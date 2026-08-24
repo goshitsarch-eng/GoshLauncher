@@ -16,7 +16,7 @@ from ulauncher.modes.launcher.looks import chrome_from_settings, ensure_look_chr
 from ulauncher.ui import gtk4
 from ulauncher.ui.helpers import layer_shell
 from ulauncher.ui.helpers.monitor import get_monitor, get_monitor_geometries, monitor_work_geometry
-from ulauncher.ui.helpers.theme import Theme
+from ulauncher.ui.helpers.theme import launcher_popup_css
 from ulauncher.ui.load_icon_surface import load_icon_paintable
 from ulauncher.ui.results_view import ResultsView
 from ulauncher.utils import scheduling
@@ -627,12 +627,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         for child in gtk4.iter_children(widget):
             self.apply_css(child)
 
-    def _get_shadow_size(self) -> int:
-        display = self.get_display()
-        if display and hasattr(display, "is_composited") and not display.is_composited():
-            return 0
-        return self.settings.window_shadow
-
     def _sync_shadow_inset(self) -> int:
         from ulauncher.modes.launcher.popup_shadow import look_shadow_inset
 
@@ -654,13 +648,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def apply_theme(self) -> None:
         if not self._css_provider:
             self._css_provider = Gtk.CssProvider()
-        theme_css = Theme.load(self.settings.theme_name).get_css(self._get_shadow_size())
-        looks_path = Path(paths.ASSETS) / "themes" / "gosh-looks.css"
-        if looks_path.is_file():
-            theme_css += "\n" + looks_path.read_text()
-        self._css_provider.load_from_data(theme_css.encode())
+        self._css_provider.load_from_data(launcher_popup_css().encode())
         self.apply_css(self)
-        logger.info('Applying theme "%s"', self.settings.theme_name)
+        logger.info('Applying look "%s"', getattr(self.settings, "look_id", "spotlight"))
 
     def get_layout_size(self) -> Gdk.Rectangle | None:
         if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:

@@ -6,7 +6,6 @@ from typing import Any
 from gi.repository import Gtk
 
 from ulauncher.ui.helpers.hotkey_controller import HotkeyController
-from ulauncher.ui.helpers.theme import get_themes
 from ulauncher.ui.preferences.views import BaseView, styled
 from ulauncher.utils.environment import IS_X11
 from ulauncher.utils.eventbus import EventBus
@@ -227,16 +226,6 @@ class PreferencesView(BaseView):
         self._add_tray_icon_row(general_box)
         self._add_hotkey_row(general_box)
 
-        # Color theme
-        theme_combo = Gtk.ComboBoxText()
-        themes = get_themes()
-        for theme in themes:
-            theme_combo.append(theme, theme)
-        theme_combo.set_active_id(self.settings.theme_name)
-        theme_combo.connect("changed", self._on_theme_changed)
-        theme_desc = "Switch between installed themes. Changes apply immediately when you relaunch the UI."
-        self._add_setting_row(general_box, "Color theme", theme_combo, theme_desc)
-
         self._add_look_combo(general_box)
 
         # Screen to show on
@@ -433,8 +422,6 @@ class PreferencesView(BaseView):
             width = clamp_popup_width(self.settings.base_width)
             if hasattr(self, "_width_spin"):
                 self._width_spin.set_value(width)
-            if hasattr(self, "_app_width_spin"):
-                self._app_width_spin.set_value(width)
             for attr, switch in getattr(self, "_chrome_switches", {}).items():
                 switch.set_active(bool(getattr(self.settings, attr)))
         finally:
@@ -500,7 +487,7 @@ class PreferencesView(BaseView):
         for attr, switch in getattr(self, "_chrome_switches", {}).items():
             bind_settings_changed(self._prefs_signals, attr, switch, self._sync_chrome_widgets)
         for attr, spin in (
-            ("base_width", getattr(self, "_width_spin", None) or getattr(self, "_app_width_spin", None)),
+            ("base_width", getattr(self, "_width_spin", None)),
             ("results_max_height", getattr(self, "_height_spin", None)),
             ("max_per_category", getattr(self, "_max_spin", None)),
             ("icon_size", getattr(self, "_icon_spin", None)),
@@ -569,28 +556,6 @@ class PreferencesView(BaseView):
         desc = "Focus an already running application instead of launching a duplicate instance. Works only on X11."
 
         self._add_setting_row(applications_box, "Switch to application if already running", raise_switch, desc)
-
-        # Window width (same popup-width range as goshos appearance Size)
-        from ulauncher.modes.launcher.chrome_size import (
-            POPUP_WIDTH_MAX,
-            POPUP_WIDTH_MIN,
-            POPUP_WIDTH_PAGE,
-            POPUP_WIDTH_STEP,
-            clamp_popup_width,
-        )
-
-        width_adjustment = Gtk.Adjustment(
-            value=clamp_popup_width(self.settings.base_width),
-            lower=POPUP_WIDTH_MIN,
-            upper=POPUP_WIDTH_MAX,
-            step_increment=POPUP_WIDTH_STEP,
-            page_increment=POPUP_WIDTH_PAGE,
-        )
-        width_spin = Gtk.SpinButton(adjustment=width_adjustment)
-        width_spin.connect("value-changed", self._on_width_changed)
-        self._app_width_spin = width_spin
-        desc = "Set the launcher width between 400 and 1200 pixels. Width is not part of a look."
-        self._add_setting_row(applications_box, "Window width", width_spin, desc)
 
         # Top apps
         recent_adjustment = Gtk.Adjustment(value=self.settings.max_recent_apps, lower=0, upper=20, step_increment=1)
@@ -888,11 +853,6 @@ class PreferencesView(BaseView):
         self._hotkey_capturing = False
         HotkeyController.apply_accelerator(DEFAULT_FALLBACK)
         self._refresh_hotkey_label()
-
-    def _on_theme_changed(self, combo: Gtk.ComboBoxText) -> None:
-        theme_name = combo.get_active_text()
-        if theme_name:
-            self.settings.save({"theme_name": theme_name})
 
     def _on_look_changed(self, combo: Gtk.ComboBoxText) -> None:
         if self._updating_chrome:

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from ulauncher import paths
-from ulauncher.ui.helpers.theme import LegacyTheme, _load_legacy_theme, get_themes
+from ulauncher.ui.helpers.theme import LegacyTheme, _load_legacy_theme, get_themes, launcher_popup_css
 
 
 def _write_manifest(dir_path: Path, data: object) -> Path:
@@ -69,3 +69,11 @@ def test_get_themes__unusable_root_manifest__leaves_the_css_themes_alone(user_th
     _write_manifest(user_themes, "{not json")
 
     assert sorted(get_themes()) == ["dark"]
+
+
+def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:
+    css = launcher_popup_css()
+    assert "window.background" in css
+    assert ".gosh-theme-spotlight" in css
+    assert "@define-color bg_color" not in css
+    assert ".prefs-btn" in css
