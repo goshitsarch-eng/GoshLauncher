@@ -289,12 +289,21 @@ def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
 
 
 def windows_from_sway_tree(payload: Any) -> list[WindowInfo]:
+    return windows_from_i3ipc_tree(payload, "sway")
+
+
+def windows_from_i3_tree(payload: Any) -> list[WindowInfo]:
+    """i3 and miracle-wm speak the same get_tree shape as Sway, with X11 class props."""
+    return windows_from_i3ipc_tree(payload, "i3")
+
+
+def windows_from_i3ipc_tree(payload: Any, prefix: str) -> list[WindowInfo]:
     windows: list[WindowInfo] = []
-    _walk_sway_tree(payload, windows, 0)
+    _walk_sway_tree(payload, windows, 0, prefix)
     return windows
 
 
-def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int) -> None:
+def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int, prefix: str = "sway") -> None:
     if not isinstance(node, dict):
         return
     next_desktop = desktop
@@ -318,7 +327,7 @@ def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int) -> None:
                 pid = 0
             windows.append(
                 WindowInfo(
-                    wid=f"sway:{node.get('id')}",
+                    wid=f"{prefix}:{node.get('id')}",
                     title=title,
                     wm_class=klass,
                     desktop=next_desktop,
@@ -329,7 +338,7 @@ def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int) -> None:
                 )
             )
     for child in children:
-        _walk_sway_tree(child, windows, next_desktop)
+        _walk_sway_tree(child, windows, next_desktop, prefix)
 
 
 def compositor_window_argv(wid: str, action: str) -> list[str] | None:
@@ -344,6 +353,9 @@ def compositor_window_argv(wid: str, action: str) -> list[str] | None:
     if kind == "sway":
         command = "focus" if action == "focus" else "kill"
         return ["swaymsg", f"[con_id={ident}]", command]
+    if kind == "i3":
+        command = "focus" if action == "focus" else "kill"
+        return ["i3-msg", f"[con_id={ident}]", command]
     if kind == "niri":
         verb = "focus-window" if action == "focus" else "close-window"
         return ["niri", "msg", "action", verb, "--id", ident]
@@ -495,6 +507,7 @@ def compositor_list_commands(
         ("HYPRLAND_INSTANCE_SIGNATURE", ["hyprctl", "-j", "clients"], windows_from_hypr_clients),
         ("SWAYSOCK", ["swaymsg", "-t", "get_tree"], windows_from_sway_tree),
         ("NIRI_SOCKET", ["niri", "msg", "--json", "windows"], windows_from_niri_windows),
+        ("I3SOCK", ["i3-msg", "-t", "get_tree"], windows_from_i3_tree),
     )
     preferred: list[tuple[list[str], Callable[[Any], list[WindowInfo]]]] = []
     rest: list[tuple[list[str], Callable[[Any], list[WindowInfo]]]] = []
@@ -928,6 +941,7 @@ def workspace_switch_steps(index: int, *, x11: bool = False) -> list[dict[str, A
     compositors: list[dict[str, Any]] = [
         {"kind": "kwin", "desktop": number},
         {"kind": "argv", "argv": ["swaymsg", "workspace", "number", str(number)]},
+        {"kind": "argv", "argv": ["i3-msg", "workspace", "number", str(number)]},
         {"kind": "argv", "argv": ["hyprctl", "dispatch", "workspace", str(number)]},
         {"kind": "argv", "argv": ["niri", "msg", "action", "focus-workspace", str(number)]},
     ]

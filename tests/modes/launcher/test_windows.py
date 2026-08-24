@@ -26,6 +26,7 @@ from ulauncher.modes.launcher.windows import (
     window_recency_value,
     window_result_id,
     windows_from_hypr_clients,
+    windows_from_i3_tree,
     windows_from_introspect_payload,
     windows_from_kwin_dump,
     windows_from_lswt_csv,
@@ -238,6 +239,33 @@ def test_hypr_sway_niri_window_payloads() -> None:
         "address:0xabc",
     ]
     assert compositor_window_argv("sway:42", "close") == ["swaymsg", "[con_id=42]", "kill"]
+    i3 = windows_from_i3_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "2",
+                    "nodes": [
+                        {
+                            "id": 9,
+                            "type": "con",
+                            "name": "Firefox",
+                            "window_properties": {"class": "firefox", "title": "Firefox"},
+                            "pid": 4,
+                            "focused": True,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    assert len(i3) == 1
+    assert i3[0].wid == "i3:9"
+    assert i3[0].wm_class == "firefox"
+    assert i3[0].desktop == 1
+    assert compositor_window_argv("i3:9", "focus") == ["i3-msg", "[con_id=9]", "focus"]
+    assert compositor_window_argv("i3:9", "close") == ["i3-msg", "[con_id=9]", "kill"]
     assert compositor_window_argv("niri:7", "focus") == [
         "niri",
         "msg",
@@ -276,11 +304,14 @@ def test_hypr_sway_niri_window_payloads() -> None:
     assert niri_cmds[0][0] == ["niri", "msg", "--json", "windows"]
     hypr_cmds = compositor_list_commands({"HYPRLAND_INSTANCE_SIGNATURE": "sig"})
     assert hypr_cmds[0][0] == ["hyprctl", "-j", "clients"]
+    i3_cmds = compositor_list_commands({"I3SOCK": "/run/i3/ipc.sock"})
+    assert i3_cmds[0][0] == ["i3-msg", "-t", "get_tree"]
     default_cmds = compositor_list_commands({})
     assert [argv for argv, _parser in default_cmds] == [
         ["hyprctl", "-j", "clients"],
         ["swaymsg", "-t", "get_tree"],
         ["niri", "msg", "--json", "windows"],
+        ["i3-msg", "-t", "get_tree"],
     ]
 
 
