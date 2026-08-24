@@ -51,3 +51,40 @@ def backdrop_box(monitors: list[Any]) -> dict[str, float]:
         max_x = max(max_x, right)
         max_y = max(max_y, bottom)
     return {"x": min_x, "y": min_y, "width": max_x - min_x, "height": max_y - min_y}
+
+
+def overlay_skip_index(*, covers_current_monitor: bool, current_index: int | None) -> int | None:
+    """Skip the launcher's monitor when that window already covers the work area (GNOME Wayland)."""
+    if covers_current_monitor:
+        return current_index
+    return None
+
+
+def overlay_plan(monitors: list[Any], skip_index: int | None = None) -> list[dict[str, Any]]:
+    """One fullscreen overlay per monitor, equivalent to goshos' union backdrop actor."""
+    plan: list[dict[str, Any]] = []
+    for index, monitor in enumerate(monitors):
+        if skip_index is not None and index == skip_index:
+            continue
+        plan.append(
+            {
+                "index": index,
+                "x": float(getattr(monitor, "x", 0)),
+                "y": float(getattr(monitor, "y", 0)),
+                "width": float(getattr(monitor, "width", 0)),
+                "height": float(getattr(monitor, "height", 0)),
+            }
+        )
+    return plan
+
+
+def overlay_window_style() -> dict[str, Any]:
+    # goshos uses opacity 0 on a reactive Clutter actor. GTK surfaces with alpha 0
+    # often drop hit-testing, so the CSS fill is a 1% black that still claims clicks.
+    return {
+        "decorated": False,
+        "can_focus": False,
+        "css_class": "goshos-backdrop",
+        "css_background": "rgba(0, 0, 0, 0.01)",
+        "defer_close": True,
+    }

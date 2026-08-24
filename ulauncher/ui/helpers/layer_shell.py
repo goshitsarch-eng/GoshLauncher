@@ -44,3 +44,30 @@ def enable(window: Gtk.Window) -> bool:
 def set_vertical_position(window: Gtk.Window, pos_y: float) -> None:
     LayerShell.set_anchor(window, LayerShell.Edge.TOP, True)
     LayerShell.set_margin(window, LayerShell.Edge.TOP, int(pos_y))
+
+
+def enable_input_only(window: Gtk.Window, monitor: object | None = None) -> bool:
+    """Fullscreen overlay that must not steal keyboard focus from the launcher."""
+    if not is_supported():
+        return False
+
+    LayerShell.init_for_window(window)
+    LayerShell.set_namespace(window, "ulauncher-backdrop")
+    keyboard_mode = getattr(LayerShell, "KeyboardMode", None)
+    if keyboard_mode is not None:
+        none_mode = getattr(keyboard_mode, "NONE", None)
+        if none_mode is not None:
+            LayerShell.set_keyboard_mode(window, none_mode)
+    LayerShell.set_layer(window, LayerShell.Layer.OVERLAY)
+    LayerShell.set_exclusive_zone(window, 0)
+    edge = getattr(LayerShell, "Edge", None)
+    if edge is not None:
+        for name in ("TOP", "BOTTOM", "LEFT", "RIGHT"):
+            side = getattr(edge, name, None)
+            if side is not None:
+                LayerShell.set_anchor(window, side, True)
+    if monitor is not None:
+        set_monitor = getattr(LayerShell, "set_monitor", None)
+        if callable(set_monitor):
+            set_monitor(window, monitor)
+    return True

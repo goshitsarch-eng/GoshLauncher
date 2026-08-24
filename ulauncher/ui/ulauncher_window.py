@@ -65,6 +65,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._chrome = chrome_from_settings(self.settings)
         self._nav_last_key = 0
         self._nav_last_time_us = 0
+        self._backdrop = None
+        self._backdrop_close_idle = None
         width_request = self.settings.base_width
         height_request = -1
 
@@ -160,6 +162,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.connect("map", self.on_initial_draw)
         self.prefs_btn.connect("clicked", lambda *_: self.get_app().show_preferences())
 
+        self._show_backdrop()
         self.present()
         super().set_visible(True)
 
@@ -556,9 +559,13 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if display is None:
             return
         monitors = display.get_monitors()
-        monitors.connect("items-changed", lambda *_args: self.position_window())
+        monitors.connect("items-changed", lambda *_args: self._on_monitors_changed())
         self._monitors_model = monitors
         self._monitors_watched = True
+
+    def _on_monitors_changed(self) -> None:
+        self.position_window()
+        self._relayout_backdrop()
 
     def _start_live_search(self) -> None:
         from ulauncher.modes.launcher.live_search import LiveSearchWatcher
@@ -618,12 +625,70 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         logger.info("Closing Ulauncher window")
         self._stop_live_search()
         self._stop_session_watch()
+        self._destroy_backdrop()
         if not save_query or not self.settings.auto_resume:
             self.get_app().set_query("", update_input=False)
         if self.settings.grab_mouse_pointer:
             self.toggle_grab_pointer_device(False)
         super().close()
         self.destroy()
+
+    def _launcher_covers_current_monitor(self) -> bool:
+        return DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE
+
+    def _backdrop_skip_index(self) -> int | None:
+        from ulauncher.modes.launcher.click_outside import overlay_skip_index
+
+        if not self._launcher_covers_current_monitor():
+            return overlay_skip_index(covers_current_monitor=False, current_index=None)
+        monitor = get_monitor(self.settings.render_on_screen != "default-monitor")
+        geometries = get_monitor_geometries()
+        current = 0 if geometries else None
+        if monitor is not None:
+            geo = monitor.get_geometry()
+            for index, other in enumerate(geometries):
+                if other.x == geo.x and other.y == geo.y and other.width == geo.width and other.height == geo.height:
+                    current = index
+                    break
+        return overlay_skip_index(covers_current_monitor=True, current_index=current)
+
+    def _show_backdrop(self) -> None:
+        from ulauncher.ui.backdrop_overlay import PopupBackdrop
+
+        if self._backdrop is None:
+            self._backdrop = PopupBackdrop(self._on_backdrop_click, self._raise_over_backdrop)
+        self._backdrop.show(self._backdrop_skip_index())
+
+    def _relayout_backdrop(self) -> None:
+        backdrop = getattr(self, "_backdrop", None)
+        if backdrop is None:
+            return
+        backdrop.relayout(self._backdrop_skip_index())
+        self.present()
+
+    def _destroy_backdrop(self) -> None:
+        idle = getattr(self, "_backdrop_close_idle", None)
+        if idle is not None:
+            idle.cancel()
+            self._backdrop_close_idle = None
+        backdrop = getattr(self, "_backdrop", None)
+        self._backdrop = None
+        if backdrop is not None:
+            backdrop.destroy()
+
+    def _on_backdrop_click(self) -> None:
+        if getattr(self, "_backdrop_close_idle", None) is not None:
+            return
+        self._backdrop_close_idle = scheduling.run_when_idle(self._run_backdrop_close)
+
+    def _run_backdrop_close(self) -> None:
+        self._backdrop_close_idle = None
+        self.close(save_query=True)
+
+    def _raise_over_backdrop(self) -> None:
+        if self.get_visible():
+            self.present()
+            self.prompt_input.grab_focus()
 
     def toggle_grab_pointer_device(self, grab: bool) -> None:
         display = self.get_display()
