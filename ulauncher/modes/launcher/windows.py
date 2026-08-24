@@ -358,6 +358,9 @@ def compositor_window_argv(wid: str, action: str) -> list[str] | None:
         if title:
             argv.append(f"title:{title}")
         return argv if app_id or title else None
+    if kind == "kwin":
+        verb = "windowactivate" if action == "focus" else "windowclose"
+        return ["kdotool", verb, ident]
     return None
 
 
@@ -412,6 +415,68 @@ def windows_from_lswt_csv(text: str) -> list[WindowInfo]:
         windows.append(
             WindowInfo(
                 wid=wid,
+                title=title or app_id,
+                wm_class=app_id,
+                desktop=0,
+                app_id=app_id,
+            )
+        )
+    return windows
+
+
+KWIN_LIST_SCRIPT = (
+    "var clients = workspace.windowList();"
+    "for (var i = 0; i < clients.length; i++) {"
+    "var c = clients[i];"
+    "if (!c || c.skipTaskbar || c.skipTaskbar || c.desktopWindow) continue;"
+    "output_result(JSON.stringify({"
+    "id: String(c.internalId),"
+    "title: String(c.caption || ''),"
+    "app_id: String(c.resourceClass || '')"
+    "}));"
+    "}"
+)
+
+
+def windows_from_kwin_dump(payload: Any) -> list[WindowInfo]:
+    """Parse kdotool kwinscript JSON lines (or a JSON array) of KWin clients."""
+    items: list[Any]
+    if isinstance(payload, list):
+        items = payload
+    elif isinstance(payload, str):
+        text = payload.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                loaded = json.loads(text)
+            except ValueError:
+                loaded = None
+            items = loaded if isinstance(loaded, list) else []
+        else:
+            items = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except ValueError:
+                    continue
+    else:
+        return []
+    windows: list[WindowInfo] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        ident = str(item.get("id") or "").strip()
+        title = str(item.get("title") or "")
+        app_id = str(item.get("app_id") or item.get("resourceClass") or "")
+        if not ident or (not title and not app_id):
+            continue
+        windows.append(
+            WindowInfo(
+                wid=f"kwin:{ident}",
                 title=title or app_id,
                 wm_class=app_id,
                 desktop=0,
@@ -480,6 +545,12 @@ def _compositor_windows() -> list[WindowInfo]:
         text = _text_command(["lswt", "-c", "tai"])
         if text:
             parsed = windows_from_lswt_csv(text)
+            if parsed:
+                return parsed
+    if shutil.which("kdotool"):
+        text = _text_command(["kdotool", "kwinscript", "--inline", KWIN_LIST_SCRIPT])
+        if text:
+            parsed = windows_from_kwin_dump(text)
             if parsed:
                 return parsed
     return []

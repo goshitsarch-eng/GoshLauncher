@@ -27,6 +27,7 @@ from ulauncher.modes.launcher.windows import (
     window_result_id,
     windows_from_hypr_clients,
     windows_from_introspect_payload,
+    windows_from_kwin_dump,
     windows_from_lswt_csv,
     windows_from_niri_windows,
     windows_from_sway_tree,
@@ -400,3 +401,18 @@ def test_lswt_csv_lists_ext_foreign_toplevels() -> None:
     assert rows[1].title == "Notes, 1"
     assert rows[0].wid == "lswt:ext-1"
     assert compositor_window_argv(rows[0].wid, "focus") is None
+
+
+def test_kwin_dump_lists_and_activates_plasma_windows() -> None:
+    rows = windows_from_kwin_dump(
+        '{"id":"{aaa}","title":"Firefox","app_id":"firefox"}\n'
+        '{"id":"{bbb}","title":"","app_id":""}\n'
+        '[{"id":"{ccc}","title":"Dolphin","resourceClass":"org.kde.dolphin"}]\n'
+    )
+    assert [row.wid for row in rows] == ["kwin:{aaa}"]
+    assert rows[0].app_id == "firefox"
+    array_rows = windows_from_kwin_dump([{"id": "{ccc}", "title": "Dolphin", "resourceClass": "org.kde.dolphin"}])
+    assert array_rows[0].wid == "kwin:{ccc}"
+    assert array_rows[0].app_id == "org.kde.dolphin"
+    assert compositor_window_argv("kwin:{aaa}", "focus") == ["kdotool", "windowactivate", "{aaa}"]
+    assert compositor_window_argv("kwin:{aaa}", "close") == ["kdotool", "windowclose", "{aaa}"]
