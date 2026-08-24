@@ -2,77 +2,113 @@
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 from ulauncher.modes.apps.app_mode import AppMode
 from ulauncher.modes.apps.app_result import AppResult
 from ulauncher.modes.launcher.word_match import (
+    SUBSTRING_MIN,
     id_matches_query,
     keyword_matches_query,
     label_matches_query,
-    text_matches_all_words,
-    text_matches_query,
+    word_prefix_match,
 )
 
 _app_mode = AppMode()
+_VARIANT_SUFFIX = re.compile(r"[\s-]+(esr|beta|nightly|dev|canary|stable|preview)$", re.IGNORECASE)
 
 
 def iter_apps() -> list[AppResult]:
     return list(_app_mode.get_triggers())
 
 
-def app_matches(app: AppResult, query: str) -> bool:
-    if not query:
-        return False
-    if text_matches_query(app.name, query) or text_matches_all_words(app.name, query):
-        return True
-    if label_matches_query(app.description, query):
-        return True
-    if any(keyword_matches_query(keyword, query) for keyword in app.keywords):
-        return True
-    if id_matches_query(app.app_id.replace(".desktop", "").replace("-", " "), query):
-        return True
-    return bool(app._executable and text_matches_query(app._executable, query))  # noqa: SLF001
+def app_base_name(name: str) -> str:
+    return _VARIANT_SUFFIX.sub("", name.lower()).strip()
 
 
-def match_score(app: AppResult, query: str) -> float:
-    q = query.lower()
-    name = app.name.lower()
-    score = 0.0
-    if name.startswith(q):
-        score += 100
-    elif text_matches_query(app.name, query):
-        score += 70
-    if text_matches_all_words(app.name, query):
-        score += 20
-    if any(keyword_matches_query(keyword, query) for keyword in app.keywords):
-        score += 15
-    if label_matches_query(app.description, query):
-        score += 10
-    for field, weight in app.get_searchable_fields():
-        if field:
-            score += weight
-    return score
-
-
-def collapse_variants(apps: list[AppResult]) -> list[AppResult]:
-    seen: dict[str, AppResult] = {}
-    order: list[str] = []
+def unique_by_base_name(apps: list[Any], limit: int) -> list[Any]:
+    if limit <= 0:
+        return []
+    seen: set[str] = set()
+    unique: list[Any] = []
     for app in apps:
-        key = app.name.split()[0].lower() if app.name else app.app_id
-        if key not in seen:
-            seen[key] = app
-            order.append(key)
-        elif match_score(app, app.name) > match_score(seen[key], seen[key].name):
-            seen[key] = app
-    return [seen[key] for key in order]
+        base = app_base_name(getattr(app, "name", "") or getattr(app, "app_id", ""))
+        if base in seen:
+            continue
+        seen.add(base)
+        unique.append(app)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+def _token_tier(name_lower: str, generic_lower: str, id_lower: str, keywords: list[str], desc_lower: str, token: str) -> int:
+    if name_lower.startswith(token):
+        return 0
+    if word_prefix_match(name_lower, token):
+        return 1
+    if len(token) >= SUBSTRING_MIN and token in name_lower:
+        return 2
+    if label_matches_query(generic_lower, token):
+        return 3
+    if id_matches_query(id_lower, token):
+        return 4
+    if any(keyword_matches_query(keyword, token) for keyword in keywords):
+        return 5
+    if len(token) >= SUBSTRING_MIN and label_matches_query(desc_lower, token):
+        return 6
+    return -1
+
+
+def app_match_tier(app: Any, query: str) -> int:
+    if not query:
+        return -1
+    q = query.lower()
+    name_lower = str(getattr(app, "name", "")).lower()
+    generic_lower = str(getattr(app, "description", "")).lower()
+    id_raw = str(getattr(app, "app_id", "")).lower()
+    id_lower = id_raw[:-8] if id_raw.endswith(".desktop") else id_raw
+    keywords = list(getattr(app, "keywords", []) or [])
+    desc_lower = generic_lower
+
+    if name_lower.startswith(q):
+        return 0
+    if word_prefix_match(name_lower, q):
+        return 1
+    if len(q) >= SUBSTRING_MIN and q in name_lower:
+        return 2
+    if label_matches_query(generic_lower, q):
+        return 3
+    if id_matches_query(id_lower, q):
+        return 4
+    if any(keyword_matches_query(keyword, q) for keyword in keywords):
+        return 5
+    if len(q) >= SUBSTRING_MIN and label_matches_query(desc_lower, q):
+        return 6
+
+    words = [word for word in q.split() if word]
+    if len(words) < 2:
+        return -1
+    worst = 0
+    for word in words:
+        tier = _token_tier(name_lower, generic_lower, id_lower, keywords, desc_lower, word)
+        if tier < 0:
+            return -1
+        worst = max(worst, tier)
+    return 7 + worst
+
+
+def app_matches(app: AppResult, query: str) -> bool:
+    return app_match_tier(app, query) >= 0
 
 
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
     ranked = sorted(
-        (app for app in iter_apps() if app_matches(app, query)),
-        key=lambda app: match_score(app, query),
-        reverse=True,
+        (app for app in iter_apps() if app_match_tier(app, query) >= 0),
+        key=lambda app: app_match_tier(app, query),
     )
-    return collapse_variants(ranked)[:limit]
+    return unique_by_base_name(ranked, limit)
 
 
 def home_apps(limit: int) -> list[AppResult]:
