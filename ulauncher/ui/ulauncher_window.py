@@ -104,17 +104,13 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.frame = Gtk.Box(valign=Gtk.Align.START, orientation=Gtk.Orientation.HORIZONTAL)
         self.set_child(self.frame)
 
-        shadow = self._get_shadow_size()
-        shadow_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        shadow_container.set_margin_top(shadow)
-        shadow_container.set_margin_bottom(shadow)
-        shadow_container.set_margin_start(shadow)
-        shadow_container.set_margin_end(shadow)
-        gtk4.pack_start(self.frame, shadow_container, True, True, 0)
+        self.shadow_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        gtk4.pack_start(self.frame, self.shadow_container, True, True, 0)
+        self._sync_shadow_inset()
 
         self.theme_root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.theme_root.set_can_focus(False)
-        gtk4.pack_start(shadow_container, self.theme_root, True, True, 0)
+        gtk4.pack_start(self.shadow_container, self.theme_root, True, True, 0)
 
         self.prompt = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.prompt.set_can_focus(False)
@@ -205,6 +201,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         look_id = getattr(self.settings, "look_id", "spotlight")
         gtk4.add_css_class(self.theme_root, f"gosh-theme-{look_id}")
         gtk4.add_css_class(self.theme_root, f"gosh-density-{self._chrome.get('density') or 'comfortable'}")
+        self._sync_shadow_inset()
         from ulauncher.modes.launcher.looks import search_icon_style_class
 
         icon_class = search_icon_style_class(bool(self._chrome.get("show_search_icon", True)))
@@ -636,6 +633,24 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return 0
         return self.settings.window_shadow
 
+    def _sync_shadow_inset(self) -> int:
+        from ulauncher.modes.launcher.popup_shadow import look_shadow_inset
+
+        display = self.get_display()
+        if display and hasattr(display, "is_composited") and not display.is_composited():
+            inset = 0
+        else:
+            looks_path = Path(paths.ASSETS) / "themes" / "gosh-looks.css"
+            css = looks_path.read_text() if looks_path.is_file() else ""
+            inset = look_shadow_inset(css, str(getattr(self.settings, "look_id", "spotlight") or "spotlight"))
+        box = getattr(self, "shadow_container", None)
+        if box is not None:
+            box.set_margin_top(inset)
+            box.set_margin_bottom(inset)
+            box.set_margin_start(inset)
+            box.set_margin_end(inset)
+        return inset
+
     def apply_theme(self) -> None:
         if not self._css_provider:
             self._css_provider = Gtk.CssProvider()
@@ -670,6 +685,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             popup_width_for_work_area,
             work_area_avoiding_keyboard,
         )
+        from ulauncher.modes.launcher.popup_shadow import origin_minus_inset, surface_size_with_inset
         from ulauncher.modes.launcher.ui_scale import gtk_layout_scale
 
         if layout_size := self.get_layout_size():
@@ -699,21 +715,23 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 geo = monitor.get_geometry()
                 surface = {"x": int(geo.x), "y": int(geo.y)}
             offset = offset_from_origin(placed, surface)
-            pos_x = offset["x"]
-            pos_y = offset["y"]
+            inset = self._sync_shadow_inset()
+            pos_x = origin_minus_inset(offset["x"], inset)
+            pos_y = origin_minus_inset(offset["y"], inset)
+            frame_width = surface_size_with_inset(popup_width, inset)
             self.results_view.set_max_height(int(placed["results_max"]))
             if gtk_window_owns_popup_width(DESKTOP_ID, IS_X11_COMPATIBLE):
-                self.set_default_size(popup_width, -1)
+                self.set_default_size(frame_width, -1)
 
             if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:
                 self.frame.set_margin_top(pos_y)
                 self.frame.set_margin_bottom(0)
                 self.frame.set_margin_start(pos_x)
-                self.frame.set_margin_end(max(0, int(work["width"] - pos_x - popup_width)))
+                self.frame.set_margin_end(max(0, int(work["width"] - pos_x - frame_width)))
             elif self.layer_shell_enabled:
                 layer_shell.set_position(self, pos_x, pos_y)
             elif hasattr(self, "move"):
-                self.move(int(placed["x"]), int(placed["y"]))
+                self.move(origin_minus_inset(placed["x"], inset), origin_minus_inset(placed["y"], inset))
 
     def _ensure_monitor_watch(self) -> None:
         if getattr(self, "_monitors_watched", False):
