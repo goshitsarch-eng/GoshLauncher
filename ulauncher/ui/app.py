@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from weakref import WeakValueDictionary
 
 import gi
-from gi.repository import Gdk, Gtk
+from gi.repository import Adw, Gtk
 
 import ulauncher
 from ulauncher import app_id, first_run, paths
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 events = EventBus("app")
 
 
-class UlauncherApp(Gtk.Application):
+class UlauncherApp(Adw.Application):
     # Gtk.Applications check if the app is already registered and if so,
     # new instances sends the signals to the registered one
     # So all methods except __init__ runs on the main app
@@ -85,7 +85,7 @@ class UlauncherApp(Gtk.Application):
             self.core.set_query(self.query, self.show_results)
 
     def do_startup(self) -> None:
-        Gtk.Application.do_startup(self)
+        Adw.Application.do_startup(self)
         Gio.ActionMap.add_action_entries(
             self,
             [
@@ -174,9 +174,9 @@ class UlauncherApp(Gtk.Application):
 
     @events.on
     def clipboard_store(self, data: str) -> None:
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(data, -1)
-        clipboard.store()
+        from ulauncher.ui.gtk4 import clipboard_set_text
+
+        clipboard_set_text(data)
 
     @events.on
     def copy_and_close(self, data: str) -> None:
@@ -185,7 +185,7 @@ class UlauncherApp(Gtk.Application):
 
     @events.on
     def show_launcher(self) -> None:
-        if (main_window := self.windows.get("main")) and main_window.get_window() is None:
+        if (main_window := self.windows.get("main")) and not main_window.get_mapped():
             logger.warning("Ignoring stale main window reference")
             del self.windows["main"]
 
@@ -201,7 +201,7 @@ class UlauncherApp(Gtk.Application):
             # (klipper, gpaste, wl-clip-persist, ...) need time to snapshot them after we set
             # ownership. X11/Wayland have no "snapshot done" event, and managers react on their
             # own schedule with non-trivial wakeup latency. GTK4's Gdk.Clipboard.store_async
-            # closes this gap properly, but we're using GTK3. So delay the quit by 1s on the
+            # can persist the selection, but compositors still race shutdown. Delay the quit by 1s on the
             # chance the user's last action was a clipboard copy. 0.25s wasn't enough; 1s seems
             # to work, but maybe not on all systems.
             #
@@ -234,7 +234,7 @@ class UlauncherApp(Gtk.Application):
         from ulauncher.ui.preferences.preferences_window import PreferencesWindow
 
         preferences = cast("PreferencesWindow | None", self.windows.get("preferences"))
-        if preferences and preferences.get_window() is None:
+        if preferences and not preferences.get_mapped():
             logger.warning("Ignoring stale Preferences window reference (suspecting a memory leak)")
             del self.windows["preferences"]
             preferences = None

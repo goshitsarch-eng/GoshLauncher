@@ -67,6 +67,10 @@ class TestFileBrowserMode:
         assert not mode.matches_query_str("test")
         assert not mode.matches_query_str("+")
         assert not mode.matches_query_str(" ")
+        assert not mode.matches_query_str("$")
+        assert not mode.matches_query_str("$ firefox")
+        assert mode.matches_query_str("$HOME")
+        assert mode.matches_query_str("$USER/Videos")
 
     def test_list_files(self, mode: FileBrowserMode) -> None:
         assert mode.list_files("path") == ["a", "B", "c", "D"]

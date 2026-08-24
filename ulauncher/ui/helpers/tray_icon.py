@@ -47,6 +47,10 @@ if tray_icon_lib is None:
             tray_icon_lib = "AyatanaIndicator"
 
 
+if getattr(Gtk, "Menu", None) is None:
+    tray_icon_lib = None
+
+
 def _create_menu_item(label: str, handler: Callable[[Any], None]) -> Gtk.MenuItem:
     menu_item = Gtk.MenuItem(label=label)
     menu_item.connect("activate", handler)
@@ -70,7 +74,10 @@ class TrayIcon(GObject.Object):
             menu.append(_create_menu_item("Exit", lambda *_: events.emit("app:quit")))
             menu.show_all()
 
-        gtk_icon_theme = Gtk.IconTheme.get_default()
+        from gi.repository import Gdk
+
+        display = Gdk.Display.get_default()
+        gtk_icon_theme = Gtk.IconTheme.get_for_display(display) if display else None
         icon_name = "find"  # standard find icon, in case the app is not installed
         icon_dir = ""
         icons = list({settings.tray_icon_name, default_icon_name, "ulauncher-indicator"})
@@ -78,7 +85,7 @@ class TrayIcon(GObject.Object):
         # check preferred, fallback on default v6 icon name, then the v5 icon name if v5 is installed
         for _icon in icons:
             # check installed icon
-            if gtk_icon_theme.has_icon(_icon):
+            if gtk_icon_theme is not None and gtk_icon_theme.has_icon(_icon):
                 icon_name = _icon
                 break
             # check asset dir icon

@@ -157,7 +157,10 @@ class ExtensionsView(BaseView):
             valign=Gtk.Align.CENTER,
             halign=Gtk.Align.CENTER,
             spacing=10,
-            margin=30,
+            margin_top=30,
+            margin_bottom=30,
+            margin_start=30,
+            margin_end=30,
         )
 
         heading_label = styled(Gtk.Label(label=heading, halign=Gtk.Align.CENTER), "title-3")
@@ -180,14 +183,28 @@ class ExtensionsView(BaseView):
         container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
         # Fixed header section
-        header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15, margin=20, margin_bottom=0)
+        header_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=15,
+            margin_top=20,
+            margin_start=20,
+            margin_end=20,
+            margin_bottom=0,
+        )
         header_box.pack_start(self._create_extension_header(ext), False, False, 0)
         header_box.pack_start(Gtk.Separator(), False, False, 0)
         container.pack_start(header_box, False, False, 0)
 
         # Scrollable content section
         scrolled = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        details_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15, margin=20, margin_top=15)
+        details_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=15,
+            margin_bottom=20,
+            margin_start=20,
+            margin_end=20,
+            margin_top=15,
+        )
 
         details_box.pack_start(self._create_extension_status_info(ext), False, False, 0)
         details_box.pack_start(self._create_installation_instructions_section(ext), False, False, 0)
@@ -360,7 +377,10 @@ class ExtensionsView(BaseView):
                 label=ext_utils.autofmt_pango_code_block(ext.display_manifest.instructions),
                 use_markup=True,
                 selectable=True,
-                margin=10,
+                margin_top=10,
+                margin_bottom=10,
+                margin_start=10,
+                margin_end=10,
                 halign=Gtk.Align.START,
                 wrap=True,
             )
@@ -524,7 +544,14 @@ class ExtensionsView(BaseView):
         container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
         if error := ext.get_error():
-            error_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin=10)
+            error_box = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                spacing=10,
+                margin_top=10,
+                margin_bottom=10,
+                margin_start=10,
+                margin_end=10,
+            )
             # Create appropriate error message based on type
             message_text = ext_utils.get_error_message(error, ext.website_url, ext.issues_url)
 

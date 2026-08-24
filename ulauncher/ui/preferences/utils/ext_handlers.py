@@ -67,8 +67,8 @@ class ExtensionHandlers:
 
         content_area = dialog.get_content_area()
         content_area.set_spacing(10)
-        content_area.set_margin_left(20)
-        content_area.set_margin_right(20)
+        content_area.set_margin_start(20)
+        content_area.set_margin_end(20)
         content_area.set_margin_top(20)
         content_area.set_margin_bottom(20)
 

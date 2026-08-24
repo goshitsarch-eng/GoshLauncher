@@ -39,9 +39,17 @@ def get_modes() -> list[Mode]:
     from ulauncher.modes.extensions.extension_mode import ExtensionMode
     from ulauncher.modes.extensions.extension_service import ext_service
     from ulauncher.modes.file_browser.file_browser_mode import FileBrowserMode
+    from ulauncher.modes.launcher.mode import LauncherMode
     from ulauncher.modes.shortcuts.shortcut_mode import ShortcutMode
 
-    return [FileBrowserMode(), CalcMode(), ShortcutMode(), ExtensionMode(ext_service), get_app_mode()]
+    return [
+        FileBrowserMode(),
+        LauncherMode(),
+        CalcMode(),
+        ShortcutMode(),
+        ExtensionMode(ext_service),
+        get_app_mode(),
+    ]
 
 
 class UlauncherCore:
@@ -144,11 +152,18 @@ class UlauncherCore:
         return list(filter(lambda searchable: searchable.search_score(query_str) > min_score, sorted_))
 
     def get_home_results(self) -> Iterable[Result]:
-        if limit := Settings.load().max_recent_apps:
-            app_mode = get_app_mode()
-            for app_result in app_mode.get_home_results(limit):
-                self._mode_map[app_result] = app_mode
-                yield app_result
+        settings = Settings.load()
+        limit = settings.max_recent_apps
+        if not limit:
+            return
+        for mode in get_modes():
+            rows = list(mode.get_home_results(limit))
+            if not rows:
+                continue
+            for result in rows:
+                self._mode_map[result] = mode
+                yield result
+            return
 
     def _render_results(self, results: Iterable[Result], callback: ResultsCallback, append: bool) -> None:
         """Hand a result list to the view. Stream state is owned by ResultBuffer and untouched here."""

@@ -11,7 +11,9 @@
 , gnused
 , gobject-introspection
 , gtk-layer-shell
-, gtk3
+, gtk4
+, gtk4-layer-shell
+, libadwaita
 , intltool
 , libX11
 , libappindicator
@@ -26,7 +28,7 @@
 , stdenv
 , systemd
 , typos
-, wrapGAppsHook3
+, wrapGAppsHook4
 , xdg-utils
 , xvfb-run
 , withXorg ? true
@@ -49,7 +51,7 @@ let
 
   packages.tests.python = pp: (with pp; [
     mock
-    (pygobject-stubs.overridePythonAttrs (old: { PYGOBJECT_STUB_CONFIG = "Gtk3,Gdk3,Soup2"; }))
+    (pygobject-stubs.overridePythonAttrs (old: { PYGOBJECT_STUB_CONFIG = "Gtk4,Gdk4,Soup2"; }))
     pytest
     pytest-mock
   ]);
@@ -74,14 +76,16 @@ let
       gdk-pixbuf
       gobject-introspection
       intltool
-      wrapGAppsHook3
+      wrapGAppsHook4
     ];
 
     buildInputs = [
       glib
       adwaita-icon-theme
       gtk-layer-shell
-      gtk3
+      gtk4
+      gtk4-layer-shell
+      libadwaita
       libappindicator
       librsvg
     ];
@@ -97,7 +101,8 @@ let
     ] ++ [
       git
       glib
-      gtk3
+      gtk4
+      libadwaita
       xdg-utils
     ];
 

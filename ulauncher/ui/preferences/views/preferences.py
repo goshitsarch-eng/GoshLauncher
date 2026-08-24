@@ -32,7 +32,14 @@ class PreferencesView(BaseView):
 
         # Create main container - centers on wide screens, fills on narrow screens
         prefs_view = styled(
-            Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=30, spacing=24),
+            Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                margin_top=30,
+                margin_bottom=30,
+                margin_start=30,
+                margin_end=30,
+                spacing=24,
+            ),
             "preferences-content",
         )
         prefs_view.set_halign(Gtk.Align.CENTER)
@@ -43,6 +50,7 @@ class PreferencesView(BaseView):
         # Add sections
         self._add_general_section(prefs_view)
         self._add_applications_section(prefs_view)
+        self._add_launcher_section(prefs_view)
         self._add_advanced_section(prefs_view)
 
     def _add_section_header(self, parent: Gtk.Box, title: str) -> None:
@@ -176,6 +184,19 @@ class PreferencesView(BaseView):
         theme_desc = "Switch between installed themes. Changes apply immediately when you relaunch the UI."
         self._add_setting_row(general_box, "Color theme", theme_combo, theme_desc)
 
+        look_combo = Gtk.ComboBoxText()
+        from ulauncher.modes.launcher.looks import LOOKS
+
+        for look in LOOKS:
+            look_combo.append(look["id"], look["title"])
+        look_combo.set_active_id(getattr(self.settings, "look_id", "spotlight"))
+        look_combo.connect("changed", self._on_look_changed)
+        look_desc = (
+            "Launcher chrome (position, density, headers, number hints, icons). "
+            "Width is separate. Matches Spotlight-goshos looks."
+        )
+        self._add_setting_row(general_box, "Launcher look", look_combo, look_desc)
+
         # Screen to show on
         screen_combo = Gtk.ComboBoxText()
         screen_combo.append("mouse-pointer-monitor", "The screen with the mouse pointer")
@@ -233,6 +254,132 @@ class PreferencesView(BaseView):
         recent_spin.connect("value-changed", self._on_recent_apps_changed)
         desc = "Control how many frequently used applications remain pinned near the top of the results."
         self._add_setting_row(applications_box, "Number of frequent apps to show", recent_spin, desc)
+
+    def _add_launcher_section(self, parent: Gtk.Box) -> None:
+        """Spotlight-goshos provider toggles, prefixes, web engine, and empty-state."""
+        launcher_box = self._create_section_container(parent, "Launcher features")
+
+        prefix_switch = Gtk.Switch(active=self.settings.enable_prefix_modes)
+        prefix_switch.connect("notify::active", self._on_prefix_modes_toggled)
+        self._add_setting_row(
+            launcher_box,
+            "Prefix modes",
+            prefix_switch,
+            "Jump to one provider with = calc, @ web, # settings, $ windows, . recents, ! command. "
+            "#ff0000, $HOME, and .bashrc stay normal queries.",
+        )
+
+        empty_switch = Gtk.Switch(active=self.settings.enable_empty_suggestions)
+        empty_switch.connect("notify::active", self._on_bool_setting("enable_empty_suggestions"))
+        self._add_setting_row(
+            launcher_box,
+            "Empty-state suggestions",
+            empty_switch,
+            "When the query is empty, show frequent apps and open windows (windows first for Pop!_OS look).",
+        )
+
+        app_actions_switch = Gtk.Switch(active=self.settings.enable_app_actions)
+        app_actions_switch.connect("notify::active", self._on_bool_setting("enable_app_actions"))
+        self._add_setting_row(
+            launcher_box,
+            "Application actions",
+            app_actions_switch,
+            "Offer desktop-file actions such as New Window alongside the main launch row.",
+        )
+
+        for attr, title, description in (
+            (
+                "enable_url_open",
+                "Open URLs",
+                "Detect domains, IPs, and schemes such as https, sftp, mailto, and magnet.",
+            ),
+            (
+                "enable_path_open",
+                "Open paths",
+                "Open ~/…, ./…, and absolute filesystem paths, including Open in Terminal.",
+            ),
+            ("enable_places", "XDG folders", "Match Home, Documents, Downloads, and the other user directories."),
+            ("enable_bookmarks", "GTK bookmarks", "Search ~/.config/gtk-3.0/bookmarks and gtk-4.0/bookmarks."),
+            ("enable_calculator", "Calculator", "Recursive-descent math. Bare 42 is not math unless you type =42."),
+            (
+                "enable_unit_convert",
+                "Unit conversion",
+                "Convert length, mass, temperature, data size, and related units.",
+            ),
+            ("enable_color_hex", "Colors", "Copy hex, rgb, hsl, hwb, and CSS color names."),
+            ("enable_time_date", "Clock", "Copy the local time or date for queries such as time, now, or tomorrow."),
+            ("enable_window_search", "Windows", "Switch, close, or kill open windows, including workspace N."),
+            ("enable_system_actions", "System actions", "Lock, suspend, restart, power off, log out, and screenshots."),
+            ("enable_settings_search", "Settings panels", "Open GNOME Settings panels such as Wi-Fi or Displays."),
+            ("enable_recent_files", "Recent files", "Search recently-used.xbel entries."),
+            (
+                "show_web_search",
+                "Web search fallback",
+                "Offer a web search when nothing local matches. @ still searches.",
+            ),
+        ):
+            switch = Gtk.Switch(active=bool(getattr(self.settings, attr)))
+            switch.connect("notify::active", self._on_bool_setting(attr))
+            self._add_setting_row(launcher_box, title, switch, description)
+
+        self._command_switch = Gtk.Switch(
+            active=self.settings.enable_command_run, sensitive=self.settings.enable_prefix_modes
+        )
+        self._command_switch.connect("notify::active", self._on_bool_setting("enable_command_run"))
+        self._add_setting_row(
+            launcher_box,
+            "Command runner",
+            self._command_switch,
+            "Run argv with the ! prefix. Off by default. Insensitive while prefix modes are off.",
+        )
+
+        engine_combo = Gtk.ComboBoxText()
+        from ulauncher.modes.launcher.web import SEARCH_ENGINES
+
+        for engine in SEARCH_ENGINES:
+            engine_combo.append(engine["id"], engine["label"])
+        engine_combo.set_active_id(self.settings.web_search_engine)
+        engine_combo.connect("changed", self._on_web_engine_changed)
+        self._add_setting_row(
+            launcher_box,
+            "Web search engine",
+            engine_combo,
+            "Engine used for @ queries and the web fallback.",
+        )
+
+        order_combo = Gtk.ComboBoxText()
+        order_combo.append("default", "Apps first")
+        order_combo.append("windows-first", "Windows first (Pop!_OS)")
+        order_combo.set_active_id(self.settings.result_order)
+        order_combo.connect("changed", self._on_result_order_changed)
+        self._add_setting_row(
+            launcher_box,
+            "Result order",
+            order_combo,
+            "Pop!_OS look also forces windows-first. Other looks keep apps first unless you override here.",
+        )
+
+    def _on_bool_setting(self, attr: str) -> Any:
+        def on_toggle(switch: Gtk.Switch, _: Any) -> None:
+            self.settings.save({attr: switch.get_active()})
+
+        return on_toggle
+
+    def _on_prefix_modes_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        enabled = switch.get_active()
+        self.settings.save({"enable_prefix_modes": enabled})
+        if hasattr(self, "_command_switch"):
+            self._command_switch.set_sensitive(enabled)
+
+    def _on_web_engine_changed(self, combo: Gtk.ComboBoxText) -> None:
+        engine_id = combo.get_active_id()
+        if engine_id:
+            self.settings.save({"web_search_engine": engine_id})
+
+    def _on_result_order_changed(self, combo: Gtk.ComboBoxText) -> None:
+        order = combo.get_active_id()
+        if order:
+            self.settings.save({"result_order": order})
 
     def _add_advanced_section(self, parent: Gtk.Box) -> None:
         """Add advanced settings section"""
@@ -309,6 +456,11 @@ class PreferencesView(BaseView):
         theme_name = combo.get_active_text()
         if theme_name:
             self.settings.save({"theme_name": theme_name})
+
+    def _on_look_changed(self, combo: Gtk.ComboBoxText) -> None:
+        look_id = combo.get_active_id()
+        if look_id:
+            self.settings.save({"look_id": look_id})
 
     def _on_screen_changed(self, combo: Gtk.ComboBoxText) -> None:
         screen = combo.get_active_id()

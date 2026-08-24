@@ -1,0 +1,131 @@
+"""System power and session actions."""
+
+from __future__ import annotations
+
+import logging
+import re
+import shutil
+
+from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
+from ulauncher.utils.launch_detached import launch_detached
+
+logger = logging.getLogger(__name__)
+
+STOP_WORDS = re.compile(r"\b(the|a|an|my|please|computer|system|session|machine|pc|of|now)\b", re.IGNORECASE)
+
+SYSTEM_ACTIONS = [
+    {
+        "id": "lock",
+        "title": "Lock Screen",
+        "icon": "system-lock-screen",
+        "keywords": ["lock", "lockscreen", "lock screen", "lock the screen", "lock now"],
+        "commands": [
+            ["loginctl", "lock-session"],
+            ["xdg-screensaver", "lock"],
+            ["gnome-screensaver-command", "-l"],
+        ],
+    },
+    {
+        "id": "logout",
+        "title": "Log Out",
+        "icon": "system-log-out",
+        "keywords": ["logout", "signout", "log out", "sign out", "log off", "sign off"],
+        "commands": [
+            ["gnome-session-quit", "--logout", "--no-prompt"],
+            ["loginctl", "terminate-session", ""],
+        ],
+    },
+    {
+        "id": "suspend",
+        "title": "Suspend",
+        "icon": "media-playback-pause",
+        "keywords": ["suspend", "sleep"],
+        "commands": [["systemctl", "suspend"], ["loginctl", "suspend"]],
+    },
+    {
+        "id": "restart",
+        "title": "Restart",
+        "icon": "system-reboot",
+        "keywords": ["restart", "reboot"],
+        "commands": [["systemctl", "reboot"], ["gnome-session-quit", "--reboot", "--no-prompt"]],
+    },
+    {
+        "id": "shutdown",
+        "title": "Power Off",
+        "icon": "system-shutdown",
+        "keywords": ["shutdown", "shut down", "poweroff", "power off", "turn off", "halt", "shut down the computer"],
+        "commands": [["systemctl", "poweroff"], ["gnome-session-quit", "--power-off", "--no-prompt"]],
+    },
+    {
+        "id": "switch-user",
+        "title": "Switch User",
+        "icon": "system-switch-user",
+        "keywords": ["switch user", "switchuser"],
+        "commands": [["gdmflexiserver"], ["dm-tool", "switch-to-greeter"]],
+    },
+    {
+        "id": "lock-orientation",
+        "title": "Lock Screen Rotation",
+        "icon": "rotation-locked",
+        "keywords": [
+            "rotation",
+            "orientation",
+            "rotate",
+            "unlock",
+            "lock orientation",
+            "unlock orientation",
+            "unlock rotation",
+        ],
+        "commands": [
+            ["gsettings", "set", "org.gnome.settings-daemon.peripherals.touchscreen", "orientation-lock", "true"]
+        ],
+    },
+    {
+        "id": "screenshot",
+        "title": "Take a Screenshot",
+        "icon": "applets-screenshooter",
+        "keywords": ["screenshot", "snip", "capture", "screencast", "record"],
+        "commands": [["gnome-screenshot"], ["grim"]],
+    },
+]
+
+
+def normalize_action_query(query: str) -> str:
+    text = STOP_WORDS.sub(" ", query.lower())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def action_matches(action: dict, query: str) -> bool:
+    q = normalize_action_query(query)
+    if not q:
+        return False
+    title = action["title"].lower()
+    if title.startswith(q) or word_prefix_match(title, q):
+        return True
+    return any(keyword_matches_query(keyword, q) for keyword in action["keywords"])
+
+
+def match_system_actions(query: str, limit: int = 6) -> list[dict]:
+    results: list[dict] = []
+    for action in SYSTEM_ACTIONS:
+        if action_matches(action, query):
+            results.append(action)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def run_system_action(action_id: str) -> None:
+    for action in SYSTEM_ACTIONS:
+        if action["id"] != action_id:
+            continue
+        for cmd in action["commands"]:
+            if cmd[0] and not shutil.which(cmd[0]):
+                continue
+            try:
+                launch_detached(cmd)
+                return
+            except Exception:
+                logger.debug("System action %s failed for %s", action_id, cmd, exc_info=True)
+        logger.warning("No working command for system action %s", action_id)
+        return

@@ -20,7 +20,7 @@ class Settings(JsonConf):
     jump_keys: str = "1234567890abcdefghijklmnopqrstuvwxyz"
     keep_alive: bool = True
     layer_shell: bool = True
-    max_recent_apps: int = 0
+    max_recent_apps: int = 6
     raise_if_started: bool = False
     render_on_screen: str = "mouse-pointer-monitor"
     show_tray_icon: bool = True
@@ -28,6 +28,29 @@ class Settings(JsonConf):
     theme_name: str = "light"
     tray_icon_name: str = "ulauncher-indicator-symbolic"
     window_shadow: int = 5
+    # Spotlight-goshos launcher providers and chrome
+    look_id: str = "spotlight"
+    max_per_category: int = 6
+    results_max_height: int = 400
+    web_search_engine: str = "google"
+    result_order: str = "default"
+    enable_prefix_modes: bool = True
+    enable_url_open: bool = True
+    enable_path_open: bool = True
+    enable_places: bool = True
+    enable_bookmarks: bool = True
+    enable_calculator: bool = True
+    enable_unit_convert: bool = True
+    enable_color_hex: bool = True
+    enable_time_date: bool = True
+    enable_window_search: bool = True
+    enable_system_actions: bool = True
+    enable_settings_search: bool = True
+    enable_recent_files: bool = True
+    enable_command_run: bool = False
+    show_web_search: bool = True
+    enable_empty_suggestions: bool = True
+    enable_app_actions: bool = True
 
     # Convert dash to underscore
     def __setitem__(self, key: str, value: Any) -> None:  # type: ignore[override]

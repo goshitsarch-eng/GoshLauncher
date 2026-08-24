@@ -35,7 +35,7 @@ You need the following to set up the local build environment:
   ```sh
   sudo add-apt-repository universe
   sudo apt install python3-{all,gi,gi-cairo,xlib} gobject-introspection \
-    gir1.2-{glib-2.0,gtk-3.0,gtklayershell-0.1}
+    gir1.2-{glib-2.0,gtk-4.0,adw-1}
   ```
 
 </details>
@@ -59,7 +59,7 @@ You need the following to set up the local build environment:
   If you don't have Ulauncher installed already, install the runtime dependencies as well:
 
   ```sh
-  sudo pacman -Syu --needed gtk3 gtk-layer-shell python-{cairo,gobject,xlib}
+  sudo pacman -Syu --needed gtk4 libadwaita python-{cairo,gobject,xlib}
   ```
 
 </details>

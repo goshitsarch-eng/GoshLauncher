@@ -9,25 +9,48 @@ from ulauncher.gi import Gio
 logger = logging.getLogger(__name__)
 
 
+def _monitors(display: Gdk.Display) -> list[Gdk.Monitor]:
+    model = display.get_monitors()
+    return [model.get_item(i) for i in range(model.get_n_items())]
+
+
 def get_monitor(use_mouse_position: bool = False) -> Gdk.Monitor | None:
     display = Gdk.Display.get_default()
     if not display:
         logger.warning("Could not get default display")
         return None
 
+    monitors = _monitors(display)
+    if not monitors:
+        return None
+
     if use_mouse_position:
-        # GdkX11.X11Display.get_default() resolves to the inherited Gdk.Display.get_default(),
-        # so on Wayland it returns the Wayland display, where the pointer position reads (0, 0)
         if (
             isinstance(display, GdkX11.X11Display)
             and (seat := display.get_default_seat())
             and (pointer := seat.get_pointer())
         ):
-            (_, x, y) = pointer.get_position()
-            return display.get_monitor_at_point(x, y)
-        logger.debug("Could not get mouse position (requires X11). Defaulting to primary or first monitor")
+            surface_at = getattr(pointer, "get_surface_at_position", None)
+            if callable(surface_at):
+                located = surface_at()
+                surface = located[0] if located else None
+                get_at = getattr(display, "get_monitor_at_surface", None)
+                if surface is not None and callable(get_at):
+                    if monitor := get_at(surface):
+                        return monitor
+            position = getattr(pointer, "get_position", None)
+            if callable(position):
+                coords = position()
+                # GTK4 may return (surface, x, y) or (x, y)
+                if len(coords) >= 2:
+                    x, y = int(coords[-2]), int(coords[-1])
+                    for monitor in monitors:
+                        geo = monitor.get_geometry()
+                        if geo.x <= x < geo.x + geo.width and geo.y <= y < geo.y + geo.height:
+                            return monitor
+        logger.debug("Could not get mouse position. Defaulting to first monitor")
 
-    return display.get_primary_monitor() or display.get_monitor(0)
+    return monitors[0]
 
 
 def get_monitor_geometries() -> list[Gdk.Rectangle]:
@@ -35,12 +58,8 @@ def get_monitor_geometries() -> list[Gdk.Rectangle]:
     if not display:
         logger.warning("Could not get default display")
         return []
-    return [monitor.get_geometry() for i in range(display.get_n_monitors()) if (monitor := display.get_monitor(i))]
+    return [monitor.get_geometry() for monitor in _monitors(display)]
 
 
 def get_text_scaling_factor() -> float:
-    # GTK seems to already compensate for monitor scaling, so this just returns font scaling
-    # GTK doesn't seem to allow different scaling factors on different displays
-    # Text_scaling allow fractional scaling
-
     return Gio.Settings.new("org.gnome.desktop.interface").get_double("text-scaling-factor")

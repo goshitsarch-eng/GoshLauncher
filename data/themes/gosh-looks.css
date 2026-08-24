@@ -1,0 +1,77 @@
+/* Spotlight-goshos launcher looks. Applied as .gosh-theme-{id} on .app */
+
+.gosh-theme-spotlight.app {
+  background-color: #1c1c1e;
+  border-radius: 18px;
+  border: 1px solid #2c2c2e;
+}
+.gosh-theme-spotlight .input { color: #f2f2f7; caret-color: #0a84ff; }
+.gosh-theme-spotlight .item-box.selected { background-color: #0a84ff; border-radius: 10px; }
+
+.gosh-theme-omarchy.app { background-color: #1a1b26; border-radius: 8px; border: 1px solid #24283b; }
+.gosh-theme-omarchy .input { color: #c0caf5; caret-color: #7aa2f7; }
+.gosh-theme-omarchy .item-box.selected { background-color: #33467c; }
+
+.gosh-theme-popos.app { background-color: #2b2e38; border-radius: 12px; }
+.gosh-theme-popos .input { color: #f6f6f6; caret-color: #94ebff; }
+.gosh-theme-popos .item-box.selected { background-color: #4d5568; }
+
+.gosh-theme-ulauncher.app { background-color: #3c4141; border-radius: 4px; }
+.gosh-theme-ulauncher .input { color: #ddd; caret-color: #faa41a; }
+.gosh-theme-ulauncher .item-box.selected { background-color: #285c99; }
+
+.gosh-theme-krunner.app { background-color: #2a2e32; border-radius: 4px; border: 1px solid #3daee9; }
+.gosh-theme-krunner .input { color: #fcfcfc; caret-color: #3daee9; }
+.gosh-theme-krunner .item-box.selected { background-color: #3daee9; }
+
+.gosh-theme-gnome.app { background-color: #242424; border-radius: 16px; }
+.gosh-theme-gnome .input { color: #eeeeee; caret-color: @theme_selected_bg_color; }
+.gosh-theme-gnome .item-box.selected { background-color: alpha(@theme_selected_bg_color, 0.35); border-radius: 10px; }
+
+.gosh-theme-rofi.app { background-color: #222222; border-radius: 0; }
+.gosh-theme-rofi .input { color: #cccccc; caret-color: #005577; }
+.gosh-theme-rofi .item-box.selected { background-color: #005577; }
+
+.gosh-theme-raycast.app { background-color: #1c1c1c; border-radius: 12px; }
+.gosh-theme-raycast .input { color: #ffffff; caret-color: #ff6363; }
+.gosh-theme-raycast .item-box.selected { background-color: #2e2e2e; border-radius: 8px; }
+
+.gosh-theme-albert.app { background-color: #232629; border-radius: 8px; }
+.gosh-theme-albert .input { color: #eff0f1; caret-color: #1d99f3; }
+.gosh-theme-albert .item-box.selected { background-color: #1d99f3; }
+
+.gosh-theme-wofi.app { background-color: #1d1f21; border-radius: 0; }
+.gosh-theme-wofi .input { color: #c5c8c6; caret-color: #285577; }
+.gosh-theme-wofi .item-box.selected { background-color: #285577; }
+
+.gosh-theme-fuzzel.app { background-color: #fdf6e3; border-radius: 10px; border: 2px solid #93a1a1; }
+.gosh-theme-fuzzel .input { color: #657b83; caret-color: #268bd2; }
+.gosh-theme-fuzzel .item-box.selected { background-color: #eee8d5; }
+.gosh-theme-fuzzel .item-name, .gosh-theme-fuzzel .item-descr { color: #657b83; }
+
+.gosh-theme-anyrun.app { background-color: #1e1e2e; border-radius: 16px; }
+.gosh-theme-anyrun .input { color: #cdd6f4; caret-color: #89b4fa; }
+.gosh-theme-anyrun .item-box.selected { background-color: #313244; border-radius: 10px; }
+
+.gosh-theme-tofi.app { background-color: #000000; border-radius: 0; }
+.gosh-theme-tofi .input { color: #ffffff; caret-color: #ffffff; }
+.gosh-theme-tofi .item-box.selected { background-color: #ffffff; }
+.gosh-theme-tofi .item-box.selected .item-name { color: #000000; }
+
+.gosh-theme-light.app { background-color: #f6f5f4; border-radius: 16px; }
+.gosh-theme-light .input { color: #241f31; caret-color: @theme_selected_bg_color; }
+.gosh-theme-light .item-box.selected { background-color: alpha(@theme_selected_bg_color, 0.25); border-radius: 10px; }
+.gosh-theme-light .item-name { color: #241f31; }
+
+.gosh-theme-powertoys.app { background-color: #2c2c2c; border-radius: 8px; }
+.gosh-theme-powertoys .input { color: #ffffff; caret-color: #0078d4; }
+.gosh-theme-powertoys .item-box.selected { background-color: #0078d4; border-radius: 4px; }
+
+.gosh-theme-synapse.app { background-color: #2d2d2d; border-radius: 6px; }
+.gosh-theme-synapse .input { color: #eeeeee; caret-color: #e95420; }
+.gosh-theme-synapse .item-box.selected { background-color: #e95420; }
+
+.gosh-theme-onagre.app { background-color: #2b2a27; border-radius: 10px; }
+.gosh-theme-onagre .input { color: #e6e4df; caret-color: #e9a825; }
+.gosh-theme-onagre .item-box.selected { background-color: #e9a825; }
+.gosh-theme-onagre .item-box.selected .item-name { color: #1a1916; }

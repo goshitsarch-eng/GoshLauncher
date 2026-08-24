@@ -52,7 +52,17 @@ class ShortcutsView(views.BaseView):
 
     def _create_form_container(self) -> Gtk.Box:
         """Create the main form container"""
-        return styled(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15, margin=20), "edit-form")
+        return styled(
+            Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                spacing=15,
+                margin_top=20,
+                margin_bottom=20,
+                margin_start=20,
+                margin_end=20,
+            ),
+            "edit-form",
+        )
 
     def _create_icon_button_row(self, shortcut: Shortcut) -> Gtk.Box:
         """Create the top row with icon on left and action buttons on right"""
@@ -155,7 +165,7 @@ class ShortcutsView(views.BaseView):
         cmd_section.pack_start(cmd_help_expander, False, False, 5)
 
         scrolled_cmd = styled(
-            Gtk.ScrolledWindow(min_content_height=100, shadow_type=Gtk.ShadowType.IN),
+            Gtk.ScrolledWindow(min_content_height=100),
             "shortcuts-command-editor",
         )
 
@@ -302,7 +312,10 @@ class ShortcutsView(views.BaseView):
             valign=Gtk.Align.CENTER,
             halign=Gtk.Align.CENTER,
             spacing=10,
-            margin=30,
+            margin_top=30,
+            margin_bottom=30,
+            margin_start=30,
+            margin_end=30,
         )
 
         heading_label = styled(Gtk.Label(label=heading, halign=Gtk.Align.CENTER), "title-3")
