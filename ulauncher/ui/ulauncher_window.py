@@ -68,6 +68,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._backdrop = None
         self._backdrop_close_idle = None
         self._prefs_layout_idle = None
+        self._input_chrome_idle = None
         self._osk_visible = False
         self._scale_watched = False
         width_request = self.settings.base_width
@@ -317,6 +318,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._start_live_search()
         self._start_session_watch()
         self._start_osk_watch()
+        self._raise_input_chrome()
         self._start_limits_timer()
 
     def on_initial_draw(self, *_: Any) -> None:
@@ -338,11 +340,14 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
         if self.is_dragging:
             return
+        ime_panel = ime_panel_visible()
+        self._sync_input_chrome_layer(ime_panel=ime_panel)
         action = gtk_window_focus_action(
             bool(self.is_active()),
             self.get_focus(),
             self.prompt_input,
-            ime_panel=ime_panel_visible(),
+            ime_panel=ime_panel,
+            osk_contains_focus=self._osk_visible,
         )
         if action == "close" and self.settings.close_on_focus_out:
             self.close(save_query=True)
@@ -410,6 +415,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 "Invalid value for arrow_key_aliases: %s, expected four letters", self.settings.arrow_key_aliases
             )
 
+        entry = self.prompt_input
+        preedit = _read_entry_preedit(entry)
+        now_us = _event_time_us(controller)
+        candidate_visible = False if preedit else ime_panel_visible()
+        # Compose and IBus lookup consume every key first, including Escape.
+        if should_propagate_for_ime(preedit, candidate_visible):
+            self._raise_input_chrome(ime_panel=candidate_visible)
+            return False
+
         if keyname == "Escape":
             self.close(save_query=True)
             return True
@@ -418,11 +432,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.get_app().show_preferences()
             return True
 
-        entry = self.prompt_input
-        preedit = _read_entry_preedit(entry)
-        now_us = _event_time_us(controller)
-        candidate_visible = False if preedit else ime_panel_visible()
-        ime_owns_nav = should_propagate_for_ime(preedit, candidate_visible)
         if (
             keyname == "BackSpace"
             and not ctrl
@@ -435,8 +444,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if ctrl:
             nav = resolve_ctrl_nav(keyname)
             if nav and self.results_view.has_results:
-                if ime_owns_nav:
-                    return False
                 if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
                     return True
                 self._nav_last_key = keyval
@@ -451,8 +458,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             if home_end["type"] == "propagate":
                 return False
             if self.results_view.has_results:
-                if ime_owns_nav:
-                    return False
                 if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
                     return True
                 self._nav_last_key = keyval
@@ -466,8 +471,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.close(save_query=True)
             return True
         if action["type"] == "move" and self.results_view.has_results:
-            if ime_owns_nav:
-                return False
             if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
                 return True
             self._nav_last_key = keyval
@@ -690,6 +693,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self._osk_watch.start()
             self._osk_visible = bool(self._osk_watch.visible)
             if self._osk_visible:
+                self._raise_input_chrome()
                 self.position_window()
 
     def _stop_osk_watch(self) -> None:
@@ -703,6 +707,10 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
     def _on_osk_changed(self, visible: bool) -> None:
         self._osk_visible = bool(visible)
+        if visible:
+            self._raise_input_chrome()
+        else:
+            self._sync_input_chrome_layer()
         if self.get_mapped():
             self.position_window()
 
@@ -773,6 +781,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
         logger.info("Closing Ulauncher window")
         self._cancel_live_layout()
+        self._cancel_input_chrome_idle()
         self._stop_live_search()
         self._stop_session_watch()
         self._stop_osk_watch()
@@ -804,18 +813,58 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                     break
         return overlay_skip_index(covers_current_monitor=True, current_index=current)
 
+    def _sync_input_chrome_layer(self, ime_panel: bool | None = None) -> None:
+        from ulauncher.modes.launcher.ime import ime_panel_visible
+        from ulauncher.modes.launcher.popup_chrome import backdrop_layer_for_input_chrome
+
+        backdrop = getattr(self, "_backdrop", None)
+        if backdrop is None:
+            return
+        if ime_panel is None:
+            preedit = _read_entry_preedit(self.prompt_input)
+            ime_panel = False if preedit else ime_panel_visible()
+        backdrop.set_layer(backdrop_layer_for_input_chrome(bool(self._osk_visible), bool(ime_panel)))
+
+    def _raise_input_chrome(self, ime_panel: bool | None = None) -> None:
+        self._sync_input_chrome_layer(ime_panel=ime_panel)
+        self._raise_input_chrome_soon()
+
+    def _raise_input_chrome_soon(self) -> None:
+        from ulauncher.modes.launcher.popup_chrome import should_schedule_input_chrome_raise
+
+        pending = getattr(self, "_input_chrome_idle", None)
+        if not should_schedule_input_chrome_raise(pending is not None, self.get_mapped()):
+            return
+        self._input_chrome_idle = scheduling.run_when_idle(self._run_input_chrome_raise)
+
+    def _run_input_chrome_raise(self) -> None:
+        from ulauncher.modes.launcher.popup_chrome import should_raise_on_input_chrome_allocation
+
+        self._input_chrome_idle = None
+        if should_raise_on_input_chrome_allocation(self.get_mapped(), True):
+            self._sync_input_chrome_layer()
+
+    def _cancel_input_chrome_idle(self) -> None:
+        idle = getattr(self, "_input_chrome_idle", None)
+        if idle is None:
+            return
+        idle.cancel()
+        self._input_chrome_idle = None
+
     def _show_backdrop(self) -> None:
         from ulauncher.ui.backdrop_overlay import PopupBackdrop
 
         if self._backdrop is None:
             self._backdrop = PopupBackdrop(self._on_backdrop_click, self._raise_over_backdrop)
         self._backdrop.show(self._backdrop_skip_index())
+        self._sync_input_chrome_layer(ime_panel=False)
 
     def _relayout_backdrop(self) -> None:
         backdrop = getattr(self, "_backdrop", None)
         if backdrop is None:
             return
         backdrop.relayout(self._backdrop_skip_index())
+        self._sync_input_chrome_layer()
         self.present()
 
     def _destroy_backdrop(self) -> None:

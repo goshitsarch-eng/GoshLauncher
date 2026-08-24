@@ -47,6 +47,20 @@ def set_vertical_position(window: Gtk.Window, pos_y: float) -> None:
     LayerShell.set_margin(window, LayerShell.Edge.TOP, int(pos_y))
 
 
+def set_layer(window: Gtk.Window, name: str) -> None:
+    if not is_supported() or LayerShell is None:
+        return
+    layer_enum = getattr(LayerShell, "Layer", None)
+    if layer_enum is None:
+        return
+    layer = getattr(layer_enum, name.upper(), None)
+    if layer is None:
+        return
+    setter = getattr(LayerShell, "set_layer", None)
+    if callable(setter):
+        setter(window, layer)
+
+
 def enable_input_only(window: Gtk.Window, monitor: object | None = None) -> bool:
     """Fullscreen overlay that must not steal keyboard focus from the launcher."""
     if not is_supported():

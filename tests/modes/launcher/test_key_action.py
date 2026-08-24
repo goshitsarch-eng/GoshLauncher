@@ -70,3 +70,19 @@ def test_preedit_and_ime_propagation_match_goshos() -> None:
     assert should_propagate_for_ime("", True) is True
     assert should_propagate_for_ime("", False) is False
     assert should_propagate_for_ime("あ", False) is True
+
+def test_escape_and_arrows_propagate_while_ime_owns_keys() -> None:
+    """popupKeyHandler returns EVENT_PROPAGATE before resolveKeyAction while composing."""
+    from ulauncher.modes.launcher.key_action import resolve_key_action, should_propagate_for_ime
+
+    def gated(preedit: str, candidate: bool, key: str) -> str:
+        if should_propagate_for_ime(preedit, candidate):
+            return "propagate"
+        return str(resolve_key_action(key, False, False, False)["type"])
+
+    assert gated("あ", False, "Escape") == "propagate"
+    assert gated("", True, "Escape") == "propagate"
+    assert gated("", False, "Escape") == "close"
+    assert gated("あ", False, "Down") == "propagate"
+    assert gated("", True, "Return") == "propagate"
+    assert gated("", False, "Down") == "move"

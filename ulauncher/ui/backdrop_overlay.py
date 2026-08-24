@@ -59,6 +59,10 @@ class PopupBackdrop:
             return
         self.show(skip_index)
 
+    def set_layer(self, name: str) -> None:
+        for window in self._windows:
+            layer_shell.set_layer(window, name)
+
     def destroy(self) -> None:
         steps = {
             "disconnect": self._disconnect,

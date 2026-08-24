@@ -7,6 +7,7 @@ from ulauncher.modes.launcher.popup_chrome import (
     OSK_POPOVER_STYLE,
     actor_has_style_class,
     actor_or_ancestor_has_style_class,
+    backdrop_layer_for_input_chrome,
     chrome_add_method,
     ime_candidate_visible,
     input_chrome_to_raise,
@@ -78,3 +79,10 @@ def test_raise_input_chrome_keys_then_accents_then_candidates() -> None:
     assert should_schedule_input_chrome_raise(True, True) is False
     assert should_raise_on_input_chrome_allocation(True, True) is True
     assert raise_osk_chrome(ui_group, keyboard, popup) is True
+
+
+def test_backdrop_layer_drops_below_osk_and_ime() -> None:
+    assert backdrop_layer_for_input_chrome(False, False) == "overlay"
+    assert backdrop_layer_for_input_chrome(True, False) == "top"
+    assert backdrop_layer_for_input_chrome(False, True) == "top"
+    assert backdrop_layer_for_input_chrome(True, True) == "top"

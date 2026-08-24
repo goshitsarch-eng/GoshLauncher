@@ -151,3 +151,12 @@ def raise_input_chrome(ui_group: Any, keyboard_box: Any, popup: Any) -> bool:
 
 def raise_osk_chrome(ui_group: Any, keyboard_box: Any, popup: Any) -> bool:
     return raise_input_chrome(ui_group, keyboard_box, popup)
+
+
+def backdrop_layer_for_input_chrome(osk_visible: bool, ime_visible: bool) -> str:
+    """Drop the click-outside surface under OSK/IME so taps hit those, not the backdrop.
+
+    goshos raises keyboardBox and candidate-popup-boxpointer above the popup.
+    A GTK app cannot restack St actors; layer-shell TOP vs OVERLAY is the stand-in.
+    """
+    return "top" if osk_visible or ime_visible else "overlay"
