@@ -105,6 +105,20 @@ def accelerator_grab_flags(flags: Mapping[str, int] | None) -> int:
     return 0
 
 
+def should_ignore_shortcut_repeat(now_us: int, last_time_us: int, min_gap_us: int = 0) -> bool:
+    """Hold-repeat must not cancel a pending open or flip reopen-after-close.
+
+    Mutter grabs use IGNORE_AUTOREPEAT. Portal and GApplication activations can
+    still repeat. Stamp last_time on ignored events too so a held key stays quiet.
+    """
+    from ulauncher.modes.launcher.nav_repeat import NAV_REPEAT_GAP_US
+
+    gap = min_gap_us if min_gap_us > 0 else NAV_REPEAT_GAP_US
+    if last_time_us <= 0:
+        return False
+    return now_us - last_time_us < gap
+
+
 def grab_release_steps(name: str, action: int) -> list[dict[str, Any]]:
     steps: list[dict[str, Any]] = []
     if name:

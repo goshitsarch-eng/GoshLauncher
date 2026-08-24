@@ -17,6 +17,7 @@ from ulauncher.modes.launcher.shortcut import (
     shortcut_label_after_change,
     shortcut_retry_list,
     shortcut_to_persist,
+    should_ignore_shortcut_repeat,
 )
 
 
@@ -109,3 +110,12 @@ def test_run_grab_release_still_ungrabs_after_allow_throws() -> None:
     released = run_grab_release(grab_release_steps("gosh-toggle", 9), {"allowNone": allow_none, "ungrab": ungrab})
     assert ",".join(calls) == "allow:gosh-toggle,ungrab:9"
     assert released == 1
+
+
+def test_shortcut_hold_repeat_is_ignored() -> None:
+    assert should_ignore_shortcut_repeat(1000, 0) is False
+    assert should_ignore_shortcut_repeat(10_000, 1_000) is True
+    assert should_ignore_shortcut_repeat(80_000, 1_000) is False
+    # stamp the ignored event so a held key stays suppressed
+    stamped = 10_000
+    assert should_ignore_shortcut_repeat(stamped + 30_000, stamped) is True

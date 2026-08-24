@@ -59,6 +59,7 @@ class UlauncherApp(Adw.Application):
         self._popup_close_pending = False
         self._popup_reopen_after_close = False
         self._popup_close_save_query = False
+        self._toggle_last_time_us = 0
         events.set_self(self)
         self.connect("startup", lambda *_: self.setup())  # runs only once on the main instance
 
@@ -364,7 +365,16 @@ class UlauncherApp(Adw.Application):
 
     def toggle_window(self) -> None:
         """Toggle window visibility - for explicit toggle requests only."""
+        import time
+
         from ulauncher.modes.launcher.popup_gate import can_open_popup, next_toggle_action
+        from ulauncher.modes.launcher.shortcut import should_ignore_shortcut_repeat
+
+        now_us = time.monotonic_ns() // 1000
+        if should_ignore_shortcut_repeat(now_us, self._toggle_last_time_us):
+            self._toggle_last_time_us = now_us
+            return
+        self._toggle_last_time_us = now_us
 
         main = self.windows.get("main")
         is_open = main is not None
