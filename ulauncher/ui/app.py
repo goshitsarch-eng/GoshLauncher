@@ -145,18 +145,21 @@ class UlauncherApp(Adw.Application):
         if settings.show_tray_icon and self._persistent:
             self.toggle_tray_icon(True)
 
-        if first_run or settings.hotkey_show_app:
-            from ulauncher.ui.helpers.hotkey_controller import HotkeyController
+        from ulauncher.ui.helpers.hotkey_controller import HotkeyController
 
+        hotkey = "<Control>space"
+        if settings.hotkey_show_app and not HotkeyController.is_plasma():
+            hotkey = settings.hotkey_show_app
+        # Portal sessions die with the process, so this must run on every startup.
+        portal_bound = HotkeyController.bind_session_hotkey(hotkey, self.toggle_window)
+
+        if first_run or settings.hotkey_show_app:
             if HotkeyController.is_supported():
-                hotkey = "<Control>space"
-                if settings.hotkey_show_app and not HotkeyController.is_plasma():
-                    hotkey = settings.hotkey_show_app
                 if HotkeyController.setup_default(hotkey):
                     display_name = Gtk.accelerator_get_label(*Gtk.accelerator_parse(hotkey))
                     body = f'Ulauncher has added a global keyboard shortcut: "{display_name}" to your desktop settings'
                     self.show_notification("de_hotkey_auto_created", "Global shortcut created", body)
-            else:
+            elif not portal_bound:
                 body = (
                     "Ulauncher doesn't support setting global keyboard shortcuts for your desktop. "
                     "There are more details on this in the preferences view (click here to open)."

@@ -16,6 +16,7 @@ from ulauncher.modes.launcher.windows import (
     pick_window_list,
     should_force_quit_window,
     sort_windows_most_recent,
+    switch_workspace,
     tab_ranks_from_introspect_payload,
     take_window_results,
     window_close_title,
@@ -26,6 +27,7 @@ from ulauncher.modes.launcher.windows import (
     workspace_index_in_range,
     workspace_label_matches,
     workspace_result_id,
+    workspace_switch_steps,
     workspace_switch_title,
 )
 
@@ -196,3 +198,58 @@ def test_activate_window_uses_application_activate_on_wayland(monkeypatch: pytes
     calls.clear()
     activate_window({"kind": "kill", "pid": 9})
     assert calls == [("sig", 9, signal.SIGKILL)]
+
+
+def test_wayland_workspace_switch_prefers_compositor_ipc() -> None:
+    ran: list[list[str]] = []
+
+    def run(argv: list[str]) -> bool:
+        ran.append(argv)
+        return True
+
+    used = switch_workspace(
+        2,
+        x11=False,
+        which=lambda name: name if name == "hyprctl" else None,
+        run=run,
+        kwin=lambda _desktop: False,
+        ewmh=lambda _index: False,
+    )
+    assert used == "hyprctl"
+    assert ran == [["hyprctl", "dispatch", "workspace", "3"]]
+    steps = workspace_switch_steps(2, x11=False)
+    assert steps[0]["kind"] == "kwin"
+    assert steps[0]["desktop"] == 3
+
+
+def test_x11_workspace_switch_uses_wmctrl_before_kwin() -> None:
+    ran: list[list[str]] = []
+
+    def run(argv: list[str]) -> bool:
+        ran.append(argv)
+        return True
+
+    used = switch_workspace(
+        1,
+        x11=True,
+        which=lambda name: name if name == "wmctrl" else None,
+        run=run,
+        kwin=lambda _desktop: True,
+        ewmh=lambda _index: False,
+    )
+    assert used == "wmctrl"
+    assert ran == [["wmctrl", "-s", "1"]]
+
+
+def test_x11_workspace_switch_falls_back_to_ewmh() -> None:
+    desktops: list[int] = []
+    used = switch_workspace(
+        0,
+        x11=True,
+        which=lambda _name: None,
+        run=lambda _argv: False,
+        kwin=lambda _desktop: False,
+        ewmh=lambda index: desktops.append(index) or True,
+    )
+    assert used == "ewmh"
+    assert desktops == [0]

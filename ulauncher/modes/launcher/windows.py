@@ -550,15 +550,95 @@ def _close_window(wid: str) -> None:
         logger.debug("Could not close window %s", wid, exc_info=True)
 
 
-def _switch_workspace(index: int) -> None:
-    if shutil.which("wmctrl"):
-        subprocess.run(["wmctrl", "-s", str(index)], check=False)
-        return
+def workspace_switch_steps(index: int, *, x11: bool = False) -> list[dict[str, Any]]:
+    """Prefer compositor IPC on Wayland; wmctrl/EWMH only work with an X11 root window."""
+    number = index + 1
+    compositors: list[dict[str, Any]] = [
+        {"kind": "kwin", "desktop": number},
+        {"kind": "argv", "argv": ["swaymsg", "workspace", "number", str(number)]},
+        {"kind": "argv", "argv": ["hyprctl", "dispatch", "workspace", str(number)]},
+        {"kind": "argv", "argv": ["niri", "msg", "action", "focus-workspace", str(number)]},
+    ]
+    x11_steps: list[dict[str, Any]] = [
+        {"kind": "argv", "argv": ["wmctrl", "-s", str(index)]},
+        {"kind": "ewmh", "index": index},
+    ]
+    if x11:
+        return x11_steps + compositors
+    return compositors + x11_steps
+
+
+def switch_workspace(
+    index: int,
+    *,
+    x11: bool | None = None,
+    which: Callable[[str], str | None] | None = None,
+    run: Callable[[list[str]], bool] | None = None,
+    kwin: Callable[[int], bool] | None = None,
+    ewmh: Callable[[int], bool] | None = None,
+) -> str | None:
+    use_x11 = session_has_x11_window_control() if x11 is None else x11
+    which_fn = which or shutil.which
+    run_fn = run or _run_workspace_argv
+    kwin_fn = kwin or _kwin_set_current_desktop
+    ewmh_fn = ewmh or _ewmh_set_current_desktop
+    for step in workspace_switch_steps(index, x11=use_x11):
+        kind = step["kind"]
+        if kind == "argv":
+            argv = step["argv"]
+            if which_fn(argv[0]) and run_fn(argv):
+                return str(argv[0])
+        elif kind == "kwin":
+            if kwin_fn(int(step["desktop"])):
+                return "kwin"
+        elif kind == "ewmh":
+            if ewmh_fn(int(step["index"])):
+                return "ewmh"
+    return None
+
+
+def _run_workspace_argv(argv: list[str]) -> bool:
+    try:
+        completed = subprocess.run(argv, check=False, capture_output=True)
+        return completed.returncode == 0
+    except OSError:
+        return False
+
+
+def _kwin_set_current_desktop(desktop: int) -> bool:
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call_sync(
+            "org.kde.KWin",
+            "/KWin",
+            "org.kde.KWin",
+            "setCurrentDesktop",
+            GLib.Variant("(i)", (desktop,)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            200,
+            None,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _ewmh_set_current_desktop(index: int) -> bool:
     try:
         from ulauncher.utils.ewmh import EWMH
 
         ewmh = EWMH()
         ewmh.setCurrentDesktop(index)
         ewmh.display.flush()
+        return True
     except Exception:
-        logger.debug("Could not switch workspace %s", index, exc_info=True)
+        logger.debug("Could not switch workspace %s via EWMH", index, exc_info=True)
+        return False
+
+
+def _switch_workspace(index: int) -> None:
+    if switch_workspace(index) is None:
+        logger.debug("Could not switch workspace %s", index)

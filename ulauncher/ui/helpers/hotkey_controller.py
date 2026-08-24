@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from shutil import which
+from typing import Any, Callable
 
 from ulauncher import app_id
 from ulauncher.gi import Gio, GLib
@@ -71,6 +72,8 @@ def _set_hotkey(hotkey: str) -> None:
 
 
 class HotkeyController:
+    _portal_session: Any = None
+
     @staticmethod
     def is_supported() -> bool:
         return IS_SUPPORTED
@@ -139,6 +142,23 @@ class HotkeyController:
                     return True
             return False
         return False
+
+    @staticmethod
+    def bind_session_hotkey(hotkey: str, on_toggle: Callable[[], None]) -> Any:
+        """Bind Ctrl+Space via the GlobalShortcuts portal on compositors without a DE store.
+
+        GNOME/XFCE/Plasma already persist a custom keybinding. Re-binding those
+        through the portal would show a second permission dialog and toggle twice.
+        """
+        from ulauncher.modes.launcher.global_shortcuts import GlobalShortcutsPortal, should_bind_portal
+
+        if not should_bind_portal(DESKTOP_ID):
+            return None
+        portal = GlobalShortcutsPortal(on_toggle)
+        if not portal.start(hotkey, app_id):
+            return None
+        HotkeyController._portal_session = portal
+        return portal
 
 
 def _current_gnome_grab() -> str:

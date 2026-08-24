@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.urls import match_url
+from ulauncher.modes.launcher.urls import FILE_EXTS, match_url
 
 
 def test_file_extensions_are_not_urls() -> None:
@@ -13,6 +13,9 @@ def test_file_extensions_are_not_urls() -> None:
     assert match_url("data.csv") is None
     assert match_url("style.scss") is None
     assert match_url("readme.md.") is None
+    assert len(FILE_EXTS) == 88
+    assert "mjs" in FILE_EXTS
+    assert "apk" in FILE_EXTS
 
 
 def test_real_domains_match() -> None:
