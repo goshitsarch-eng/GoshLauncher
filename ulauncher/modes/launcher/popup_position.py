@@ -36,6 +36,112 @@ def gtk_window_owns_popup_width(desktop_id: str, is_x11_compatible: bool) -> boo
     return desktop_id != "GNOME" or is_x11_compatible
 
 
+def intersect_rect(first: dict[str, float], second: dict[str, float]) -> dict[str, int] | None:
+    x = max(first["x"], second["x"])
+    y = max(first["y"], second["y"])
+    right = min(first["x"] + first["width"], second["x"] + second["width"])
+    bottom = min(first["y"] + first["height"], second["y"] + second["height"])
+    if right <= x or bottom <= y:
+        return None
+    return {"x": int(x), "y": int(y), "width": int(right - x), "height": int(bottom - y)}
+
+
+def desktop_work_area_from_ewmh(values: Any, desktop_index: int = 0) -> dict[str, int] | None:
+    """Parse _NET_WORKAREA (x, y, width, height per desktop)."""
+    if values is None:
+        return None
+    if isinstance(values, dict):
+        if "x" in values and "y" in values and "width" in values and "height" in values:
+            return {key: int(values[key]) for key in ("x", "y", "width", "height")}
+        return None
+    try:
+        items = list(values)
+    except TypeError:
+        return None
+    if not items:
+        return None
+    if not isinstance(items[0], (int, float, str)):
+        index = desktop_index if 0 <= desktop_index < len(items) else 0
+        return desktop_work_area_from_ewmh(items[index], 0)
+    nums: list[int] = []
+    for item in items:
+        try:
+            nums.append(int(item))
+        except (TypeError, ValueError):
+            return None
+    if len(nums) < 4:
+        return None
+    offset = max(0, int(desktop_index)) * 4
+    if offset + 4 > len(nums):
+        offset = 0
+    return {"x": nums[offset], "y": nums[offset + 1], "width": nums[offset + 2], "height": nums[offset + 3]}
+
+
+def work_area_for_monitor(geometry: dict[str, float], desktop_work_area: dict[str, float] | None) -> dict[str, int]:
+    """goshos getWorkAreaForMonitor: keep panel struts out of the popup origin."""
+    geo = {
+        "x": int(geometry["x"]),
+        "y": int(geometry["y"]),
+        "width": int(geometry["width"]),
+        "height": int(geometry["height"]),
+    }
+    if not desktop_work_area:
+        return geo
+    overlap = intersect_rect(geo, desktop_work_area)
+    return overlap or geo
+
+
+def work_area_from_hyprland_monitor(monitor: Any) -> dict[str, int] | None:
+    # hyprctl -j monitors: reserved is [left, top, right, bottom]
+    if not monitor:
+        return None
+    width = int(_get(monitor, "width", 0) or 0)
+    height = int(_get(monitor, "height", 0) or 0)
+    if width <= 0 or height <= 0:
+        return None
+    reserved = _get(monitor, "reserved", None) or [0, 0, 0, 0]
+    try:
+        left = int(reserved[0])
+        top = int(reserved[1])
+        right = int(reserved[2])
+        bottom = int(reserved[3])
+    except (TypeError, IndexError, ValueError):
+        left = top = right = bottom = 0
+    return {
+        "x": int(_get(monitor, "x", 0) or 0) + left,
+        "y": int(_get(monitor, "y", 0) or 0) + top,
+        "width": max(0, width - left - right),
+        "height": max(0, height - top - bottom),
+    }
+
+
+def hyprland_work_area_for_geometry(monitors: Any, geometry: dict[str, float]) -> dict[str, int] | None:
+    rows = list(monitors or [])
+    if not rows:
+        return None
+    match = None
+    for monitor in rows:
+        if int(_get(monitor, "x", 0) or 0) == int(geometry["x"]) and int(_get(monitor, "y", 0) or 0) == int(
+            geometry["y"]
+        ):
+            match = monitor
+            break
+    if match is None:
+        match = next((monitor for monitor in rows if _get(monitor, "focused", False)), rows[0])
+    return work_area_from_hyprland_monitor(match)
+
+
+def resolve_monitor_work_area(
+    geometry: dict[str, float],
+    desktop_work_area: dict[str, float] | None = None,
+    hyprland_monitors: Any = None,
+) -> dict[str, int]:
+    hypr = hyprland_work_area_for_geometry(hyprland_monitors, geometry)
+    if hypr:
+        return hypr
+    return work_area_for_monitor(geometry, desktop_work_area)
+
+
 def results_max_height_for_work_area(requested: float, space_below: float) -> float:
     if space_below <= 0:
         return 0

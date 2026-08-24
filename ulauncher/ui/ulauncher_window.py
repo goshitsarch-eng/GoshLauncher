@@ -15,7 +15,7 @@ from ulauncher.internals.results_update import ResultsUpdate
 from ulauncher.modes.launcher.looks import chrome_from_settings, ensure_look_chrome
 from ulauncher.ui import gtk4
 from ulauncher.ui.helpers import layer_shell
-from ulauncher.ui.helpers.monitor import get_monitor, get_monitor_geometries
+from ulauncher.ui.helpers.monitor import get_monitor, get_monitor_geometries, monitor_work_geometry
 from ulauncher.ui.helpers.theme import Theme
 from ulauncher.ui.load_icon_surface import load_icon_paintable
 from ulauncher.ui.results_view import ResultsView
@@ -656,7 +656,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             layout_size.height = min(geometry.height for geometry in geometries)
             return layout_size
         if monitor := get_monitor(self.settings.render_on_screen != "default-monitor"):
-            return monitor.get_geometry()
+            return monitor_work_geometry(monitor)
         return None
 
     def position_window(self) -> None:

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from ulauncher.modes.launcher.popup_position import (
     MIN_RESULTS_HEIGHT,
+    desktop_work_area_from_ewmh,
     empty_popup_height,
     gtk_window_owns_popup_width,
     keyboard_overlap_from_box,
@@ -11,8 +12,11 @@ from ulauncher.modes.launcher.popup_position import (
     place_popup,
     popup_origin,
     popup_width_for_work_area,
+    resolve_monitor_work_area,
     results_max_height_for_work_area,
     work_area_avoiding_keyboard,
+    work_area_for_monitor,
+    work_area_from_hyprland_monitor,
 )
 from ulauncher.modes.launcher.ui_scale import (
     css_px,
@@ -128,3 +132,30 @@ def test_empty_popup_height_uses_measured_entry() -> None:
     assert gtk_window_owns_popup_width("GNOME", False) is False
     assert gtk_window_owns_popup_width("GNOME", True) is True
     assert gtk_window_owns_popup_width("KDE", False) is True
+
+
+def test_work_area_sits_below_panel_struts() -> None:
+    geometry = {"x": 0, "y": 0, "width": 1920, "height": 1080}
+    assert desktop_work_area_from_ewmh(None) is None
+    assert desktop_work_area_from_ewmh([0, 32, 1920, 1048]) == {"x": 0, "y": 32, "width": 1920, "height": 1048}
+    assert desktop_work_area_from_ewmh([0, 0, 1920, 1080, 0, 40, 1920, 1040], 1) == {
+        "x": 0,
+        "y": 40,
+        "width": 1920,
+        "height": 1040,
+    }
+    assert desktop_work_area_from_ewmh([[0, 24, 1920, 1056]]) == {"x": 0, "y": 24, "width": 1920, "height": 1056}
+    below_panel = work_area_for_monitor(geometry, {"x": 0, "y": 32, "width": 1920, "height": 1048})
+    assert below_panel == {"x": 0, "y": 32, "width": 1920, "height": 1048}
+    assert work_area_for_monitor(geometry, None) == geometry
+    assert work_area_for_monitor(geometry, {"x": 2000, "y": 0, "width": 100, "height": 100}) == geometry
+    origin = popup_origin(below_panel, 600, 80, "top")
+    assert origin["y"] == int(32 + 1048 * 0.12)
+    hypr = work_area_from_hyprland_monitor({"x": 0, "y": 0, "width": 1920, "height": 1080, "reserved": [0, 40, 0, 48]})
+    assert hypr == {"x": 0, "y": 40, "width": 1920, "height": 992}
+    resolved = resolve_monitor_work_area(
+        geometry,
+        {"x": 0, "y": 32, "width": 1920, "height": 1048},
+        [{"x": 0, "y": 0, "width": 1920, "height": 1080, "reserved": [0, 40, 0, 0], "focused": True}],
+    )
+    assert resolved["y"] == 40
