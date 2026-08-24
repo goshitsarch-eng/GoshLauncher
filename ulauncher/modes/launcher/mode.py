@@ -11,8 +11,10 @@ from ulauncher.modes.launcher.plan import (
     flags_from_settings,
     merge_empty_suggestions,
     plan_search,
+    should_refresh_bookmarks,
     should_refresh_command,
     should_refresh_path,
+    should_refresh_recent_files,
 )
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
 from ulauncher.modes.mode import Mode
@@ -39,6 +41,7 @@ class LauncherMode(Mode):
         return bool(query_str)
 
     def handle_query(self, query: Query, callback: Callable[[effects.EffectMessage], None]) -> None:
+        from ulauncher.modes.launcher.bookmarks import bookmarks_are_ready, ensure_bookmarks
         from ulauncher.modes.launcher.commands import (
             command_is_resolved,
             command_needs_async,
@@ -46,6 +49,7 @@ class LauncherMode(Mode):
             invalidate_command_lookup,
         )
         from ulauncher.modes.launcher.paths import ensure_path, invalidate_path_lookup, path_is_resolved
+        from ulauncher.modes.launcher.recents import ensure_recent_files, recents_are_ready
 
         settings = Settings.load()
         flags = flags_from_settings(settings)
@@ -59,13 +63,17 @@ class LauncherMode(Mode):
         self._paint_chrome = chrome
         want_path = should_refresh_path(bool(flags.get("path")), planned)
         want_command = should_refresh_command(bool(flags.get("command")), planned)
+        want_bookmarks = should_refresh_bookmarks(bool(flags.get("bookmarks")), planned)
+        want_recents = should_refresh_recent_files(bool(flags.get("files")), planned)
         slash_command = want_command and command_needs_async(planned["query"])
         path_async = want_path and not path_is_resolved(planned["query"])
         command_async = slash_command and not command_is_resolved(planned["query"])
+        bookmarks_async = want_bookmarks and not bookmarks_are_ready()
+        recents_async = want_recents and not recents_are_ready()
         callback(
             effects.render_results(
                 self._results_for_plan(planned, settings, chrome),
-                final=not (path_async or command_async),
+                final=not (path_async or command_async or bookmarks_async or recents_async),
             )
         )
         if want_path:
@@ -76,6 +84,10 @@ class LauncherMode(Mode):
             ensure_command(planned["query"], self._schedule_repaint)
         else:
             invalidate_command_lookup()
+        if want_bookmarks:
+            ensure_bookmarks(self._schedule_repaint)
+        if want_recents:
+            ensure_recent_files(self._schedule_repaint)
 
     def _schedule_repaint(self) -> None:
         if self._lookup_idle:
@@ -93,11 +105,15 @@ class LauncherMode(Mode):
         callback(effects.render_results(self._results_for_plan(planned, settings, chrome)))
 
     def flush_lookups(self) -> None:
+        from ulauncher.modes.launcher.bookmarks import flush_bookmarks_lookup
         from ulauncher.modes.launcher.commands import flush_command_lookup
         from ulauncher.modes.launcher.paths import flush_path_lookup
+        from ulauncher.modes.launcher.recents import flush_recents_lookup
 
         flush_path_lookup()
         flush_command_lookup()
+        flush_bookmarks_lookup()
+        flush_recents_lookup()
         if self._lookup_idle:
             self._lookup_idle.cancel()
             self._run_repaint()
@@ -337,9 +353,9 @@ class LauncherMode(Mode):
                     add("places", {"kind": "path", "score": 79, **term})
 
         if "bookmarks" in providers:
-            from ulauncher.modes.launcher.bookmarks import match_bookmarks
+            from ulauncher.modes.launcher.bookmarks import search_bookmarks
 
-            for hit in match_bookmarks(q)[:cap]:
+            for hit in search_bookmarks(q, cap):
                 row = _row_from_uri(hit, score=75, kind="bookmark")
                 if row:
                     add("bookmarks", row)
@@ -511,9 +527,9 @@ class LauncherMode(Mode):
                 )
 
         if "files" in providers:
-            from ulauncher.modes.launcher.recents import match_recents
+            from ulauncher.modes.launcher.recents import search_recents
 
-            for hit in match_recents(q)[:cap]:
+            for hit in search_recents(q, cap):
                 row = _row_from_uri(hit, score=45, kind="file")
                 if row:
                     add("files", row)

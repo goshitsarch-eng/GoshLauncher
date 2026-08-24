@@ -2,7 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ulauncher.modes.launcher.recents import match_recents, parse_xbel, usable_recent_uri
+import pytest
+
+from ulauncher.modes.launcher.recents import (
+    ensure_recent_files,
+    flush_recents_lookup,
+    icon_for_basename,
+    invalidate_recent_files,
+    match_recents,
+    parse_recent_xbel,
+    parse_xbel,
+    recent_exists_should_settle,
+    search_recents,
+    usable_recent_uri,
+)
 
 
 def test_usable_recent_uri_rejects_web_and_script() -> None:
@@ -54,3 +67,54 @@ def test_match_recents_parent_folder_and_multi_word() -> None:
     by_host = match_recents("fileserver", rows)
     assert [row["title"] for row in by_host] == ["readme.md"]
     assert match_recents("", rows, limit=1) == rows[:1]
+
+
+def test_parse_recent_xbel_regex_unescapes_and_skips_web() -> None:
+    text = """
+<xbel>
+  <bookmark href="https://example.com/ignore"/>
+  <bookmark href="javascript:alert(1)"/>
+  <bookmark href="file:javascript:alert(1)"/>
+  <bookmark href="file:///tmp/a&amp;b.txt"/>
+  <bookmark href='file:///tmp/single.txt'/>
+  <bookmark href = "file:///tmp/spaced.txt"/>
+  <bookmark href="sftp://nas.local/share/notes.txt"/>
+</xbel>
+"""
+    uris = parse_recent_xbel(text)
+    assert "file:///tmp/a&b.txt" in uris
+    assert "file:///tmp/single.txt" in uris
+    assert "file:///tmp/spaced.txt" in uris
+    assert "sftp://nas.local/share/notes.txt" in uris
+    assert all("example.com" not in uri and "javascript" not in uri for uri in uris)
+
+
+def test_icon_for_basename_and_exists_budget() -> None:
+    assert icon_for_basename("notes.pdf") == "x-office-document-symbolic"
+    assert icon_for_basename("shot.png") == "image-x-generic-symbolic"
+    assert icon_for_basename("README") == "document-open-recent-symbolic"
+    assert recent_exists_should_settle(0, 10, 800) is True
+    assert recent_exists_should_settle(2, 100, 800) is False
+    assert recent_exists_should_settle(2, 800, 800) is True
+
+
+def test_search_recents_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    notes = tmp_path / "unique-goshos-recent-xyz.txt"
+    notes.write_text("ok", encoding="utf-8")
+    xbel = tmp_path / "recently-used.xbel"
+    xbel.write_text(
+        f"""<?xml version="1.0"?>
+<xbel>
+  <bookmark href="{notes.as_uri()}"/>
+</xbel>
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.recents.XBEL", xbel)
+    invalidate_recent_files()
+    assert search_recents("unique-goshos-recent-xyz") == []
+    ensure_recent_files(lambda: None)
+    flush_recents_lookup()
+    rows = search_recents("unique-goshos-recent-xyz")
+    assert rows
+    assert rows[0]["title"] == "unique-goshos-recent-xyz.txt"

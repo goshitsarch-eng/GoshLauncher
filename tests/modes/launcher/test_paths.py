@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.bookmarks import normalize_bookmark_uri, parse_gtk_bookmarks
+from pathlib import Path
+
+import pytest
+
+from ulauncher.modes.launcher.bookmarks import (
+    ensure_bookmarks,
+    flush_bookmarks_lookup,
+    invalidate_bookmarks,
+    normalize_bookmark_uri,
+    parse_gtk_bookmarks,
+    search_bookmarks,
+)
 from ulauncher.modes.launcher.paths import (
     canonicalize_launch_uri,
     ensure_path,
@@ -87,3 +98,16 @@ def test_bookmark_uri_canonicalizes_and_rejects_unsafe() -> None:
     assert " " not in uri
     rows = parse_gtk_bookmarks("file:///tmp/docs Documents\njavascript:alert(1) bad\n")
     assert [row["title"] for row in rows] == ["Documents"]
+
+
+def test_search_bookmarks_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bookmark_file = tmp_path / "bookmarks"
+    bookmark_file.write_text("file:///tmp UniqueBookmarkLabelXYZ\n", encoding="utf-8")
+    monkeypatch.setattr("ulauncher.modes.launcher.bookmarks.BOOKMARK_FILES", (bookmark_file,))
+    invalidate_bookmarks()
+    assert search_bookmarks("UniqueBookmarkLabelXYZ") == []
+    ensure_bookmarks(lambda: None)
+    flush_bookmarks_lookup()
+    rows = search_bookmarks("UniqueBookmarkLabelXYZ")
+    assert rows
+    assert rows[0]["title"] == "UniqueBookmarkLabelXYZ"

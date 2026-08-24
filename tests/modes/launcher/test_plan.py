@@ -6,8 +6,10 @@ from ulauncher.modes.launcher.plan import (
     flags_from_settings,
     merge_empty_suggestions,
     plan_search,
+    should_refresh_bookmarks,
     should_refresh_command,
     should_refresh_path,
+    should_refresh_recent_files,
 )
 
 
@@ -88,6 +90,24 @@ def test_should_refresh_command_only_in_bang_mode() -> None:
     assert should_refresh_command(True, planned) is True
     planned = plan_search("ls", _flags(enable_command_run=True))
     assert should_refresh_command(True, planned) is False
+
+
+def test_should_refresh_bookmarks_only_in_all_mode() -> None:
+    planned = plan_search("docs", _flags())
+    assert should_refresh_bookmarks(True, planned) is True
+    planned = plan_search("=42", _flags())
+    assert should_refresh_bookmarks(True, planned) is False
+    assert should_refresh_bookmarks(False, plan_search("docs", _flags())) is False
+
+
+def test_should_refresh_recent_files_for_dot_prefix_and_all() -> None:
+    planned = plan_search(". notes", _flags())
+    assert should_refresh_recent_files(True, planned) is True
+    planned = plan_search("notes", _flags())
+    assert should_refresh_recent_files(True, planned) is True
+    planned = plan_search("@ notes", _flags())
+    assert should_refresh_recent_files(True, planned) is False
+    assert should_refresh_recent_files(False, plan_search(". notes", _flags())) is False
 
 
 def test_spoken_open_firefox_strips_verb() -> None:

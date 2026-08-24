@@ -181,6 +181,24 @@ def test_path_first_paint_is_checking_until_flush() -> None:
     assert path.description == "Open path"
 
 
+def test_bookmark_first_paint_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bookmark_file = tmp_path / "bookmarks"
+    bookmark_file.write_text("file:///tmp UniqueBookmarkLabelXYZ\n", encoding="utf-8")
+    monkeypatch.setattr("ulauncher.modes.launcher.bookmarks.BOOKMARK_FILES", (bookmark_file,))
+    from ulauncher.modes.launcher.bookmarks import invalidate_bookmarks
+
+    invalidate_bookmarks()
+    captured: list = []
+    mode = LauncherMode()
+    mode.handle_query(Query(None, "UniqueBookmarkLabelXYZ"), captured.append)
+    assert captured
+    first_kinds = [str(getattr(row, "kind", "")) for row in captured[0]["results"]]
+    assert "bookmark" not in first_kinds
+    mode.flush_lookups()
+    last_kinds = [str(getattr(row, "kind", "")) for row in captured[-1]["results"]]
+    assert "bookmark" in last_kinds
+
+
 def test_search_order_windows_first_puts_windows_before_apps(monkeypatch: pytest.MonkeyPatch) -> None:
     from ulauncher.utils.settings import Settings
 

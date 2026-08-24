@@ -1,8 +1,9 @@
-"""GTK 3/4 bookmark files."""
+"""GTK 3/4 bookmark files, loaded off the first paint like goshos bookmarksSearch.js."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from ulauncher.modes.launcher.paths import (
@@ -21,18 +22,31 @@ BOOKMARK_FILES = (
 )
 
 
-def normalize_bookmark_uri(uri: str) -> str:
+class _BookmarkLookup:
+    rows: list[dict] | None = None
+    loading = False
+    on_ready: Callable[[], None] | None = None
+    load_id = 0
+    pending_finish: Callable[[], None] | None = None
+
+
+_bookmark_lookup = _BookmarkLookup()
+
+
+def normalize_bookmark_uri(uri: str, home: str | None = None) -> str:
     uri = uri.strip()
     if not uri:
         return ""
     if uri.startswith("/"):
         return canonicalize_file_uri(file_uri_from_absolute(uri))
     if uri == "~" or uri.startswith("~/"):
-        return canonicalize_file_uri(file_uri_from_absolute(expand_path(uri)))
+        return canonicalize_file_uri(file_uri_from_absolute(expand_path(uri, home)))
+    if uri.lower().startswith("file:"):
+        return canonicalize_file_uri(uri)
     return canonicalize_launch_uri(uri)
 
 
-def parse_gtk_bookmarks(text: str) -> list[dict]:
+def parse_gtk_bookmarks(text: str, home: str | None = None) -> list[dict]:
     rows: list[dict] = []
     seen: set[str] = set()
     for raw in text.splitlines():
@@ -42,12 +56,16 @@ def parse_gtk_bookmarks(text: str) -> list[dict]:
         space = line.find(" ")
         raw_uri = line if space == -1 else line[:space]
         label = "" if space == -1 else line[space + 1 :].strip()
-        uri = normalize_bookmark_uri(raw_uri)
+        uri = normalize_bookmark_uri(raw_uri, home)
         if not uri or uri in seen:
             continue
         seen.add(uri)
         rows.append({"uri": uri, "title": label or _title_from_uri(uri)})
     return rows
+
+
+def merge_bookmark_files(texts: list[str], home: str | None = None) -> list[dict]:
+    return parse_gtk_bookmarks("\n".join(texts), home)
 
 
 def _title_from_uri(uri: str) -> str:
@@ -58,27 +76,51 @@ def _title_from_uri(uri: str) -> str:
     return parsed.hostname or uri
 
 
-def bookmark_description(uri: str) -> str:
+def bookmark_description(uri: str, home: str | None = None) -> str:
     path = path_from_file_uri(uri)
     if path:
-        return collapse_home(path)
+        return collapse_home(path, home)
     return uri
 
 
-def load_bookmarks() -> list[dict]:
-    chunks: list[str] = []
+def bookmark_icon(uri: str) -> str:
+    if uri.lower().startswith("file:"):
+        return "folder-symbolic"
+    return "network-server-symbolic"
+
+
+def _described(rows: list[dict], home: str | None = None) -> list[dict]:
+    return [
+        {
+            "uri": row["uri"],
+            "title": row["title"],
+            "description": bookmark_description(row["uri"], home),
+            "icon": bookmark_icon(row["uri"]),
+        }
+        for row in rows
+    ]
+
+
+def _read_bookmark_texts_sync() -> list[str]:
+    texts: list[str] = []
     for path in BOOKMARK_FILES:
         if path.is_file():
-            chunks.append(path.read_text(encoding="utf-8", errors="replace"))
-    rows = parse_gtk_bookmarks("\n".join(chunks))
-    for row in rows:
-        row["description"] = bookmark_description(row["uri"])
-        row["icon"] = "folder" if row["uri"].lower().startswith("file:") else "network-server"
-    return rows
+            texts.append(path.read_text(encoding="utf-8", errors="replace"))
+        else:
+            texts.append("")
+    return texts
+
+
+def load_bookmarks() -> list[dict]:
+    return _described(merge_bookmark_files(_read_bookmark_texts_sync()))
 
 
 def match_bookmarks(query: str, rows: list[dict] | None = None, limit: int = 6) -> list[dict]:
-    rows = rows if rows is not None else load_bookmarks()
+    if rows is None:
+        cached = _bookmark_lookup.rows
+        if cached is None:
+            return []
+        rows = _described(cached)
     results: list[dict] = []
     for row in rows:
         title = row["title"]
@@ -94,3 +136,148 @@ def match_bookmarks(query: str, rows: list[dict] | None = None, limit: int = 6) 
         if len(results) >= limit:
             break
     return results
+
+
+def bookmarks_are_ready() -> bool:
+    return _bookmark_lookup.rows is not None
+
+
+def search_bookmarks(query: str, limit: int = 6) -> list[dict]:
+    if _bookmark_lookup.rows is None:
+        return []
+    return match_bookmarks(query, _described(_bookmark_lookup.rows), limit)
+
+
+def invalidate_bookmarks() -> None:
+    _bookmark_lookup.rows = None
+    _bookmark_lookup.loading = False
+    _bookmark_lookup.on_ready = None
+    _bookmark_lookup.pending_finish = None
+    _bookmark_lookup.load_id += 1
+
+
+def _flush_ready() -> None:
+    callback = _bookmark_lookup.on_ready
+    _bookmark_lookup.on_ready = None
+    if callback:
+        callback()
+
+
+def _apply_texts(texts: list[str], load_id: int) -> None:
+    if load_id != _bookmark_lookup.load_id:
+        return
+    if _bookmark_lookup.rows is not None:
+        return
+    _bookmark_lookup.rows = merge_bookmark_files(texts)
+    _bookmark_lookup.loading = False
+    _bookmark_lookup.pending_finish = None
+    _flush_ready()
+
+
+def _decode_contents(source: Any, result: Any) -> str:
+    try:
+        finished = source.load_contents_finish(result)
+    except Exception:
+        return ""
+    contents: Any = finished
+    if isinstance(finished, tuple):
+        contents = finished[1] if isinstance(finished[0], bool) else finished[0]
+    if isinstance(contents, memoryview):
+        contents = contents.tobytes()
+    if isinstance(contents, bytes):
+        return contents.decode("utf-8", errors="replace")
+    return str(contents or "")
+
+
+def _exists_finished(source: Any, result: Any) -> bool:
+    try:
+        return bool(source.query_exists_finish(result))
+    except Exception:
+        return False
+
+
+def _query_exists_async(file: Any, glib: Any, callback: Callable[[Any, Any], None]) -> None:
+    try:
+        file.query_exists_async(glib.PRIORITY_DEFAULT, None, callback)
+    except TypeError:
+        file.query_exists_async(None, callback)
+
+
+def _start_load() -> None:
+    load_id = _bookmark_lookup.load_id
+    _bookmark_lookup.loading = True
+
+    def finish_sync() -> None:
+        _apply_texts(_read_bookmark_texts_sync(), load_id)
+
+    _bookmark_lookup.pending_finish = finish_sync
+    try:
+        from ulauncher.gi import Gio, GLib
+    except Exception:
+        finish_sync()
+        return
+
+    paths = list(BOOKMARK_FILES)
+    texts = [""] * len(paths)
+    pending = len(paths)
+
+    def finish_one() -> None:
+        nonlocal pending
+        pending -= 1
+        if pending > 0:
+            return
+        if load_id != _bookmark_lookup.load_id:
+            return
+        _apply_texts(texts, load_id)
+
+    def load_one(index: int) -> None:
+        path = paths[index]
+        file = Gio.File.new_for_path(str(path))
+
+        def on_exists(src: Any, exists_res: Any) -> None:
+            exists = _exists_finished(src, exists_res)
+            if load_id != _bookmark_lookup.load_id:
+                return
+            if not exists:
+                texts[index] = ""
+                finish_one()
+                return
+
+            def on_loaded(loaded: Any, load_res: Any) -> None:
+                texts[index] = _decode_contents(loaded, load_res)
+                if load_id != _bookmark_lookup.load_id:
+                    return
+                finish_one()
+
+            try:
+                src.load_contents_async(None, on_loaded)
+            except Exception:
+                texts[index] = ""
+                finish_one()
+
+        try:
+            _query_exists_async(file, GLib, on_exists)
+        except Exception:
+            texts[index] = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+            finish_one()
+
+    if not paths:
+        _apply_texts([], load_id)
+        return
+    for index in range(len(paths)):
+        load_one(index)
+
+
+def ensure_bookmarks(on_ready: Callable[[], None]) -> None:
+    if _bookmark_lookup.rows is not None:
+        return
+    _bookmark_lookup.on_ready = on_ready
+    if not _bookmark_lookup.loading:
+        _start_load()
+
+
+def flush_bookmarks_lookup() -> None:
+    finish = _bookmark_lookup.pending_finish
+    _bookmark_lookup.pending_finish = None
+    if finish:
+        finish()
