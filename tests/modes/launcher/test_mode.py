@@ -79,6 +79,18 @@ def test_hex_color_without_space() -> None:
     assert "settings" not in kinds
 
 
+def test_modern_css_color_query() -> None:
+    results = _handle("hsl(0deg 100% 50%)")
+    kinds = _kinds(results)
+    assert "color" in kinds
+    color = next(row for row in results if getattr(row, "kind", "") == "color")
+    assert color.name == "#ff0000"
+    kinds = _kinds(_handle("rgb(255 0 0)"))
+    assert "color" in kinds
+    kinds = _kinds(_handle("hwb(0 0% 0%)"))
+    assert "color" in kinds
+
+
 def test_spoken_math_and_units() -> None:
     kinds = _kinds(_handle("two plus two"))
     assert "calculator" in kinds

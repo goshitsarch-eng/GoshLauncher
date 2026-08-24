@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import colorsys
-import math
 import re
 from typing import Optional
 
@@ -159,54 +158,147 @@ CSS_NAMED_COLORS: dict[str, str] = {
 }
 
 _HEX_RE = re.compile(r"^#?([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$", re.IGNORECASE)
-_FUNC_RE = re.compile(
-    r"^(rgba?|hsla?|hwb)\s*\(\s*([^)]+)\s*\)$",
-    re.IGNORECASE,
+# goshos colorMatch.js: comma, space-separated, optional deg, optional slash alpha
+_RGB_RES = (
+    re.compile(
+        r"^rgba?\(\s*([\d.]+)\s*%\s*,\s*([\d.]+)\s*%\s*,\s*([\d.]+)\s*%\s*(?:,\s*[\d.]+\s*)?\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^rgba?\(\s*([\d.]+)\s*%\s+([\d.]+)\s*%\s+([\d.]+)\s*%(?:\s*/\s*[\d.%]+)?\s*\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^rgba?\s+([\d.]+)\s*%\s*,\s*([\d.]+)\s*%\s*,\s*([\d.]+)\s*%(?:\s*,\s*[\d.]+)?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^rgba?\s+([\d.]+)\s*%\s+([\d.]+)\s*%\s+([\d.]+)\s*%(?:\s+[\d.%]+)?\s*$",
+        re.IGNORECASE,
+    ),
+)
+_RGB_BYTE_RES = (
+    re.compile(
+        r"^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^rgba?\(\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s*/\s*[\d.%]+)?\s*\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^rgba?\s+(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^rgba?\s+(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s+[\d.]+)?\s*$",
+        re.IGNORECASE,
+    ),
+)
+_HSL_RES = (
+    re.compile(
+        r"^hsla?\(\s*(-?[\d.]+)(?:deg)?\s*,\s*([\d.]+)\s*%?\s*,\s*([\d.]+)\s*%?\s*(?:,\s*[\d.]+\s*)?\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^hsla?\(\s*(-?[\d.]+)(?:deg)?\s+([\d.]+)\s*%?\s+([\d.]+)\s*%?(?:\s*/\s*[\d.%]+)?\s*\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^hsla?\s+(-?[\d.]+)(?:deg)?\s*,\s*([\d.]+)\s*%?\s*,\s*([\d.]+)\s*%?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^hsla?\s+(-?[\d.]+)(?:deg)?\s+([\d.]+)\s*%?\s+([\d.]+)\s*%?\s*$",
+        re.IGNORECASE,
+    ),
+)
+_HWB_RES = (
+    re.compile(
+        r"^hwba?\(\s*(-?[\d.]+)(?:deg)?\s*,\s*([\d.]+)\s*%?\s*,\s*([\d.]+)\s*%?\s*(?:,\s*[\d.]+\s*)?\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^hwba?\(\s*(-?[\d.]+)(?:deg)?\s+([\d.]+)\s*%?\s+([\d.]+)\s*%?(?:\s*/\s*[\d.%]+)?\s*\)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^hwba?\s+(-?[\d.]+)(?:deg)?\s*,\s*([\d.]+)\s*%?\s*,\s*([\d.]+)\s*%?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^hwba?\s+(-?[\d.]+)(?:deg)?\s+([\d.]+)\s*%?\s+([\d.]+)\s*%?\s*$",
+        re.IGNORECASE,
+    ),
 )
 
 
-def _clamp(n: float, lo: float = 0, hi: float = 1) -> float:
-    return max(lo, min(hi, n))
+def _first_match(text: str, patterns: tuple[re.Pattern[str], ...]) -> re.Match[str] | None:
+    for pattern in patterns:
+        match = pattern.match(text)
+        if match:
+            return match
+    return None
 
 
-def _parse_channel(raw: str, *, percent: bool | None = None, max_value: float = 255) -> Optional[float]:
-    s = raw.strip()
-    if not s:
-        return None
-    is_pct = s.endswith("%")
-    if is_pct:
-        s = s[:-1].strip()
-    try:
-        value = float(s)
-    except ValueError:
-        return None
-    if is_pct or percent is True:
-        return _clamp(value / 100.0)
-    if percent is False:
-        return _clamp(value / max_value)
-    return _clamp(value / max_value)
+def _byte_hex(n: int) -> str:
+    return f"{max(0, min(255, n)):02x}"
 
 
-def _parse_hue(raw: str) -> Optional[float]:
-    s = raw.strip().lower()
-    if not s:
+def _rgb_bytes_to_hex(r: float, g: float, b: float) -> str:
+    return f"#{_byte_hex(round(r * 255))}{_byte_hex(round(g * 255))}{_byte_hex(round(b * 255))}"
+
+
+def _hsl_to_hex(h: float, s: float, l: float) -> str:
+    rf, gf, bf = colorsys.hls_to_rgb(((h % 360) + 360) % 360 / 360.0, l / 100.0, s / 100.0)
+    return _rgb_bytes_to_hex(rf, gf, bf)
+
+
+def _hwb_to_hex(h: float, w: float, bl: float) -> str:
+    white = w / 100.0
+    black = bl / 100.0
+    if white + black >= 1:
+        gray = white / (white + black)
+        return _rgb_bytes_to_hex(gray, gray, gray)
+    rf, gf, bf = colorsys.hls_to_rgb(((h % 360) + 360) % 360 / 360.0, 0.5, 1.0)
+    factor = 1 - white - black
+    return _rgb_bytes_to_hex(rf * factor + white, gf * factor + white, bf * factor + white)
+
+
+def _parse_rgb_hex(text: str) -> str | None:
+    percent = _first_match(text, _RGB_RES)
+    if percent:
+        r, g, b = float(percent.group(1)), float(percent.group(2)), float(percent.group(3))
+        if r > 100 or g > 100 or b > 100:
+            return None
+        return f"#{_byte_hex(round(r * 255 / 100))}{_byte_hex(round(g * 255 / 100))}{_byte_hex(round(b * 255 / 100))}"
+    match = _first_match(text, _RGB_BYTE_RES)
+    if not match:
         return None
-    mul = 1.0
-    if s.endswith("turn"):
-        mul = 360.0
-        s = s[:-4].strip()
-    elif s.endswith("rad"):
-        mul = 180.0 / math.pi
-        s = s[:-3].strip()
-    elif s.endswith("grad"):
-        mul = 0.9
-        s = s[:-4].strip()
-    elif s.endswith("deg"):
-        s = s[:-3].strip()
-    try:
-        return (float(s) * mul) % 360.0
-    except ValueError:
+    r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+    if r > 255 or g > 255 or b > 255:
         return None
+    return f"#{_byte_hex(r)}{_byte_hex(g)}{_byte_hex(b)}"
+
+
+def _parse_hsl_hex(text: str) -> str | None:
+    match = _first_match(text, _HSL_RES)
+    if not match:
+        return None
+    s, l = float(match.group(2)), float(match.group(3))
+    if s > 100 or l > 100:
+        return None
+    return _hsl_to_hex(float(match.group(1)), s, l)
+
+
+def _parse_hwb_hex(text: str) -> str | None:
+    match = _first_match(text, _HWB_RES)
+    if not match:
+        return None
+    w, b = float(match.group(2)), float(match.group(3))
+    if w > 100 or b > 100:
+        return None
+    return _hwb_to_hex(float(match.group(1)), w, b)
 
 
 def expand_hex(hex_s: str) -> str:
@@ -227,6 +319,14 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+def _color_dict(hx: str, source: str, name: str | None = None) -> dict:
+    r, g, b = hex_to_rgb(hx)
+    parsed: dict = {"hex": hx, "r": r, "g": g, "b": b, "source": source}
+    if name is not None:
+        parsed["name"] = name
+    return parsed
+
+
 def parse_color(query: str) -> Optional[dict]:
     """Return parsed color or None. Rejects settings-style ``# wifi``."""
     raw = query.strip()
@@ -241,68 +341,23 @@ def parse_color(query: str) -> Optional[dict]:
     lower = raw.lower()
     named = CSS_NAMED_COLORS.get(lower)
     if named:
-        r, g, b = hex_to_rgb(named)
-        return {"hex": named, "r": r, "g": g, "b": b, "source": "name", "name": lower}
+        return _color_dict(named, "name", name=lower)
 
     # goshos requires a leading hash so cafe, dead, and ff0000 stay app searches
-    hex_m = _HEX_RE.match(raw.replace(" ", "")) if raw.startswith("#") else None
+    hex_m = _HEX_RE.match(raw) if raw.startswith("#") else None
     if hex_m:
-        hx = expand_hex("#" + hex_m.group(1))
-        r, g, b = hex_to_rgb(hx)
-        return {"hex": hx, "r": r, "g": g, "b": b, "source": "hex"}
+        return _color_dict(expand_hex("#" + hex_m.group(1)), "hex")
 
-    func = _FUNC_RE.match(lower.replace(" ", " "))
-    if not func:
-        # allow "rgb 255 0 0" / "hsl 0 100% 50%"
-        parts = re.split(r"[\s,]+", lower)
-        if parts and parts[0] in ("rgb", "rgba", "hsl", "hsla", "hwb") and len(parts) >= 4:
-            kind = parts[0]
-            args = parts[1:5]
-            return _from_func(kind, args)
-        return None
-
-    kind = func.group(1).lower()
-    args = [a.strip() for a in re.split(r"[,/]", func.group(2)) if a.strip()]
-    return _from_func(kind, args)
-
-
-def _from_func(kind: str, args: list[str]) -> Optional[dict]:
-    if kind in ("rgb", "rgba"):
-        if len(args) < 3:
-            return None
-        r = _parse_channel(args[0], max_value=255)
-        g = _parse_channel(args[1], max_value=255)
-        b = _parse_channel(args[2], max_value=255)
-        if r is None or g is None or b is None:
-            return None
-        ri, gi, bi = int(round(r * 255)), int(round(g * 255)), int(round(b * 255))
-        return {"hex": rgb_to_hex(ri, gi, bi), "r": ri, "g": gi, "b": bi, "source": kind}
-    if kind in ("hsl", "hsla"):
-        if len(args) < 3:
-            return None
-        h = _parse_hue(args[0])
-        s = _parse_channel(args[1], percent=True)
-        l = _parse_channel(args[2], percent=True)
-        if h is None or s is None or l is None:
-            return None
-        rf, gf, bf = colorsys.hls_to_rgb(h / 360.0, l, s)
-        ri, gi, bi = int(round(rf * 255)), int(round(gf * 255)), int(round(bf * 255))
-        return {"hex": rgb_to_hex(ri, gi, bi), "r": ri, "g": gi, "b": bi, "source": kind}
-    if kind == "hwb":
-        if len(args) < 3:
-            return None
-        h = _parse_hue(args[0])
-        w = _parse_channel(args[1], percent=True)
-        bl = _parse_channel(args[2], percent=True)
-        if h is None or w is None or bl is None:
-            return None
-        # hwb to rgb
-        rf, gf, bf = colorsys.hls_to_rgb(h / 360.0, 0.5, 1.0)
-        rf = rf * (1 - w - bl) + w
-        gf = gf * (1 - w - bl) + w
-        bf = bf * (1 - w - bl) + w
-        ri, gi, bi = int(round(_clamp(rf) * 255)), int(round(_clamp(gf) * 255)), int(round(_clamp(bf) * 255))
-        return {"hex": rgb_to_hex(ri, gi, bi), "r": ri, "g": gi, "b": bi, "source": "hwb"}
+    # CSS Color 4 function syntax from goshos colorMatch.js (space, comma, slash alpha).
+    rgb_hex = _parse_rgb_hex(raw)
+    if rgb_hex is not None:
+        return _color_dict(rgb_hex, "rgb")
+    hsl_hex = _parse_hsl_hex(raw)
+    if hsl_hex is not None:
+        return _color_dict(hsl_hex, "hsl")
+    hwb_hex = _parse_hwb_hex(raw)
+    if hwb_hex is not None:
+        return _color_dict(hwb_hex, "hwb")
     return None
 
 
