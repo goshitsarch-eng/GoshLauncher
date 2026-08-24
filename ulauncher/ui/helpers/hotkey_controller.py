@@ -6,7 +6,11 @@ from shutil import which
 
 from ulauncher import app_id
 from ulauncher.gi import Gio, GLib
-from ulauncher.modes.launcher.shortcut import shortcut_attempts, shortcut_retry_list
+from ulauncher.modes.launcher.shortcut import (
+    hotkey_to_restore_after_failed_grab,
+    shortcut_attempts,
+    shortcut_retry_list,
+)
 from ulauncher.ui.hotkey_dialog import HotkeyDialog
 from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME
 from ulauncher.utils.launch_detached import launch_detached
@@ -86,7 +90,20 @@ class HotkeyController:
                     return
 
         elif IS_SUPPORTED:
-            _set_hotkey(HotkeyDialog().run())
+            previous = _current_gnome_grab() if DESKTOP_ID == "GNOME" else ""
+            requested = HotkeyDialog().run()
+            if not requested:
+                return
+            try:
+                _set_hotkey(requested)
+            except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                logger.debug("Shortcut grab failed for %s", requested, exc_info=True)
+                restore = hotkey_to_restore_after_failed_grab(False, previous)
+                if restore:
+                    try:
+                        _set_hotkey(restore)
+                    except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                        logger.debug("Could not restore previous shortcut grab", exc_info=True)
 
     @staticmethod
     def setup_default(default_hotkey: str) -> bool:

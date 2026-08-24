@@ -28,3 +28,9 @@ def shortcut_to_persist(requested: str, working: str | None) -> str | None:
     if not working or working == requested:
         return None
     return working
+
+
+def hotkey_to_restore_after_failed_grab(grab_ok: bool, previous: str) -> str | None:
+    if grab_ok or not previous:
+        return None
+    return previous

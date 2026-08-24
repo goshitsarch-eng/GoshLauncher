@@ -123,6 +123,27 @@ class TestResultsViewNavigation:
         assert view.get_active_result() is None
         assert not view.has_results
 
+    def test_pending_row_is_selectable_arrows_skip_to_ready(self) -> None:
+        view = ResultsView(cast("Any", MagicMock()), cast("Any", MagicMock()), cast("Any", MagicMock()))
+        header = MagicMock()
+        header.result.highlightable = False
+        header.result.actions = {}
+        pending = MagicMock()
+        pending.result.highlightable = True
+        pending.result.actions = {}
+        ready = MagicMock()
+        ready.result.highlightable = True
+        ready.result.actions = {"activate": {"name": "Activate"}}
+        view._widgets = cast("Any", [header, pending, ready])
+        assert view._highlightable_indices() == [1, 2]
+        assert view._nav_indices() == [2]
+        view.select(1)
+        assert view._index == 1
+        view.go_down()
+        assert view._index == 2
+        view.select_jump(0)
+        assert view._index == 1
+
 
 class TestResultsViewSelection:
     """Selection logic used across streamed replace/append batches."""
@@ -180,7 +201,12 @@ class TestResultsViewStreaming:
     def _update(
         names: list[str], query: str = "q", selected_name: str | None = None, append: bool = False
     ) -> ResultsUpdate:
-        return results_update([Result(name=name) for name in names], Query(None, query), selected_name, append)
+        return results_update(
+            [Result(name=name, highlightable=True, actions={"activate": {"name": "Activate"}}) for name in names],
+            Query(None, query),
+            selected_name,
+            append,
+        )
 
     def test_replace_preserves_user_pick_within_same_query(self, view: ResultsView) -> None:
         view.render(self._update(["a", "b", "c"]))

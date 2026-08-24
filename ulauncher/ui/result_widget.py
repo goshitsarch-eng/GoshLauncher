@@ -43,6 +43,7 @@ class ResultWidget(Gtk.Box):
         self._on_select = on_select
         self._on_activate = on_activate
         self.jump_keys = jump_keys
+        self.widget_index = index
         text_scaling_factor = get_text_scaling_factor()
         from ulauncher.modes.launcher.looks import chrome_from_settings, icon_size_for_look
         from ulauncher.utils.settings import Settings
@@ -177,8 +178,8 @@ class ResultWidget(Gtk.Box):
 
     def on_click(self, gesture: Gtk.GestureClick, _n_press: int, _x: float, _y: float) -> None:
         alt = gesture.get_current_button() != 1
-        self._on_activate(self.index, alt)
+        self._on_activate(self.widget_index, alt)
 
     def on_mouse_hover(self, *_args: object) -> None:
         if self.result.highlightable:
-            self._on_select(self.index)
+            self._on_select(self.widget_index)

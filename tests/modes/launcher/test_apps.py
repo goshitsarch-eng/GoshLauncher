@@ -119,6 +119,20 @@ def test_match_apps_keeps_more_used_variant(monkeypatch: pytest.MonkeyPatch) -> 
             return ["firefox.desktop", "firefox-esr.desktop"]
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, stable])
-    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda cls: _Rankings()))
+    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
     matched = match_apps("fire", 6)
     assert [app.name for app in matched] == ["Firefox"]
+
+
+def test_focus_open_windows_activates_matching_class(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.apps import focus_open_windows
+
+    activated: list[dict] = []
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.activate_window", activated.append)
+    app = SimpleNamespace(app_id="firefox.desktop", _executable="firefox")
+    windows = [
+        WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="Navigator.firefox", desktop=0, pid=11),
+    ]
+    assert focus_open_windows(app, windows) is True
+    assert activated[0]["wid"] == "0x1"
+    assert focus_open_windows(app, []) is False

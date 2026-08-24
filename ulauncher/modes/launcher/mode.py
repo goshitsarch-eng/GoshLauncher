@@ -92,13 +92,15 @@ class LauncherMode(Mode):
             return
         kind = result.kind
         payload = result.payload if isinstance(result.payload, dict) else {}
-        if kind == "app":
+        if kind in {"app", "app-action"}:
             from ulauncher.modes.apps.app_rankings import AppRankings
             from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
             from ulauncher.modes.apps.launch_app import launch_app
+            from ulauncher.modes.launcher.apps import focus_open_windows
 
             app_id = str(payload.get("app_id") or "")
-            if not app_id or not AppResult.from_id(app_id):
+            app = AppResult.from_id(app_id) if app_id else None
+            if not app_id or not app:
                 callback(effects.do_nothing())
                 return
             action_name = payload.get("action_name")
@@ -107,6 +109,8 @@ class LauncherMode(Mode):
                 launched = launch_app(app_id, action_name=action_id[len(ACTION_PREFIX) :])
             elif action_name:
                 launched = launch_app(app_id, action_name=str(action_name))
+            elif focus_open_windows(app):
+                launched = True
             else:
                 launched = launch_app(app_id)
             if launched:
@@ -115,7 +119,7 @@ class LauncherMode(Mode):
                 return
             callback(effects.do_nothing())
             return
-        if kind == "url":
+        if kind in {"url", "bookmark"} and payload.get("url"):
             from ulauncher.modes.launcher.paths import canonicalize_launch_uri
 
             url = canonicalize_launch_uri(str(payload.get("url") or ""))
@@ -124,7 +128,7 @@ class LauncherMode(Mode):
                 return
             callback(effects.open(url))
             return
-        if kind == "path":
+        if kind in {"path", "place", "file", "bookmark"}:
             from ulauncher.modes.launcher.paths import terminal_command
             from ulauncher.utils.launch_detached import launch_detached, open_detached
 
@@ -143,11 +147,11 @@ class LauncherMode(Mode):
             open_detached(path)
             callback(effects.close_window())
             return
-        if kind in {"calculator", "units", "color", "clock"}:
+        if kind in {"calculator", "units", "unit", "color", "clock", "time"}:
             _events.emit("app:copy_and_close", str(payload.get("copy_text") or result.name))
             callback(effects.close_window())
             return
-        if kind == "window":
+        if kind in {"window", "workspace", "window-close"}:
             from ulauncher.modes.launcher.windows import activate_window
 
             activate_window(payload)
@@ -253,7 +257,7 @@ class LauncherMode(Mode):
                 add(
                     "places",
                     {
-                        "kind": "path",
+                        "kind": "place",
                         "score": 80,
                         "title": hit["title"],
                         "description": hit.get("description") or "",
@@ -271,7 +275,7 @@ class LauncherMode(Mode):
             from ulauncher.modes.launcher.bookmarks import match_bookmarks
 
             for hit in match_bookmarks(q)[:cap]:
-                row = _row_from_uri(hit, score=75)
+                row = _row_from_uri(hit, score=75, kind="bookmark")
                 if row:
                     add("bookmarks", row)
 
@@ -305,7 +309,7 @@ class LauncherMode(Mode):
                     add(
                         "apps",
                         {
-                            "kind": "app",
+                            "kind": "app-action",
                             "score": 69,
                             "title": action["title"],
                             "description": action["description"],
@@ -386,10 +390,17 @@ class LauncherMode(Mode):
             from ulauncher.modes.launcher.windows import match_windows
 
             for win in match_windows(q, cap):
+                raw_kind = win.get("kind") or "focus"
+                if raw_kind == "workspace":
+                    row_kind = "workspace"
+                elif raw_kind in {"close", "quit", "kill"}:
+                    row_kind = "window-close"
+                else:
+                    row_kind = "window"
                 add(
                     "windows",
                     {
-                        "kind": "window",
+                        "kind": row_kind,
                         "score": 65,
                         "title": win["title"],
                         "description": win.get("description") or "",
@@ -397,7 +408,7 @@ class LauncherMode(Mode):
                         "wid": win.get("wid") or win.get("payload") or "",
                         "pid": win.get("pid") or 0,
                         "wm_class": win.get("wm_class") or "",
-                        "window_kind": win.get("kind") or "focus",
+                        "window_kind": raw_kind,
                         "payload": win.get("payload"),
                     },
                 )
@@ -438,7 +449,7 @@ class LauncherMode(Mode):
             from ulauncher.modes.launcher.recents import match_recents
 
             for hit in match_recents(q)[:cap]:
-                row = _row_from_uri(hit, score=45)
+                row = _row_from_uri(hit, score=45, kind="file")
                 if row:
                     add("files", row)
 
@@ -498,39 +509,27 @@ class LauncherMode(Mode):
         return rows
 
     def _materialize(self, rows: Sequence[dict[str, Any]], chrome: dict[str, Any], headers: bool) -> Iterator[Result]:
+        from ulauncher.modes.launcher.section_titles import section_title
+
         last_kind = ""
-        labels = {
-            "url": "Open Link",
-            "path": "Folders",
-            "app": "Applications",
-            "calculator": "Calculator",
-            "units": "Convert",
-            "color": "Color",
-            "clock": "Clock",
-            "window": "Windows",
-            "system": "System",
-            "settings": "Settings",
-            "web": "Search the Web",
-            "command": "Run Command",
-        }
         compact = chrome.get("density") == "compact"
         show_icons = chrome.get("show_result_icons", True)
         show_descriptions = chrome.get("show_descriptions", True)
         for row in rows:
             kind = str(row["kind"])
             if headers and kind != last_kind:
-                yield SectionHeader(name=labels.get(kind, kind.title()), compact=True)
+                yield SectionHeader(name=section_title(kind), compact=True)
                 last_kind = kind
             payload = {
                 k: v for k, v in row.items() if k not in {"kind", "score", "title", "description", "icon", "actions"}
             }
-            if kind == "window":
+            if kind in {"window", "workspace", "window-close"}:
                 payload["kind"] = row.get("window_kind") or "focus"
             icon = "" if not show_icons else str(row.get("icon") or _default_icon(kind))
             actions = row.get("actions") or {"activate": {"name": "Activate"}}
             if kind == "command" and not row.get("ready"):
                 actions = {}
-            if kind == "path" and not row.get("exists", True):
+            if kind in {"path", "place", "file", "bookmark"} and not row.get("exists", True):
                 actions = {}
             yield LauncherResult(
                 name=str(row["title"]),
@@ -544,7 +543,7 @@ class LauncherMode(Mode):
             )
 
 
-def _row_from_uri(hit: dict[str, Any], score: int) -> dict[str, Any] | None:
+def _row_from_uri(hit: dict[str, Any], score: int, kind: str | None = None) -> dict[str, Any] | None:
     from ulauncher.modes.launcher.paths import canonicalize_launch_uri, path_from_file_uri
 
     uri = canonicalize_launch_uri(str(hit.get("uri") or hit.get("path") or ""))
@@ -553,7 +552,7 @@ def _row_from_uri(hit: dict[str, Any], score: int) -> dict[str, Any] | None:
     path = path_from_file_uri(uri)
     if path:
         return {
-            "kind": "path",
+            "kind": kind or "path",
             "score": score,
             "title": hit["title"],
             "description": hit.get("description") or "",
@@ -563,7 +562,7 @@ def _row_from_uri(hit: dict[str, Any], score: int) -> dict[str, Any] | None:
             "exists": True,
         }
     return {
-        "kind": "url",
+        "kind": kind or "url",
         "score": score,
         "title": hit["title"],
         "description": hit.get("description") or "",
@@ -586,4 +585,10 @@ def _default_icon(kind: str) -> str:
         "settings": "preferences-system",
         "web": "web-browser",
         "command": "utilities-terminal",
+        "place": "folder",
+        "file": "text-x-generic",
+        "bookmark": "user-bookmarks",
+        "app-action": "application-x-executable",
+        "workspace": "workspace-switcher",
+        "window-close": "window-close",
     }.get(kind, "application-x-executable")

@@ -7,6 +7,7 @@ from gi.repository import Gtk
 
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
+from ulauncher.modes.launcher.no_results import no_results_detail, no_results_title, should_show_no_results
 from ulauncher.ui import gtk4
 from ulauncher.utils import scheduling
 
@@ -48,7 +49,14 @@ class ResultsView(Gtk.ScrolledWindow):
 
     @property
     def has_results(self) -> bool:
-        return bool(self._selectable_indices())
+        return bool(self._highlightable_indices())
+
+    def get_result_objects(self) -> list[Result]:
+        return [widget.result for widget in self._widgets]
+
+    @property
+    def selected_index(self) -> int:
+        return self._index
 
     def set_max_height(self, height: int) -> None:
         self.set_max_content_height(height)
@@ -72,9 +80,9 @@ class ResultsView(Gtk.ScrolledWindow):
         self._user_selected = True
 
     def select_jump(self, jump_index: int) -> None:
-        selectable = self._selectable_indices()
-        if 0 <= jump_index < len(selectable):
-            self.select(selectable[jump_index])
+        highlightable = self._highlightable_indices()
+        if 0 <= jump_index < len(highlightable):
+            self.select(highlightable[jump_index])
 
     def go_up(self) -> None:
         self._move(-1)
@@ -89,27 +97,47 @@ class ResultsView(Gtk.ScrolledWindow):
         self._move(5)
 
     def go_home(self) -> None:
-        selectable = self._selectable_indices()
-        if selectable:
-            self.select(selectable[0])
+        nav = self._nav_indices()
+        if nav:
+            self.select(nav[0])
 
     def go_end(self) -> None:
-        selectable = self._selectable_indices()
-        if selectable:
-            self.select(selectable[-1])
+        nav = self._nav_indices()
+        if nav:
+            self.select(nav[-1])
 
     def _move(self, step: int) -> None:
-        selectable = self._selectable_indices()
-        if not selectable:
+        nav = self._nav_indices()
+        if not nav:
             return
         try:
-            pos = selectable.index(self._index)
+            pos = nav.index(self._index)
         except ValueError:
-            pos = 0
-        self.select(selectable[(pos + step) % len(selectable)])
+            if step > 0:
+                after = [index for index in nav if index > self._index]
+                self.select(after[0] if after else nav[0])
+            else:
+                before = [index for index in nav if index < self._index]
+                self.select(before[-1] if before else nav[-1])
+            return
+        if abs(step) == 1:
+            self.select(nav[(pos + step) % len(nav)])
+            return
+        next_pos = pos + step
+        if next_pos < 0:
+            next_pos = 0
+        elif next_pos >= len(nav):
+            next_pos = len(nav) - 1
+        self.select(nav[next_pos])
+
+    def _highlightable_indices(self) -> list[int]:
+        return [i for i, widget in enumerate(self._widgets) if widget.result.highlightable]
+
+    def _nav_indices(self) -> list[int]:
+        return [i for i, widget in enumerate(self._widgets) if widget.result.highlightable and widget.result.actions]
 
     def _selectable_indices(self) -> list[int]:
-        return [i for i, widget in enumerate(self._widgets) if widget.result.highlightable and widget.result.actions]
+        return self._highlightable_indices()
 
     def _replace_results(self, update: ResultsUpdate) -> None:
         previous_pick = self.get_active_result() if self._user_selected else None
@@ -124,7 +152,11 @@ class ResultsView(Gtk.ScrolledWindow):
 
         if not result_list:
             self._user_selected = False
-            self.set_visible(False)
+            query_text = str(update["query"])
+            if should_show_no_results(query_text, 0):
+                self._show_no_results(query_text)
+            else:
+                self.set_visible(False)
             logger.debug("Hiding results container, no results found")
             return
 
@@ -155,9 +187,9 @@ class ResultsView(Gtk.ScrolledWindow):
         from ulauncher.ui.result_widget import ResultWidget
 
         jump_keys = self._settings.get_jump_keys()
-        jump_i = len(self._selectable_indices())
+        jump_i = len(self._highlightable_indices())
         for offset, result in enumerate(results):
-            jump_index = jump_i if result.highlightable and result.actions else -1
+            jump_index = jump_i if result.highlightable else -1
             if jump_index >= 0:
                 jump_i += 1
             widget = ResultWidget(
@@ -180,11 +212,11 @@ class ResultsView(Gtk.ScrolledWindow):
         self._select(self._index_for_name(selected_name))
 
     def _select(self, index: int) -> None:
-        selectable = self._selectable_indices()
+        highlightable = self._highlightable_indices()
         if not self._widgets:
             return
-        if index not in selectable:
-            index = selectable[0] if selectable else 0
+        if index not in highlightable:
+            index = highlightable[0] if highlightable else 0
         if self._selected:
             self._selected.deselect()
         self._index = index
@@ -204,8 +236,8 @@ class ResultsView(Gtk.ScrolledWindow):
         for index, widget in enumerate(self._widgets):
             if widget.result.searchable and widget.result.name == name:
                 return index
-        selectable = self._selectable_indices()
-        return selectable[0] if selectable else 0
+        highlightable = self._highlightable_indices()
+        return highlightable[0] if highlightable else 0
 
     def _fit_results_height(self) -> None:
         if not self._has_wrapped_results:
@@ -222,3 +254,22 @@ class ResultsView(Gtk.ScrolledWindow):
         if abs(needed_height - current_height) > 1:
             self.set_min_content_height(needed_height)
             scheduling.run_when_idle(self.queue_resize)
+
+    def _show_no_results(self, query: str) -> None:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        gtk4.add_css_class(box, "gosh-no-results")
+        title = Gtk.Label(label=no_results_title())
+        gtk4.add_css_class(title, "gosh-no-results-title")
+        title.set_wrap(True)
+        title.set_xalign(0.5)
+        detail = Gtk.Label(label=no_results_detail(query))
+        detail.set_wrap(True)
+        detail.set_xalign(0.5)
+        box.append(title)
+        box.append(detail)
+        self._box.append(box)
+        self._box.set_margin_bottom(10)
+        self._box.set_margin_top(3)
+        self._apply_css(self._box)
+        gtk4.show_all(self)
+        self.set_visible(True)

@@ -103,7 +103,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         gtk4.pack_start(self.prompt, self.prompt_input, True, True, 0)
         gtk4.pack_end(self.prompt, self.prefs_btn, False, False, 0)
 
-        self.results_view = ResultsView(self.settings, self.apply_css, self.activate_result)
+        self.results_view = ResultsView(self.settings, self.apply_css, self._activate_clicked)
 
         gtk4.pack_start(self.theme_root, self.prompt, False, True, 0)
         gtk4.pack_start(self.theme_root, self.results_view, False, True, 0)
@@ -156,13 +156,41 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
     def _apply_look_classes(self) -> None:
         for css_class in list(self.theme_root.get_css_classes()):
-            if css_class.startswith(("gosh-theme-", "gosh-density-")) or css_class == "gosh-no-search-icon":
+            if (
+                css_class.startswith(("gosh-theme-", "gosh-density-", "gosh-accent-"))
+                or css_class == "gosh-no-search-icon"
+            ):
                 gtk4.remove_css_class(self.theme_root, css_class)
         gtk4.add_css_class(self.theme_root, "app")
-        gtk4.add_css_class(self.theme_root, f"gosh-theme-{getattr(self.settings, 'look_id', 'spotlight')}")
+        look_id = getattr(self.settings, "look_id", "spotlight")
+        gtk4.add_css_class(self.theme_root, f"gosh-theme-{look_id}")
         gtk4.add_css_class(self.theme_root, f"gosh-density-{self._chrome.get('density') or 'comfortable'}")
         if not self._chrome.get("show_search_icon", True):
             gtk4.add_css_class(self.theme_root, "gosh-no-search-icon")
+        from ulauncher.modes.launcher.accent import accent_style_class, session_accent_nick
+
+        accent = accent_style_class(look_id, session_accent_nick())
+        if accent:
+            gtk4.add_css_class(self.theme_root, accent)
+        self._ensure_accent_watch()
+
+    def _ensure_accent_watch(self) -> None:
+        if getattr(self, "_accent_watched", False):
+            return
+        self._accent_watched = True
+        from ulauncher.gi import Gio, GLib
+        from ulauncher.modes.launcher.accent import next_accent_listen_action
+
+        try:
+            source = Gio.SettingsSchemaSource.get_default()
+            schema = source.lookup("org.gnome.desktop.interface", True) if source else None
+            if next_accent_listen_action(schema) != "listen":
+                return
+            settings = Gio.Settings.new("org.gnome.desktop.interface")
+            settings.connect("changed::accent-color", lambda *_: self._apply_look_classes())
+            self._accent_settings = settings
+        except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError):
+            return
 
     def restyle_from_settings(self) -> None:
         self.settings = Settings.load(force=True)
@@ -204,17 +232,46 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def on_input_changed(self) -> None:
         self.get_app().query_changed(self.prompt_input.get_text())
 
-    def activate_result(self, alt: bool) -> None:
-        if result := self.results_view.get_active_result():
-            self.get_app().activate_result(result, alt)
+    def activate_result(self, alt: bool, fallback: bool = True) -> None:
+        from ulauncher.modes.launcher.activate import activatable_result, indexed_activatable_result
+
+        results = self.results_view.get_result_objects()
+        index = self.results_view.selected_index
+        chosen = activatable_result(results, index) if fallback else indexed_activatable_result(results, index)
+        if chosen:
+            self.get_app().activate_result(chosen, alt)
+
+    def _activate_clicked(self, alt: bool) -> None:
+        self.activate_result(alt, fallback=False)
+
+    def _apply_move(self, delta: int) -> None:
+        if delta <= -999:  # noqa: PLR2004
+            self.results_view.go_home()
+        elif delta >= 999:  # noqa: PLR2004
+            self.results_view.go_end()
+        elif delta >= 5:  # noqa: PLR2004
+            self.results_view.go_page_down()
+        elif delta <= -5:  # noqa: PLR2004
+            self.results_view.go_page_up()
+        elif delta > 0:
+            self.results_view.go_down()
+        elif delta < 0:
+            self.results_view.go_up()
 
     def on_input_key_press(  # noqa: PLR0911, PLR0912
         self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: Gdk.ModifierType
     ) -> bool:
+        from ulauncher.modes.launcher.key_action import (
+            resolve_ctrl_nav,
+            resolve_home_end_action,
+            resolve_key_action,
+        )
+
         keyname = Gdk.keyval_name(keyval) or ""
+        shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
         alt = bool(state & Gdk.ModifierType.ALT_MASK)
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
-        jump_keys = self.settings.get_jump_keys()
+        show_numbers = bool(self._chrome.get("show_numbers"))
 
         use_arrow_key_aliases = len(self.settings.arrow_key_aliases) == 4  # noqa: PLR2004
         arrow_key_aliases = [*self.settings.arrow_key_aliases] if use_arrow_key_aliases else [None] * 4
@@ -242,43 +299,50 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         ):
             return True
 
+        if ctrl:
+            nav = resolve_ctrl_nav(keyname)
+            if nav and self.results_view.has_results:
+                self._apply_move(int(nav["delta"]))
+                return True
+
+        cursor = entry.get_position()
+        text_len = len(entry.get_text() or "")
+        home_end = resolve_home_end_action(keyname, cursor, text_len)
+        if home_end:
+            if home_end["type"] == "propagate":
+                return False
+            if self.results_view.has_results:
+                self._apply_move(int(home_end["delta"]))
+                return True
+            return False
+
+        action = resolve_key_action(keyname, shift, alt, show_numbers)
+        if action["type"] == "close":
+            self.close(save_query=True)
+            return True
+        if action["type"] == "move" and self.results_view.has_results:
+            self._apply_move(int(action["delta"]))
+            return True
+        if action["type"] == "activate" and self.results_view.has_results:
+            self.activate_result(alt)
+            return True
+        if action["type"] == "activate-index" and self.results_view.has_results:
+            self.results_view.select_jump(int(action["index"]))
+            self.activate_result(False, fallback=False)
+            return True
+
         if self.results_view.has_results:
-            if keyname in ("Up", "ISO_Left_Tab") or (ctrl and keyname in (up_alias, "k", "p")):
-                self.results_view.go_up()
-                return True
-            if keyname in ("Down", "Tab") or (ctrl and keyname in (down_alias, "j", "n")):
-                self.results_view.go_down()
-                return True
-            if keyname == "Page_Up":
-                self.results_view.go_page_up()
-                return True
-            if keyname == "Page_Down":
-                self.results_view.go_page_down()
-                return True
-            cursor = entry.get_position()
-            text_len = len(entry.get_text() or "")
-            if keyname == "Home" and cursor == 0:
-                self.results_view.go_home()
-                return True
-            if keyname == "End" and cursor == text_len:
-                self.results_view.go_end()
-                return True
             if ctrl and keyname == left_alias:
                 entry.set_position(max(0, cursor - 1))
                 return True
             if ctrl and keyname == right_alias:
                 entry.set_position(cursor + 1)
                 return True
-            if keyname in ("Return", "KP_Enter"):
-                self.activate_result(alt)
+            if ctrl and keyname == up_alias:
+                self.results_view.go_up()
                 return True
-            string = chr(Gdk.keyval_to_unicode(keyval)) if Gdk.keyval_to_unicode(keyval) else ""
-            if alt and string in jump_keys:
-                if string.isdigit() and not self._chrome.get("show_numbers"):
-                    return False
-                self.results_view.select_jump(jump_keys.index(string))
-                if string.isdigit() and self._chrome.get("show_numbers"):
-                    self.activate_result(False)
+            if ctrl and keyname == down_alias:
+                self.results_view.go_down()
                 return True
         return False
 

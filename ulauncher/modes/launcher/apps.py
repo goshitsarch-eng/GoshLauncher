@@ -144,6 +144,29 @@ def _app_class_needles(app: Any) -> set[str]:
     return {needle for needle in needles if needle and needle != "desktop"}
 
 
+def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
+    from ulauncher.modes.launcher.windows import activate_window, list_windows
+
+    open_windows = list_windows() if windows is None else windows
+    if app_window_count(app, open_windows) <= 0:
+        return False
+    needles = _app_class_needles(app)
+    for win in open_windows:
+        cls = str(getattr(win, "wm_class", "") or "").lower()
+        tokens = {part for part in re.split(r"[./]", cls) if part}
+        if needles & tokens:
+            activate_window(
+                {
+                    "kind": "focus",
+                    "wid": getattr(win, "wid", ""),
+                    "pid": getattr(win, "pid", 0),
+                    "payload": getattr(win, "wid", ""),
+                }
+            )
+            return True
+    return False
+
+
 def app_window_count(app: Any, windows: list[Any] | None = None) -> int:
     if windows is None:
         from ulauncher.modes.launcher.windows import list_windows

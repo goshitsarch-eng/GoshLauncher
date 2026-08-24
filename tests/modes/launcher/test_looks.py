@@ -28,3 +28,14 @@ def test_apply_look_chrome_stamps_popos() -> None:
     assert chrome["position"] == "top"
     assert chrome["show_numbers"] is True
     assert chrome["result_order"] == "windows-first"
+
+
+def test_every_look_has_theme_css() -> None:
+    from pathlib import Path
+
+    css_path = Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css"
+    text = css_path.read_text()
+    ids = look_ids()
+    assert len(ids) == 17
+    for look_id in ids:
+        assert f".gosh-theme-{look_id}" in text

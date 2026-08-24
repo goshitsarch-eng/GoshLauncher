@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.shortcut import shortcut_attempts, shortcut_retry_list, shortcut_to_persist
+from ulauncher.modes.launcher.shortcut import (
+    hotkey_to_restore_after_failed_grab,
+    shortcut_attempts,
+    shortcut_retry_list,
+    shortcut_to_persist,
+)
 
 
 def test_shortcut_attempts_include_fallbacks() -> None:
@@ -21,3 +26,9 @@ def test_shortcut_to_persist_only_when_fallback_worked() -> None:
     assert shortcut_to_persist("<Super>space", "<Super>space") is None
     assert shortcut_to_persist("<Super>space", "<Control>space") == "<Control>space"
     assert shortcut_to_persist("<Super>space", None) is None
+
+
+def test_hotkey_restore_after_failed_grab_keeps_previous() -> None:
+    assert hotkey_to_restore_after_failed_grab(True, "<Control>space") is None
+    assert hotkey_to_restore_after_failed_grab(False, "") is None
+    assert hotkey_to_restore_after_failed_grab(False, "<Control>space") == "<Control>space"
