@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import shutil
 import signal
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -188,11 +190,207 @@ def pick_window_list(
     ewmh: list[WindowInfo],
     wmctrl: list[WindowInfo],
     introspect: list[WindowInfo],
+    compositor: list[WindowInfo] | None = None,
 ) -> list[WindowInfo]:
     native = ewmh or wmctrl
-    if len(introspect) > len(native):
-        return introspect
-    return native or introspect
+    extra = compositor or []
+    wayland = introspect if len(introspect) >= len(extra) else extra
+    if len(wayland) > len(native):
+        return wayland
+    return native or wayland
+
+
+def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
+    if not isinstance(payload, list):
+        return []
+    windows: list[WindowInfo] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        if item.get("hidden") or item.get("mapped") is False:
+            continue
+        address = str(item.get("address") or "")
+        if not address:
+            continue
+        title = str(item.get("title") or "")
+        klass = str(item.get("class") or item.get("initialClass") or "")
+        if not title and not klass:
+            continue
+        workspace = item.get("workspace")
+        ws_id = workspace.get("id") if isinstance(workspace, dict) else workspace
+        try:
+            ws_num = int(ws_id)
+        except (TypeError, ValueError):
+            ws_num = 1
+        desktop = ws_num - 1 if ws_num > 0 else 0
+        try:
+            pid = int(item.get("pid") or 0)
+        except (TypeError, ValueError):
+            pid = 0
+        try:
+            history = item.get("focusHistoryID")
+            if history is None:
+                history = item.get("focusHistoryId")
+            user_time = 10**9 - int(history)
+        except (TypeError, ValueError):
+            user_time = 0
+        windows.append(
+            WindowInfo(
+                wid=f"hypr:{address}",
+                title=title,
+                wm_class=klass,
+                desktop=desktop,
+                pid=pid,
+                sticky=bool(item.get("pinned")),
+                user_time=user_time,
+                app_id=klass,
+            )
+        )
+    return windows
+
+
+def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
+    if not isinstance(payload, list):
+        return []
+    windows: list[WindowInfo] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        ident = item.get("id")
+        if ident is None:
+            continue
+        title = str(item.get("title") or "")
+        app_id = str(item.get("app_id") or "")
+        if not title and not app_id:
+            continue
+        try:
+            ws_num = int(item.get("workspace_id") or 1)
+        except (TypeError, ValueError):
+            ws_num = 1
+        try:
+            pid = int(item.get("pid") or 0)
+        except (TypeError, ValueError):
+            pid = 0
+        windows.append(
+            WindowInfo(
+                wid=f"niri:{ident}",
+                title=title,
+                wm_class=app_id,
+                desktop=ws_num - 1 if ws_num > 0 else 0,
+                pid=pid,
+                sticky=False,
+                user_time=1 if item.get("is_focused") else 0,
+                app_id=app_id,
+            )
+        )
+    return windows
+
+
+def windows_from_sway_tree(payload: Any) -> list[WindowInfo]:
+    windows: list[WindowInfo] = []
+    _walk_sway_tree(payload, windows, 0)
+    return windows
+
+
+def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int) -> None:
+    if not isinstance(node, dict):
+        return
+    next_desktop = desktop
+    if node.get("type") == "workspace":
+        name = str(node.get("name") or "1")
+        if name.startswith("__"):
+            return
+        if name.isdigit():
+            next_desktop = max(int(name) - 1, 0)
+    children = list(node.get("nodes") or []) + list(node.get("floating_nodes") or [])
+    is_leaf = not children
+    has_window = bool(node.get("pid") or node.get("app_id") or node.get("window_properties"))
+    if is_leaf and has_window and node.get("type") in {"con", "floating_con"}:
+        props = node.get("window_properties") if isinstance(node.get("window_properties"), dict) else {}
+        klass = str(node.get("app_id") or props.get("class") or props.get("instance") or "")
+        title = str(node.get("name") or props.get("title") or "")
+        if title or klass:
+            try:
+                pid = int(node.get("pid") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            windows.append(
+                WindowInfo(
+                    wid=f"sway:{node.get('id')}",
+                    title=title,
+                    wm_class=klass,
+                    desktop=next_desktop,
+                    pid=pid,
+                    sticky=bool(node.get("sticky")),
+                    user_time=1 if node.get("focused") else 0,
+                    app_id=str(node.get("app_id") or klass),
+                )
+            )
+    for child in children:
+        _walk_sway_tree(child, windows, next_desktop)
+
+
+def compositor_window_argv(wid: str, action: str) -> list[str] | None:
+    if ":" not in str(wid):
+        return None
+    kind, ident = str(wid).split(":", 1)
+    if not ident:
+        return None
+    if kind == "hypr":
+        dispatch = "focuswindow" if action == "focus" else "closewindow"
+        return ["hyprctl", "dispatch", dispatch, f"address:{ident}"]
+    if kind == "sway":
+        command = "focus" if action == "focus" else "kill"
+        return ["swaymsg", f"[con_id={ident}]", command]
+    if kind == "niri":
+        verb = "focus-window" if action == "focus" else "close-window"
+        return ["niri", "msg", "action", verb, "--id", ident]
+    return None
+
+
+def compositor_list_commands(
+    environ: Mapping[str, str] | None = None,
+) -> list[tuple[list[str], Callable[[Any], list[WindowInfo]]]]:
+    """Prefer the compositor that owns this session's socket when several CLIs exist."""
+    env = os.environ if environ is None else environ
+    loaders = (
+        ("HYPRLAND_INSTANCE_SIGNATURE", ["hyprctl", "-j", "clients"], windows_from_hypr_clients),
+        ("SWAYSOCK", ["swaymsg", "-t", "get_tree"], windows_from_sway_tree),
+        ("NIRI_SOCKET", ["niri", "msg", "--json", "windows"], windows_from_niri_windows),
+    )
+    preferred: list[tuple[list[str], Callable[[Any], list[WindowInfo]]]] = []
+    rest: list[tuple[list[str], Callable[[Any], list[WindowInfo]]]] = []
+    for key, argv, parser in loaders:
+        item = (argv, parser)
+        if env.get(key):
+            preferred.append(item)
+        else:
+            rest.append(item)
+    return preferred + rest
+
+
+def _json_command(argv: list[str]) -> Any:
+    try:
+        out = subprocess.check_output(argv, text=True, errors="replace", timeout=0.4)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    try:
+        return json.loads(out)
+    except ValueError:
+        return None
+
+
+def _compositor_windows() -> list[WindowInfo]:
+    for argv, parser in compositor_list_commands():
+        if not shutil.which(argv[0]):
+            continue
+        payload = _json_command(argv)
+        if payload is None:
+            continue
+        parsed = parser(payload)
+        if parsed:
+            return parsed
+    return []
 
 
 def _introspect_windows_payload() -> dict[Any, Any]:
@@ -240,7 +438,8 @@ def list_windows() -> list[WindowInfo]:
             wmctrl = []
     payload = _introspect_windows_payload()
     introspect = windows_from_introspect_payload(payload)
-    windows = pick_window_list(ewmh, wmctrl, introspect)
+    compositor = _compositor_windows()
+    windows = pick_window_list(ewmh, wmctrl, introspect, compositor)
     ranks = tab_ranks_from_introspect_payload(payload)
     return sort_windows_most_recent(windows, tab_ranks=ranks or None)
 
@@ -464,17 +663,18 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
     wid = payload.get("wid") or payload.get("payload") or ""
     pid = int(payload.get("pid") or 0)
     app_id = str(payload.get("app_id") or "")
+    compositor_owned = compositor_window_argv(str(wid), "focus") is not None
     if kind == "kill":
         if pid:
             _signal_pid(pid, signal.SIGKILL)
         return
     if kind in {"close", "quit"}:
         _close_window(wid)
-        if pid and not session_has_x11_window_control():
+        if pid and not session_has_x11_window_control() and not compositor_owned:
             _signal_pid(pid, signal.SIGTERM)
         return
     _focus_window(wid)
-    if app_id and not session_has_x11_window_control():
+    if app_id and not session_has_x11_window_control() and not compositor_owned:
         activate = application_activate or _focus_application
         activate(app_id)
 
@@ -515,6 +715,10 @@ def _focus_application(app_id: str) -> bool:
 
 
 def _focus_window(wid: str) -> None:
+    argv = compositor_window_argv(wid, "focus")
+    if argv:
+        subprocess.run(argv, check=False, capture_output=True)
+        return
     if shutil.which("wmctrl"):
         subprocess.run(["wmctrl", "-ia", wid], check=False)
         return
@@ -533,6 +737,10 @@ def _focus_window(wid: str) -> None:
 
 
 def _close_window(wid: str) -> None:
+    argv = compositor_window_argv(wid, "close")
+    if argv:
+        subprocess.run(argv, check=False, capture_output=True)
+        return
     if shutil.which("wmctrl"):
         subprocess.run(["wmctrl", "-ic", wid], check=False)
         return

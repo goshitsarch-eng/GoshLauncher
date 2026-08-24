@@ -9,6 +9,8 @@ from ulauncher.modes.launcher.windows import (
     activate_window,
     application_bus_name,
     application_object_path,
+    compositor_list_commands,
+    compositor_window_argv,
     parse_window_close_query,
     parse_window_intent,
     parse_workspace_query,
@@ -23,7 +25,10 @@ from ulauncher.modes.launcher.windows import (
     window_matches,
     window_recency_value,
     window_result_id,
+    windows_from_hypr_clients,
     windows_from_introspect_payload,
+    windows_from_niri_windows,
+    windows_from_sway_tree,
     workspace_index_in_range,
     workspace_label_matches,
     workspace_result_id,
@@ -161,6 +166,108 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     assert picked == wayland
     assert pick_window_list(native, [], []) == native
     assert pick_window_list([], [], []) == []
+    compositor = [WindowInfo(wid="hypr:0x1", title="Wayland", wm_class="app", desktop=0)]
+    assert pick_window_list([], [], [], compositor) == compositor
+    native_one = [WindowInfo(wid="0x1", title="X", wm_class="x", desktop=0)]
+    compositor_two = [*compositor, WindowInfo(wid="hypr:0x2", title="Other", wm_class="b", desktop=0)]
+    assert pick_window_list(native_one, [], [], compositor_two) == compositor_two
+
+
+def test_hypr_sway_niri_window_payloads() -> None:
+    hypr = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xabc",
+                "title": "Firefox",
+                "class": "firefox",
+                "pid": 9,
+                "workspace": {"id": 2},
+                "focusHistoryID": 0,
+                "mapped": True,
+            },
+            {"address": "0xhid", "title": "Hidden", "class": "x", "hidden": True},
+            {"address": "", "title": "No id", "class": "x"},
+        ]
+    )
+    assert len(hypr) == 1
+    assert hypr[0].wid == "hypr:0xabc"
+    assert hypr[0].desktop == 1
+    assert hypr[0].app_id == "firefox"
+    sway = windows_from_sway_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "3",
+                    "nodes": [
+                        {
+                            "id": 42,
+                            "type": "con",
+                            "name": "Terminal",
+                            "app_id": "foot",
+                            "pid": 8,
+                            "focused": True,
+                        }
+                    ],
+                },
+                {"type": "workspace", "name": "__i3_scratch", "nodes": [{"id": 1, "type": "con", "name": "scratch"}]},
+            ],
+        }
+    )
+    assert len(sway) == 1
+    assert sway[0].wid == "sway:42"
+    assert sway[0].desktop == 2
+    assert sway[0].app_id == "foot"
+    niri = windows_from_niri_windows(
+        [
+            {"id": 7, "title": "Notes", "app_id": "org.gnome.TextEditor", "workspace_id": 1, "is_focused": True},
+            {"id": 8, "title": "", "app_id": ""},
+        ]
+    )
+    assert len(niri) == 1
+    assert niri[0].wid == "niri:7"
+    assert niri[0].wm_class == "org.gnome.TextEditor"
+    assert compositor_window_argv("hypr:0xabc", "focus") == [
+        "hyprctl",
+        "dispatch",
+        "focuswindow",
+        "address:0xabc",
+    ]
+    assert compositor_window_argv("sway:42", "close") == ["swaymsg", "[con_id=42]", "kill"]
+    assert compositor_window_argv("niri:7", "focus") == [
+        "niri",
+        "msg",
+        "action",
+        "focus-window",
+        "--id",
+        "7",
+    ]
+    assert compositor_window_argv("0x1", "focus") is None
+    hypr_alt = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xdef",
+                "title": "Term",
+                "class": "foot",
+                "workspace": {"id": 1},
+                "focusHistoryId": 3,
+                "mapped": True,
+            }
+        ]
+    )
+    assert hypr_alt[0].wid == "hypr:0xdef"
+    assert hypr_alt[0].user_time == 10**9 - 3
+    niri_cmds = compositor_list_commands({"NIRI_SOCKET": "/run/niri.sock"})
+    assert niri_cmds[0][0] == ["niri", "msg", "--json", "windows"]
+    hypr_cmds = compositor_list_commands({"HYPRLAND_INSTANCE_SIGNATURE": "sig"})
+    assert hypr_cmds[0][0] == ["hyprctl", "-j", "clients"]
+    default_cmds = compositor_list_commands({})
+    assert [argv for argv, _parser in default_cmds] == [
+        ["hyprctl", "-j", "clients"],
+        ["swaymsg", "-t", "get_tree"],
+        ["niri", "msg", "--json", "windows"],
+    ]
 
 
 def test_application_bus_name_strips_desktop_suffix() -> None:
@@ -198,6 +305,15 @@ def test_activate_window_uses_application_activate_on_wayland(monkeypatch: pytes
     calls.clear()
     activate_window({"kind": "kill", "pid": 9})
     assert calls == [("sig", 9, signal.SIGKILL)]
+    calls.clear()
+    activate_window(
+        {"kind": "focus", "wid": "hypr:0xabc", "app_id": "org.gnome.Console"},
+        application_activate=lambda app: calls.append(("app", app)) or True,
+    )
+    assert calls == [("x11", "hypr:0xabc")]
+    calls.clear()
+    activate_window({"kind": "close", "wid": "niri:7", "pid": 9})
+    assert calls == [("close", "niri:7")]
 
 
 def test_wayland_workspace_switch_prefers_compositor_ipc() -> None:
