@@ -7,6 +7,7 @@ from ulauncher.modes.launcher.click_outside import (
     backdrop_claims_event,
     backdrop_pointer_action,
     backdrop_should_close,
+    backdrop_teardown_order,
     click_is_outside_card,
 )
 
@@ -35,3 +36,9 @@ def test_backdrop_box_unions_monitors() -> None:
     ]
     box = backdrop_box(monitors)
     assert box == {"x": 0, "y": 0, "width": 1440, "height": 600}
+
+
+def test_backdrop_teardown_order_hides_before_chrome_detach() -> None:
+    order = backdrop_teardown_order()
+    assert ",".join(order) == "disconnect,hide,remove-chrome,destroy"
+    assert order.index("hide") < order.index("remove-chrome")

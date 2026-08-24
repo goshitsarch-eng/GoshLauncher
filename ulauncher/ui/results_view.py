@@ -15,6 +15,7 @@ from ulauncher.modes.launcher.paint_selection import (
     result_selection_key,
     row_matches_previous,
 )
+from ulauncher.modes.launcher.scroll_view import set_overlay_scrollbars
 from ulauncher.modes.launcher.selection_math import next_activatable_index
 from ulauncher.ui import gtk4
 from ulauncher.utils import scheduling
@@ -56,6 +57,8 @@ class ResultsView(Gtk.ScrolledWindow):
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         gtk4.add_css_class(self._box, "result-box")
         self.set_child(self._box)
+        # overlay bars sit on the row and hide Alt+1-9 hints
+        set_overlay_scrollbars(self, False)
 
     @property
     def has_results(self) -> bool:

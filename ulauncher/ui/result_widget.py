@@ -8,6 +8,7 @@ from gi.repository import Gtk, Pango
 
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
+from ulauncher.modes.launcher.scroll_view import scroll_value_to_show_row
 from ulauncher.ui import gtk4
 from ulauncher.ui.helpers.monitor import get_text_scaling_factor
 from ulauncher.ui.helpers.text_highlighter import highlight_text
@@ -155,11 +156,8 @@ class ResultWidget(Gtk.Box):
         viewport_height = scrolled.get_allocated_height()
         scroll_y = adjustment.get_value()
         allocation = self.get_allocation()
-        bottom = allocation.y + allocation.height
-        if scroll_y > allocation.y:
-            adjustment.set_value(allocation.y)
-        elif viewport_height + scroll_y < bottom:
-            adjustment.set_value(bottom - viewport_height)
+        # page_size is 0 before the first allocate; writing that offset jumps the list
+        adjustment.set_value(scroll_value_to_show_row(allocation.y, allocation.height, scroll_y, viewport_height))
 
     def highlight_name(self) -> None:
         if self.result.wrap:

@@ -29,6 +29,11 @@ def click_is_outside_card(x: float, y: float, width: float, height: float) -> bo
     return x < 0 or y < 0 or x > width or y > height
 
 
+def backdrop_teardown_order() -> list[str]:
+    # clutter 18 aborts if a mapped actor is detached
+    return ["disconnect", "hide", "remove-chrome", "destroy"]
+
+
 def backdrop_box(monitors: list[Any]) -> dict[str, float]:
     if not monitors:
         return {"x": 0, "y": 0, "width": 0, "height": 0}
