@@ -280,10 +280,16 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
     def on_focus_out(self) -> None:
         from ulauncher.modes.launcher.focus_loss import gtk_window_focus_action, should_run_refocus
+        from ulauncher.modes.launcher.ime import ime_panel_visible
 
         if self.is_dragging:
             return
-        action = gtk_window_focus_action(bool(self.is_active()), self.get_focus(), self.prompt_input)
+        action = gtk_window_focus_action(
+            bool(self.is_active()),
+            self.get_focus(),
+            self.prompt_input,
+            ime_panel=ime_panel_visible(),
+        )
         if action == "close" and self.settings.close_on_focus_out:
             self.close(save_query=True)
             return

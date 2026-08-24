@@ -57,6 +57,10 @@ def test_gtk_window_focus_action() -> None:
     assert gtk_window_focus_action(True, None, entry) == "refocus-entry"
     assert gtk_window_focus_action(True, entry, entry) == "ignore"
     assert gtk_window_focus_action(True, object(), entry) == "refocus-entry"
+    assert gtk_window_focus_action(False, None, entry, ime_panel=True) == "ignore"
+    assert gtk_window_focus_action(False, None, entry, osk_contains_focus=True) == "ignore"
+    candidate = SimpleNamespace(has_css_class=lambda name: name == "candidate-popup-boxpointer")
+    assert gtk_window_focus_action(True, candidate, entry) == "ignore"
 
 
 def test_osk_and_ime_helpers() -> None:

@@ -107,19 +107,31 @@ def should_run_refocus(is_open: bool, visible: bool) -> bool:
     return bool(is_open and visible)
 
 
-def gtk_window_focus_action(window_active: bool, focus: Any, entry: Any) -> str:
+def gtk_window_focus_action(
+    window_active: bool,
+    focus: Any,
+    entry: Any,
+    *,
+    ime_panel: bool = False,
+    osk_contains_focus: bool = False,
+) -> str:
     """Map GTK window focus onto the goshos focus-loss table.
 
     Alt-tab to another window is close. A null focus widget while the window is
     still active is the GNOME 48 chrome-click case and returns to the entry.
+    An IBus/Fcitx lookup or OSK long-press is not alt-tab.
     """
+    ime_focus = bool(ime_panel) or focus_is_ime_candidate(focus)
+    osk_focus = bool(osk_contains_focus) or focus_is_on_screen_keyboard(focus)
     if not window_active:
+        if ime_focus or osk_focus:
+            return "ignore"
         return focus_loss_action(True, False, False, False, False, False)
     return focus_loss_action(
         bool(focus),
         False,
         focus is not None,
         focus_is_search_entry(focus, entry),
-        False,
-        False,
+        osk_focus,
+        ime_focus,
     )
