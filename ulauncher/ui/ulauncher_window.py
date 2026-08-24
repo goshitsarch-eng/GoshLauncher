@@ -326,6 +326,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def on_input_key_press(  # noqa: PLR0911, PLR0912, PLR0915
         self, controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: Gdk.ModifierType
     ) -> bool:
+        from ulauncher.modes.launcher.ime import ime_panel_visible
         from ulauncher.modes.launcher.key_action import (
             resolve_ctrl_nav,
             resolve_home_end_action,
@@ -360,7 +361,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         entry = self.prompt_input
         preedit = _read_entry_preedit(entry)
         now_us = _event_time_us(controller)
-        ime_owns_nav = should_propagate_for_ime(preedit, False)
+        candidate_visible = False if preedit else ime_panel_visible()
+        ime_owns_nav = should_propagate_for_ime(preedit, candidate_visible)
         if (
             keyname == "BackSpace"
             and not ctrl
