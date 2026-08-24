@@ -98,8 +98,29 @@ def get_hyprland_monitors() -> list[Any] | None:
     return data if isinstance(data, list) else None
 
 
+def get_i3ipc_tree() -> dict[str, object] | None:
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    if os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
+        argv = ["swaymsg", "-t", "get_tree"]
+    elif os.environ.get("I3SOCK") and shutil.which("i3-msg"):
+        argv = ["i3-msg", "-t", "get_tree"]
+    else:
+        return None
+    try:
+        payload = subprocess.check_output(argv, timeout=1)
+        data = json.loads(payload)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, TypeError):
+        logger.debug("i3/Sway tree unavailable", exc_info=True)
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def monitor_work_geometry(monitor: Gdk.Monitor) -> Gdk.Rectangle:
-    """Monitor geometry minus panel struts (EWMH _NET_WORKAREA or Hyprland reserved)."""
+    """Monitor geometry minus panel struts (EWMH, Hyprland reserved, or i3/Sway workspace rect)."""
     from ulauncher.modes.launcher.popup_position import resolve_monitor_work_area
 
     geo = monitor.get_geometry()
@@ -107,6 +128,7 @@ def monitor_work_geometry(monitor: Gdk.Monitor) -> Gdk.Rectangle:
         {"x": geo.x, "y": geo.y, "width": geo.width, "height": geo.height},
         get_ewmh_desktop_work_area(),
         get_hyprland_monitors(),
+        get_i3ipc_tree(),
     )
     rect = Gdk.Rectangle()
     rect.x = int(work["x"])

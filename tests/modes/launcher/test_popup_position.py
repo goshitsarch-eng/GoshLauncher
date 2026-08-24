@@ -17,6 +17,7 @@ from ulauncher.modes.launcher.popup_position import (
     work_area_avoiding_keyboard,
     work_area_for_monitor,
     work_area_from_hyprland_monitor,
+    work_area_from_sway_tree,
 )
 from ulauncher.modes.launcher.ui_scale import (
     css_px,
@@ -159,3 +160,64 @@ def test_work_area_sits_below_panel_struts() -> None:
         [{"x": 0, "y": 0, "width": 1920, "height": 1080, "reserved": [0, 40, 0, 0], "focused": True}],
     )
     assert resolved["y"] == 40
+
+
+def test_work_area_from_sway_workspace_rect() -> None:
+    geometry = {"x": 0, "y": 0, "width": 1920, "height": 1080}
+    tree = {
+        "type": "root",
+        "nodes": [
+            {"type": "output", "name": "__i3", "rect": {"x": 0, "y": 0, "width": 0, "height": 0}, "nodes": []},
+            {
+                "type": "output",
+                "name": "eDP-1",
+                "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+                "nodes": [
+                    {
+                        "type": "workspace",
+                        "name": "__i3_scratch",
+                        "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+                    },
+                    {
+                        "type": "workspace",
+                        "name": "1",
+                        "visible": True,
+                        "rect": {"x": 0, "y": 32, "width": 1920, "height": 1048},
+                    },
+                    {
+                        "type": "workspace",
+                        "name": "2",
+                        "focused": True,
+                        "rect": {"x": 0, "y": 40, "width": 1920, "height": 1040},
+                    },
+                ],
+            },
+        ],
+    }
+    assert work_area_from_sway_tree(tree, geometry) == {"x": 0, "y": 40, "width": 1920, "height": 1040}
+    origin = popup_origin(work_area_from_sway_tree(tree, geometry) or geometry, 600, 80, "top")
+    assert origin["y"] == int(40 + 1040 * 0.12)
+    resolved = resolve_monitor_work_area(geometry, {"x": 0, "y": 8, "width": 1920, "height": 1072}, None, tree)
+    assert resolved["y"] == 40
+    other = {"x": 1920, "y": 0, "width": 1920, "height": 1080}
+    assert work_area_from_sway_tree(tree, other) is None
+    assert work_area_from_sway_tree(None, geometry) is None
+    visible_only = {
+        "type": "root",
+        "nodes": [
+            {
+                "type": "output",
+                "name": "eDP-1",
+                "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+                "nodes": [
+                    {
+                        "type": "workspace",
+                        "name": "1",
+                        "visible": True,
+                        "rect": {"x": 0, "y": 32, "width": 1920, "height": 1048},
+                    }
+                ],
+            }
+        ],
+    }
+    assert work_area_from_sway_tree(visible_only, geometry) == {"x": 0, "y": 32, "width": 1920, "height": 1048}

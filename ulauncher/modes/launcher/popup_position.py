@@ -131,14 +131,76 @@ def hyprland_work_area_for_geometry(monitors: Any, geometry: dict[str, float]) -
     return work_area_from_hyprland_monitor(match)
 
 
+def _ipc_rect(value: Any) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        return {
+            "x": int(value["x"]),
+            "y": int(value["y"]),
+            "width": int(value["width"]),
+            "height": int(value["height"]),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _workspace_work_area(output: dict[str, Any]) -> dict[str, int] | None:
+    """Visible i3/Sway workspace `rect` is the bar-free area on that output."""
+    workspaces: list[dict[str, Any]] = []
+    for child in output.get("nodes") or []:
+        if not isinstance(child, dict):
+            continue
+        if str(child.get("type") or "") != "workspace":
+            continue
+        if str(child.get("name") or "").startswith("__"):
+            continue
+        workspaces.append(child)
+    if not workspaces:
+        return None
+    chosen = next((ws for ws in workspaces if ws.get("focused")), None)
+    if chosen is None:
+        chosen = next((ws for ws in workspaces if ws.get("visible")), workspaces[0])
+    return _ipc_rect(chosen.get("rect"))
+
+
+def work_area_from_sway_tree(tree: Any, geometry: dict[str, float]) -> dict[str, int] | None:
+    if not tree:
+        return None
+    gx = int(geometry["x"])
+    gy = int(geometry["y"])
+
+    def walk(node: Any) -> dict[str, int] | None:
+        if not isinstance(node, dict):
+            return None
+        ntype = str(node.get("type") or "")
+        name = str(node.get("name") or "")
+        if ntype == "output" and not name.startswith("__"):
+            rect = _ipc_rect(node.get("rect"))
+            if rect and rect["x"] == gx and rect["y"] == gy:
+                return _workspace_work_area(node)
+        for key in ("nodes", "floating_nodes"):
+            for child in node.get(key) or []:
+                found = walk(child)
+                if found:
+                    return found
+        return None
+
+    return walk(tree)
+
+
 def resolve_monitor_work_area(
     geometry: dict[str, float],
     desktop_work_area: dict[str, float] | None = None,
     hyprland_monitors: Any = None,
+    sway_tree: Any = None,
 ) -> dict[str, int]:
     hypr = hyprland_work_area_for_geometry(hyprland_monitors, geometry)
     if hypr:
         return hypr
+    sway = work_area_from_sway_tree(sway_tree, geometry)
+    if sway:
+        return sway
     return work_area_for_monitor(geometry, desktop_work_area)
 
 
