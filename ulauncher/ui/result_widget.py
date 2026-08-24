@@ -25,6 +25,7 @@ class ResultWidget(Gtk.Box):
     result: Result
     jump_keys: list[str]
     item_box: Gtk.Box
+    item_container: Gtk.Box
     shortcut_label: Gtk.Label
     title_box: Gtk.Box
     text_container: Gtk.Box
@@ -47,15 +48,13 @@ class ResultWidget(Gtk.Box):
         self.widget_index = index
         text_scaling_factor = get_text_scaling_factor()
         from ulauncher.modes.launcher.looks import chrome_from_settings, icon_size_for_look
+        from ulauncher.modes.launcher.result_row import RESULT_CHILD_SPACING
         from ulauncher.utils.settings import Settings
 
         chrome = chrome_from_settings(Settings.load())
         icon_size = icon_size_for_look(chrome, str(chrome.get("density") or "comfortable"))
         self._show_numbers = bool(chrome.get("show_numbers"))
         show_icons = bool(chrome.get("show_result_icons", True))
-        inner_margin_x = int(12.0 * text_scaling_factor)
-        outer_margin_x = int(18.0 * text_scaling_factor)
-        margin_y = (3 if result.compact else 5) * text_scaling_factor
 
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         gtk4.add_css_class(self, "item-frame")
@@ -81,9 +80,10 @@ class ResultWidget(Gtk.Box):
         self.item_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         gtk4.add_css_class(self.item_box, "item-box")
         self.append(self.item_box)
-        item_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        item_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=RESULT_CHILD_SPACING)
         gtk4.add_css_class(item_container, "item-container")
         self.item_box.append(item_container)
+        self.item_container = item_container
 
         from ulauncher.modes.launcher.result_icon import should_build_result_icon
 
@@ -100,8 +100,6 @@ class ResultWidget(Gtk.Box):
             orientation=Gtk.Orientation.VERTICAL,
             valign=Gtk.Align.CENTER,
         )
-        self.text_container.set_margin_start(inner_margin_x)
-        self.text_container.set_margin_end(inner_margin_x)
         gtk4.pack_start(item_container, self.text_container, True, True, 0)
 
         self.shortcut_label = Gtk.Label(justify=Gtk.Justification.RIGHT, width_request=44)
@@ -121,11 +119,6 @@ class ResultWidget(Gtk.Box):
 
         should_expand = not result.compact and not result.description
         gtk4.pack_start(self.text_container, self.title_box, should_expand, True, 0)
-
-        item_container.set_margin_start(int(outer_margin_x))
-        item_container.set_margin_end(int(outer_margin_x))
-        item_container.set_margin_top(int(margin_y))
-        item_container.set_margin_bottom(int(margin_y))
 
         if result.description and not result.compact:
             descr_label = self._make_text_label()

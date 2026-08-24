@@ -113,3 +113,15 @@ class TestResultWidget:
         widget.on_touch_event(None, event("touch-update", 10.0 + TOUCH_TAP_SLOP + 4))
         widget.on_touch_event(None, event("touch-end", 10.0 + TOUCH_TAP_SLOP + 4))
         assert activated == []
+
+    def test_look_css_owns_row_padding(self) -> None:
+        from ulauncher.modes.launcher.result_row import RESULT_CHILD_SPACING
+
+        widget = ResultWidget(Result(), 0, Query("", None), noop, noop, JUMP_KEYS)
+        assert widget.item_container.get_spacing() == RESULT_CHILD_SPACING
+        assert widget.item_container.get_margin_start() == 0
+        assert widget.item_container.get_margin_end() == 0
+        assert widget.item_container.get_margin_top() == 0
+        assert widget.item_container.get_margin_bottom() == 0
+        assert widget.text_container.get_margin_start() == 0
+        assert widget.text_container.get_margin_end() == 0
