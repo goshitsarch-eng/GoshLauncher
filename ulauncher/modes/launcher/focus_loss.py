@@ -107,6 +107,38 @@ def should_run_refocus(is_open: bool, visible: bool) -> bool:
     return bool(is_open and visible)
 
 
+def point_in_rect(x: float, y: float, rect: tuple[float, float, float, float]) -> bool:
+    left, top, width, height = rect
+    return left <= x < left + width and top <= y < top + height
+
+
+def prompt_click_target(
+    x: float,
+    y: float,
+    icon_rect: tuple[float, float, float, float],
+    entry_rect: tuple[float, float, float, float],
+    prefs_rect: tuple[float, float, float, float],
+) -> str:
+    """Which prompt child a click hit. Search icon and empty padding are chrome."""
+    if point_in_rect(x, y, prefs_rect):
+        return "prefs"
+    if point_in_rect(x, y, icon_rect):
+        return "search-icon"
+    if point_in_rect(x, y, entry_rect):
+        return "entry"
+    return "padding"
+
+
+def prompt_click_should_refocus(target: str) -> bool:
+    """Click the magnifier or empty padding — the next letter must reach the entry."""
+    return target in {"search-icon", "padding"}
+
+
+def prompt_click_should_drag(target: str) -> bool:
+    """Goshos chrome is not a movable window. Keep drag on empty padding only."""
+    return target == "padding"
+
+
 def gtk_window_focus_action(
     window_active: bool,
     focus: Any,

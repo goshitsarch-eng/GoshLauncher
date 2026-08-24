@@ -8,7 +8,11 @@ from ulauncher.modes.launcher.focus_loss import (
     focus_is_search_entry,
     focus_loss_action,
     gtk_window_focus_action,
+    point_in_rect,
     popup_chrome_should_focus,
+    prompt_click_should_drag,
+    prompt_click_should_refocus,
+    prompt_click_target,
     result_row_should_focus,
     should_capture_keys,
     should_run_refocus,
@@ -61,6 +65,23 @@ def test_gtk_window_focus_action() -> None:
     assert gtk_window_focus_action(False, None, entry, osk_contains_focus=True) == "ignore"
     candidate = SimpleNamespace(has_css_class=lambda name: name == "candidate-popup-boxpointer")
     assert gtk_window_focus_action(True, candidate, entry) == "ignore"
+
+
+def test_prompt_click_search_icon_and_padding_refocus() -> None:
+    icon = (0.0, 0.0, 20.0, 20.0)
+    entry = (24.0, 0.0, 200.0, 20.0)
+    prefs = (230.0, 0.0, 24.0, 24.0)
+    assert prompt_click_target(8.0, 10.0, icon, entry, prefs) == "search-icon"
+    assert prompt_click_target(100.0, 10.0, icon, entry, prefs) == "entry"
+    assert prompt_click_target(240.0, 10.0, icon, entry, prefs) == "prefs"
+    assert prompt_click_target(12.0, 40.0, icon, entry, prefs) == "padding"
+    assert prompt_click_should_refocus("search-icon") is True
+    assert prompt_click_should_refocus("padding") is True
+    assert prompt_click_should_refocus("entry") is False
+    assert prompt_click_should_refocus("prefs") is False
+    assert prompt_click_should_drag("padding") is True
+    assert prompt_click_should_drag("search-icon") is False
+    assert point_in_rect(0.0, 0.0, (0.0, 0.0, 0.0, 0.0)) is False
 
 
 def test_osk_and_ime_helpers() -> None:

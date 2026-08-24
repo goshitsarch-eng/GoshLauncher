@@ -33,3 +33,18 @@ class TestEmit:
         bus.emit("test-isolation:event_b")
         survivor.assert_called_once_with()
         assert "Unhandled error in listener for event test-isolation:event_b" in caplog.text
+
+
+class TestListenOff:
+    def test_listen_receives_and_off_stops(self) -> None:
+        bus = EventBus()
+        heard: list[str] = []
+        wrapper = bus.listen("test-listen:ping", heard.append)
+        bus.emit("test-listen:ping", "one")
+        bus.off("test-listen:ping", wrapper)
+        bus.emit("test-listen:ping", "two")
+        assert heard == ["one"]
+
+    def test_off_is_safe_when_missing(self) -> None:
+        bus = EventBus()
+        bus.off("test-listen:missing", lambda: None)

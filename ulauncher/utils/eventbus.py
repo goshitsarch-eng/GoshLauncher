@@ -47,6 +47,27 @@ class EventBus:
         # return the original listener so the class method works as normal
         return listener
 
+    def listen(self, event_name: str, listener: Callable[..., Any]) -> Callable[..., Any]:
+        """Subscribe ``listener`` to a full event name. Returns the wrapper ``off`` must receive.
+
+        ``@on`` keeps the method name as the event. Prefs windows need a removable
+        handle because Gio.Settings outlives the widget (goshos prefsCombo.js).
+        """
+
+        @wraps(listener)
+        def wrapper(*args: Any, **kwargs: Any) -> None:
+            if self.skip_if_not_bound and not self.self_arg:
+                return
+            if self.self_arg:
+                args = (self.self_arg, *args)
+            listener(*args, **kwargs)
+
+        _listeners[event_name].add(wrapper)
+        return wrapper
+
+    def off(self, event_name: str, wrapper: Callable[..., Any]) -> None:
+        _listeners[event_name].discard(wrapper)
+
     def emit(self, event_name: str, *args: Any, **kwargs: Any) -> None:
         # Exception barrier: a raising listener must not break the emitter or the other listeners
         for listener in _listeners[event_name]:

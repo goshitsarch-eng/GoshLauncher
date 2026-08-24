@@ -69,6 +69,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._backdrop_close_idle = None
         self._prefs_layout_idle = None
         self._input_chrome_idle = None
+        self._refocus_idle = None
         self._osk_visible = False
         self._scale_watched = False
         width_request = self.settings.base_width
@@ -110,9 +111,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         gtk4.pack_start(self.frame, shadow_container, True, True, 0)
 
         self.theme_root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.theme_root.set_can_focus(False)
         gtk4.pack_start(shadow_container, self.theme_root, True, True, 0)
 
         self.prompt = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.prompt.set_can_focus(False)
         gtk4.add_css_class(self.prompt, "prompt")
         self.prompt_input = Gtk.Entry(hexpand=True, height_request=30)
         self.prompt_input.set_margin_top(15)
@@ -126,9 +129,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.prefs_btn.set_margin_end(15)
         self.prefs_btn.set_can_focus(False)
 
+        from ulauncher.modes.launcher.focus_loss import popup_chrome_should_focus
         from ulauncher.modes.launcher.search_entry import SEARCH_ICON_NAME, SEARCH_ICON_PX
 
         self.search_icon = Gtk.Image(icon_name=SEARCH_ICON_NAME, pixel_size=SEARCH_ICON_PX)
+        self.search_icon.set_can_focus(popup_chrome_should_focus())
         gtk4.add_css_class(self.search_icon, "search-icon")
         self.search_icon.set_margin_start(12)
         self.search_icon.set_valign(Gtk.Align.CENTER)
@@ -353,7 +358,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.get_app().request_close(save_query=True)
             return
         if action == "refocus-entry" and should_run_refocus(self.get_mapped(), self.get_visible()):
-            self.prompt_input.grab_focus()
+            self._refocus_entry_soon()
 
     def on_focus_in(self) -> None:
         if self.settings.grab_mouse_pointer:
@@ -370,6 +375,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         chosen = activatable_result(results, index) if fallback else indexed_activatable_result(results, index)
         if chosen:
             self.get_app().activate_result(chosen, alt)
+            return
+        self._refocus_entry_soon()
 
     def _activate_clicked(self, alt: bool) -> None:
         self.activate_result(alt, fallback=False)
@@ -505,6 +512,13 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def on_mouse_down(self, gesture: Gtk.GestureClick, _n_press: int, x: float, y: float) -> None:
         if gesture.get_current_button() != 1:
             return
+        from ulauncher.modes.launcher.focus_loss import prompt_click_should_drag, prompt_click_should_refocus
+
+        target = self._prompt_click_target(x, y)
+        if prompt_click_should_refocus(target):
+            self._refocus_entry_soon()
+        if not prompt_click_should_drag(target):
+            return
         self.is_dragging = True
         native = self.get_native()
         surface = native.get_surface() if native else None
@@ -515,7 +529,57 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             surface.begin_move(device, 1, int(x), int(y), timestamp)
 
     def on_mouse_up(self, *_args: Any) -> None:
+        was_dragging = self.is_dragging
         self.is_dragging = False
+        if was_dragging:
+            self._refocus_entry_soon()
+
+    def _widget_rect_in_prompt(self, widget: Gtk.Widget) -> tuple[float, float, float, float]:
+        compute = getattr(widget, "compute_bounds", None)
+        if callable(compute):
+            ok, bounds = compute(self.prompt)
+            if ok and bounds is not None:
+                get_x = getattr(bounds, "get_x", None)
+                if callable(get_x):
+                    return (
+                        float(bounds.get_x()),
+                        float(bounds.get_y()),
+                        float(bounds.get_width()),
+                        float(bounds.get_height()),
+                    )
+                return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
+        alloc = widget.get_allocation()
+        return (float(alloc.x), float(alloc.y), float(alloc.width), float(alloc.height))
+
+    def _prompt_click_target(self, x: float, y: float) -> str:
+        from ulauncher.modes.launcher.focus_loss import prompt_click_target
+
+        return prompt_click_target(
+            x,
+            y,
+            self._widget_rect_in_prompt(self.search_icon),
+            self._widget_rect_in_prompt(self.prompt_input),
+            self._widget_rect_in_prompt(self.prefs_btn),
+        )
+
+    def _refocus_entry_soon(self) -> None:
+        pending = getattr(self, "_refocus_idle", None)
+        if pending is not None:
+            return
+        self._refocus_idle = scheduling.run_when_idle(self._run_refocus_entry)
+
+    def _run_refocus_entry(self) -> None:
+        from ulauncher.modes.launcher.focus_loss import should_run_refocus
+
+        self._refocus_idle = None
+        if should_run_refocus(self.get_mapped(), self.get_visible()):
+            self.prompt_input.grab_focus()
+
+    def _cancel_refocus_idle(self) -> None:
+        idle = getattr(self, "_refocus_idle", None)
+        if idle:
+            idle.cancel()
+        self._refocus_idle = None
 
     def _click_outside_card(self, x: float, y: float) -> bool:
         from ulauncher.modes.launcher.click_outside import click_is_outside_card
@@ -782,6 +846,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         logger.info("Closing Ulauncher window")
         self._cancel_live_layout()
         self._cancel_input_chrome_idle()
+        self._cancel_refocus_idle()
         self._stop_live_search()
         self._stop_session_watch()
         self._stop_osk_watch()

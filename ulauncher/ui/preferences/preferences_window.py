@@ -125,4 +125,8 @@ class PreferencesWindow(Adw.ApplicationWindow):
     def _on_close_request(self, *_args: Any) -> bool:
         if self._theme_watcher:
             self._theme_watcher.disconnect()
+        view = self.views.get("preferences")
+        unbind = getattr(view, "unbind_settings", None)
+        if callable(unbind):
+            unbind()
         return False

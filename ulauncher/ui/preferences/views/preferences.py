@@ -49,11 +49,13 @@ class PreferencesView(BaseView):
 
         # Add sections
         self._updating_chrome = False
+        self._prefs_signals = None
         self._add_general_section(prefs_view)
         self._add_chrome_section(prefs_view)
         self._add_applications_section(prefs_view)
         self._add_launcher_section(prefs_view)
         self._add_advanced_section(prefs_view)
+        self._bind_settings_follow()
 
     def _add_section_header(self, parent: Gtk.Box, title: str) -> None:
         """Add a section header"""
@@ -143,10 +145,10 @@ class PreferencesView(BaseView):
         parent.pack_start(row_box, False, False, 0)
 
     def _select_combo_id(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
-        from ulauncher.modes.launcher.prefs_combo import combo_selected_index
+        from ulauncher.modes.launcher.prefs_combo import combo_selected_index, combo_should_set
 
         index = combo_selected_index(items, current_id)
-        if index >= 0:
+        if combo_should_set(index, combo.get_active()):
             combo.set_active(index)
 
     def _add_look_combo(self, general_box: Gtk.Box) -> None:
@@ -157,6 +159,7 @@ class PreferencesView(BaseView):
             look_combo.append(look["id"], look["title"])
         self._select_combo_id(look_combo, LOOKS, getattr(self.settings, "look_id", "spotlight"))
         look_combo.connect("changed", self._on_look_changed)
+        self._look_combo = look_combo
         self._add_setting_row(general_box, "Launcher look", look_combo, look_prefs_search_text())
 
     def _add_background_row(self, general_box: Gtk.Box, run_in_bg_footer: str) -> None:
@@ -342,6 +345,90 @@ class PreferencesView(BaseView):
         finally:
             self._updating_chrome = False
 
+    def unbind_settings(self) -> None:
+        box = getattr(self, "_prefs_signals", None)
+        if box is not None:
+            box.disconnect_all()
+
+    def _bind_settings_follow(self) -> None:
+        from ulauncher.modes.launcher.prefs_combo import (
+            DENSITY_ITEMS,
+            ORDER_ITEMS,
+            POSITION_ITEMS,
+            JsonSettingsSignals,
+            bind_settings_changed,
+        )
+        from ulauncher.modes.launcher.web import SEARCH_ENGINES
+
+        self._prefs_signals = JsonSettingsSignals(self.settings)
+        if hasattr(self, "_look_combo"):
+            bind_settings_changed(self._prefs_signals, "look_id", self._look_combo, self._follow_look_combo)
+        if hasattr(self, "_position_combo"):
+            bind_settings_changed(
+                self._prefs_signals,
+                "popup_position",
+                self._position_combo,
+                lambda: self._follow_combo(self._position_combo, list(POSITION_ITEMS), self.settings.popup_position),
+            )
+        if hasattr(self, "_density_combo"):
+            bind_settings_changed(
+                self._prefs_signals,
+                "row_density",
+                self._density_combo,
+                lambda: self._follow_combo(self._density_combo, list(DENSITY_ITEMS), self.settings.row_density),
+            )
+        if hasattr(self, "_order_combo"):
+            bind_settings_changed(
+                self._prefs_signals,
+                "result_order",
+                self._order_combo,
+                lambda: self._follow_combo(self._order_combo, list(ORDER_ITEMS), self.settings.result_order),
+            )
+        if hasattr(self, "_engine_combo"):
+            bind_settings_changed(
+                self._prefs_signals,
+                "web_search_engine",
+                self._engine_combo,
+                lambda: self._follow_combo(self._engine_combo, SEARCH_ENGINES, self.settings.web_search_engine),
+            )
+        if hasattr(self, "_app_actions_switch"):
+            bind_settings_changed(
+                self._prefs_signals,
+                "enable_application_mode",
+                self._app_actions_switch,
+                self._sync_dependent_switches,
+            )
+        if hasattr(self, "_command_switch"):
+            bind_settings_changed(
+                self._prefs_signals, "enable_prefix_modes", self._command_switch, self._sync_dependent_switches
+            )
+
+    def _follow_combo(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
+        self._updating_chrome = True
+        try:
+            self._select_combo_id(combo, items, current_id)
+        finally:
+            self._updating_chrome = False
+
+    def _follow_look_combo(self) -> None:
+        from ulauncher.modes.launcher.looks import LOOKS
+
+        self._updating_chrome = True
+        try:
+            if hasattr(self, "_look_combo"):
+                self._select_combo_id(self._look_combo, LOOKS, self.settings.look_id)
+        finally:
+            self._updating_chrome = False
+        self._sync_chrome_widgets()
+
+    def _sync_dependent_switches(self) -> None:
+        from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
+
+        if hasattr(self, "_app_actions_switch"):
+            self._app_actions_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_application_mode))
+        if hasattr(self, "_command_switch"):
+            self._command_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_prefix_modes))
+
     def _add_applications_section(self, parent: Gtk.Box) -> None:
         """Add applications settings section"""
         applications_box = self._create_section_container(parent, "Applications")
@@ -349,6 +436,7 @@ class PreferencesView(BaseView):
         # Enable application mode
         app_mode_switch = Gtk.Switch(active=self.settings.enable_application_mode)
         app_mode_switch.connect("notify::active", self._on_app_mode_toggled)
+        self._app_mode_switch = app_mode_switch
         desc = "Include desktop applications alongside shortcuts and extensions in search results."
         self._add_setting_row(applications_box, "Include applications in search", app_mode_switch, desc)
 
@@ -379,6 +467,7 @@ class PreferencesView(BaseView):
 
         prefix_switch = Gtk.Switch(active=self.settings.enable_prefix_modes)
         prefix_switch.connect("notify::active", self._on_prefix_modes_toggled)
+        self._prefix_switch = prefix_switch
         self._add_setting_row(
             launcher_box,
             "Prefix modes",
@@ -396,13 +485,19 @@ class PreferencesView(BaseView):
             "When the query is empty, show frequent apps and open windows (windows first for Pop!_OS look).",
         )
 
-        app_actions_switch = Gtk.Switch(active=self.settings.enable_app_actions)
+        from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
+
+        app_actions_switch = Gtk.Switch(
+            active=self.settings.enable_app_actions,
+            sensitive=dependent_row_sensitive(self.settings.enable_application_mode),
+        )
         app_actions_switch.connect("notify::active", self._on_bool_setting("enable_app_actions"))
+        self._app_actions_switch = app_actions_switch
         self._add_setting_row(
             launcher_box,
             "Application actions",
             app_actions_switch,
-            "Offer desktop-file actions such as New Window alongside the main launch row.",
+            "New window and desktop-file actions for the best app match. Applications must stay enabled.",
         )
 
         for attr, title, description in (
@@ -440,8 +535,11 @@ class PreferencesView(BaseView):
             switch.connect("notify::active", self._on_bool_setting(attr))
             self._add_setting_row(launcher_box, title, switch, description)
 
+        from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
+
         self._command_switch = Gtk.Switch(
-            active=self.settings.enable_command_run, sensitive=self.settings.enable_prefix_modes
+            active=self.settings.enable_command_run,
+            sensitive=dependent_row_sensitive(self.settings.enable_prefix_modes),
         )
         self._command_switch.connect("notify::active", self._on_bool_setting("enable_command_run"))
         self._add_setting_row(
@@ -458,6 +556,7 @@ class PreferencesView(BaseView):
             engine_combo.append(engine["id"], engine["label"])
         self._select_combo_id(engine_combo, SEARCH_ENGINES, self.settings.web_search_engine)
         engine_combo.connect("changed", self._on_web_engine_changed)
+        self._engine_combo = engine_combo
         self._add_setting_row(
             launcher_box,
             "Web search engine",
@@ -489,10 +588,11 @@ class PreferencesView(BaseView):
     def _on_prefix_modes_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         enabled = switch.get_active()
         self.settings.save({"enable_prefix_modes": enabled})
-        if hasattr(self, "_command_switch"):
-            self._command_switch.set_sensitive(enabled)
+        self._sync_dependent_switches()
 
     def _on_web_engine_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_chrome:
+            return
         engine_id = combo.get_active_id()
         if engine_id:
             self.settings.save({"web_search_engine": engine_id})
@@ -581,6 +681,8 @@ class PreferencesView(BaseView):
             self.settings.save({"theme_name": theme_name})
 
     def _on_look_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_chrome:
+            return
         look_id = combo.get_active_id()
         from ulauncher.modes.launcher.looks import apply_look_chrome, should_apply_look
 
@@ -606,6 +708,7 @@ class PreferencesView(BaseView):
 
     def _on_app_mode_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         self.settings.save({"enable_application_mode": switch.get_active()})
+        self._sync_dependent_switches()
 
     def _on_raise_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         self.settings.save({"raise_if_started": switch.get_active()})
