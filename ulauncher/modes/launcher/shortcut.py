@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable, Iterable, Mapping
 
 DEFAULT_FALLBACK = "<Control>space"
+CAPTURE_PROMPT = "Press a key combination..."
 
 MODIFIER_KEY_NAMES = frozenset(
     {
@@ -94,6 +95,37 @@ def shortcut_label_after_change(shortcut_array: list[str] | None, capturing: boo
     if capturing:
         return None
     return shortcut_display_label(shortcut_array)
+
+
+def shortcut_row_label(shortcut_array: list[str] | None, capturing: bool) -> str:
+    """Prompt while capturing; settings writes must not overwrite that prompt."""
+    after = shortcut_label_after_change(shortcut_array, capturing)
+    if after is None:
+        return CAPTURE_PROMPT
+    return after
+
+
+def next_shortcut_capture_action(capturing: bool, kind: str) -> str:
+    """goshos shortcutPage.js: click to capture, Tab-away / Escape restore, key commits."""
+    if kind == "activate":
+        return "start"
+    if not capturing:
+        return "ignore"
+    if kind in {"focus-out", "escape"}:
+        return "cancel"
+    if kind == "modifier":
+        return "keep"
+    if kind == "commit":
+        return "commit"
+    return "keep"
+
+
+def shortcut_capture_key_kind(key_name: str | None) -> str:
+    if key_name == "Escape":
+        return "escape"
+    if not key_name or is_modifier_key_name(key_name):
+        return "modifier"
+    return "commit"
 
 
 def accelerator_grab_flags(flags: Mapping[str, int] | None) -> int:

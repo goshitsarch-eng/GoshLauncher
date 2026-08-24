@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from ulauncher.modes.launcher.shortcut import (
+    CAPTURE_PROMPT,
+    DEFAULT_FALLBACK,
     accelerator_grab_flags,
     build_accelerator,
     format_accelerator,
@@ -10,12 +12,15 @@ from ulauncher.modes.launcher.shortcut import (
     hotkey_to_restore_after_failed_grab,
     is_modifier_key_name,
     modifiers_from_mask,
+    next_shortcut_capture_action,
     normalize_accel_key,
     run_grab_release,
     shortcut_attempts,
+    shortcut_capture_key_kind,
     shortcut_display_label,
     shortcut_label_after_change,
     shortcut_retry_list,
+    shortcut_row_label,
     shortcut_to_persist,
     should_ignore_shortcut_repeat,
 )
@@ -119,3 +124,21 @@ def test_shortcut_hold_repeat_is_ignored() -> None:
     # stamp the ignored event so a held key stays suppressed
     stamped = 10_000
     assert should_ignore_shortcut_repeat(stamped + 30_000, stamped) is True
+
+
+def test_shortcut_capture_tab_away_restores_label() -> None:
+    assert next_shortcut_capture_action(False, "activate") == "start"
+    assert next_shortcut_capture_action(False, "escape") == "ignore"
+    assert next_shortcut_capture_action(False, "focus-out") == "ignore"
+    assert next_shortcut_capture_action(True, "focus-out") == "cancel"
+    assert next_shortcut_capture_action(True, "escape") == "cancel"
+    assert next_shortcut_capture_action(True, "modifier") == "keep"
+    assert next_shortcut_capture_action(True, "commit") == "commit"
+    assert shortcut_capture_key_kind("Escape") == "escape"
+    assert shortcut_capture_key_kind("Control_L") == "modifier"
+    assert shortcut_capture_key_kind("") == "modifier"
+    assert shortcut_capture_key_kind("space") == "commit"
+    assert shortcut_row_label(["<Control>space"], True) == CAPTURE_PROMPT
+    assert shortcut_row_label(["<Control>space"], False) == "Ctrl+space"
+    assert shortcut_row_label([], False) == "Not set (will default to Ctrl+Space)"
+    assert DEFAULT_FALLBACK == "<Control>space"

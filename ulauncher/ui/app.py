@@ -164,13 +164,11 @@ class UlauncherApp(Adw.Application):
 
         from ulauncher.ui.helpers.hotkey_controller import HotkeyController
 
-        hotkey = "<Control>space"
-        if settings.hotkey_show_app and not HotkeyController.is_plasma():
-            hotkey = settings.hotkey_show_app
+        hotkey = settings.hotkey_show_app or "<Control>space"
         # Portal sessions die with the process, so this must run on every startup.
         portal_bound = HotkeyController.bind_session_hotkey(hotkey, self.toggle_window)
 
-        if first_run or settings.hotkey_show_app:
+        if first_run:
             if HotkeyController.is_supported():
                 if HotkeyController.setup_default(hotkey):
                     display_name = Gtk.accelerator_get_label(*Gtk.accelerator_parse(hotkey))
@@ -185,8 +183,11 @@ class UlauncherApp(Adw.Application):
                     "de_hotkey_unsupported", "Cannot create global shortcut", body, "app.show-preferences"
                 )
 
-            # Remove json file setting so the notification won't show again
-            settings.save(hotkey_show_app="")
+    @events.on
+    def rebind_hotkey(self, accel: str) -> None:
+        from ulauncher.ui.helpers.hotkey_controller import HotkeyController
+
+        HotkeyController.rebind_portal(accel)
 
     @events.on
     def show_notification(self, notification_id: str | None, title: str, body: str, default_action: str = "-") -> None:

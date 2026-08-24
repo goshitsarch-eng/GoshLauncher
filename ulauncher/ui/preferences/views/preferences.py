@@ -177,18 +177,47 @@ class PreferencesView(BaseView):
         self._add_setting_row(general_box, "Run in background", keep_alive_switch, f"{desc}{run_in_bg_footer}")
 
     def _add_hotkey_row(self, general_box: Gtk.Box) -> None:
-        if HotkeyController.is_supported():
-            hotkey_button = Gtk.Button.new_with_label("Set hotkey")
-            hotkey_button.connect("clicked", self._on_hotkey_clicked)
-            hotkey_desc = "Choose the global keyboard shortcut that opens Ulauncher."
-            self._add_setting_row(general_box, "Hotkey", hotkey_button, hotkey_desc)
-            return
-        warning_text = (
-            "Ulauncher doesn't support setting global shortcuts for your desktop environment. "
-            "Bind this command in your DE settings: gapplication launch io.ulauncher.Ulauncher"
+        from ulauncher.modes.launcher.shortcut import shortcut_row_label
+
+        self._hotkey_capturing = False
+        accel = HotkeyController.current_accelerator()
+        label = Gtk.Label(label=shortcut_row_label([accel], False), xalign=1)
+        label.set_can_focus(True)
+        self._hotkey_label = label
+
+        click = Gtk.GestureClick()
+        click.connect("pressed", lambda *_args: self._on_hotkey_capture_activate())
+        label.add_controller(click)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._on_hotkey_capture_key)
+        label.add_controller(keys)
+        focus = Gtk.EventControllerFocus()
+        focus.connect("leave", lambda *_args: self._on_hotkey_capture_focus_out())
+        label.add_controller(focus)
+
+        self._add_setting_row(
+            general_box,
+            "Toggle shortcut",
+            label,
+            "Click here, then press a key combination.",
         )
-        unavailable_label = Gtk.Label(label="Not available", sensitive=False)
-        self._add_setting_row(general_box, "Hotkey", unavailable_label, warning_text, is_warning=True)
+        reset_btn = Gtk.Button(label="Reset")
+        reset_btn.connect("clicked", self._on_hotkey_reset_clicked)
+        self._add_setting_row(
+            general_box,
+            "Reset to default",
+            reset_btn,
+            "Set shortcut to Ctrl+Space.",
+        )
+        if HotkeyController.is_plasma():
+            kcm_btn = Gtk.Button.new_with_label("Keyboard settings")
+            kcm_btn.connect("clicked", self._on_hotkey_clicked)
+            self._add_setting_row(
+                general_box,
+                "Plasma shortcuts",
+                kcm_btn,
+                "Plasma stores the grab in System Settings.",
+            )
 
     def _add_general_section(self, parent: Gtk.Box) -> None:
         """Add general settings section"""
@@ -480,6 +509,10 @@ class PreferencesView(BaseView):
                 bind_settings_changed(self._prefs_signals, attr, spin, self._sync_chrome_widgets)
         for attr, switch in getattr(self, "_feature_switches", {}).items():
             bind_settings_changed(self._prefs_signals, attr, switch, self._sync_feature_switches)
+        if hasattr(self, "_hotkey_label"):
+            bind_settings_changed(
+                self._prefs_signals, "hotkey_show_app", self._hotkey_label, self._refresh_hotkey_label
+            )
 
     def _follow_combo(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
         self._updating_chrome = True
@@ -784,6 +817,77 @@ class PreferencesView(BaseView):
 
     def _on_hotkey_clicked(self, _: Gtk.Button) -> None:
         HotkeyController.show_dialog()
+
+    def _refresh_hotkey_label(self) -> None:
+        from ulauncher.modes.launcher.shortcut import shortcut_row_label
+
+        if not hasattr(self, "_hotkey_label"):
+            return
+        accel = HotkeyController.current_accelerator()
+        self._hotkey_label.set_text(shortcut_row_label([accel] if accel else [], self._hotkey_capturing))
+
+    def _on_hotkey_capture_activate(self) -> None:
+        from ulauncher.modes.launcher.shortcut import next_shortcut_capture_action
+
+        if next_shortcut_capture_action(self._hotkey_capturing, "activate") != "start":
+            return
+        self._hotkey_capturing = True
+        self._refresh_hotkey_label()
+        self._hotkey_label.grab_focus()
+
+    def _on_hotkey_capture_focus_out(self) -> None:
+        from ulauncher.modes.launcher.shortcut import next_shortcut_capture_action
+
+        if next_shortcut_capture_action(self._hotkey_capturing, "focus-out") != "cancel":
+            return
+        self._hotkey_capturing = False
+        self._refresh_hotkey_label()
+
+    def _on_hotkey_capture_key(self, _controller: Any, keyval: int, _keycode: int, state: int) -> bool:
+        from gi.repository import Gdk
+
+        from ulauncher.modes.launcher.shortcut import (
+            build_accelerator,
+            modifiers_from_mask,
+            next_shortcut_capture_action,
+            shortcut_capture_key_kind,
+        )
+
+        kind = shortcut_capture_key_kind(Gdk.keyval_name(keyval))
+        action = next_shortcut_capture_action(self._hotkey_capturing, kind)
+        if action == "ignore":
+            return False
+        if action == "cancel":
+            self._hotkey_capturing = False
+            self._refresh_hotkey_label()
+            return True
+        if action != "commit":
+            return True
+        key_name = Gdk.keyval_name(keyval) or ""
+        mods = modifiers_from_mask(
+            int(state),
+            {
+                "super": int(Gdk.ModifierType.SUPER_MASK),
+                "control": int(Gdk.ModifierType.CONTROL_MASK),
+                "shift": int(Gdk.ModifierType.SHIFT_MASK),
+                "alt": int(Gdk.ModifierType.ALT_MASK),
+                "meta": int(Gdk.ModifierType.META_MASK),
+            },
+        )
+        accel = build_accelerator(key_name, mods)
+        if not accel:
+            return True
+        self._hotkey_capturing = False
+        HotkeyController.apply_accelerator(accel)
+        self._refresh_hotkey_label()
+        return True
+
+    def _on_hotkey_reset_clicked(self, _: Gtk.Button) -> None:
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
+
+        self._hotkey_capturing = False
+        HotkeyController.apply_accelerator(DEFAULT_FALLBACK)
+        self._refresh_hotkey_label()
 
     def _on_theme_changed(self, combo: Gtk.ComboBoxText) -> None:
         theme_name = combo.get_active_text()

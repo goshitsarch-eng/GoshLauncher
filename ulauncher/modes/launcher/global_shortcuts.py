@@ -126,6 +126,7 @@ class GlobalShortcutsPortal:
         connection = bus if bus is not None else _session_connection()
         if connection is None:
             return False
+        self._unsubscribe()
         self._connection = connection
         self._accel = accel
         trigger = gtk_accel_to_portal_trigger(accel)
@@ -180,6 +181,19 @@ class GlobalShortcutsPortal:
         sub_id = _signal_subscribe(connection, GLOBAL_SHORTCUTS_IFACE, "Activated", PORTAL_PATH, callback)
         if sub_id:
             self._subs.append(sub_id)
+
+    def _unsubscribe(self) -> None:
+        connection = self._connection
+        if connection is not None:
+            unsub = getattr(connection, "signal_unsubscribe", None)
+            if callable(unsub):
+                for sub_id in self._subs:
+                    try:
+                        unsub(sub_id)
+                    except (TypeError, ValueError, RuntimeError, OSError):
+                        continue
+        self._subs = []
+        self._session_handle = ""
 
 
 def _session_connection() -> Any | None:

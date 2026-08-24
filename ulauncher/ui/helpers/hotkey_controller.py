@@ -144,6 +144,44 @@ class HotkeyController:
         return False
 
     @staticmethod
+    def current_accelerator() -> str:
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
+        from ulauncher.utils.settings import Settings
+
+        if DESKTOP_ID == "GNOME":
+            grabbed = _current_gnome_grab()
+            if grabbed:
+                return grabbed
+        return Settings.load().hotkey_show_app or DEFAULT_FALLBACK
+
+    @staticmethod
+    def apply_accelerator(accel: str) -> bool:
+        """Write a captured shortcut the way goshos writes toggle-shortcut."""
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK, hotkey_to_restore_after_failed_grab
+        from ulauncher.utils.eventbus import EventBus
+        from ulauncher.utils.settings import Settings
+
+        requested = accel or DEFAULT_FALLBACK
+        previous = HotkeyController.current_accelerator()
+        try:
+            if IS_SUPPORTED and DESKTOP_ID != "PLASMA":
+                _set_hotkey(requested)
+            Settings.load().save({"hotkey_show_app": requested})
+            EventBus().emit("app:rebind_hotkey", requested)
+        except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+            logger.debug("Shortcut grab failed for %s", requested, exc_info=True)
+            restore = hotkey_to_restore_after_failed_grab(False, previous)
+            if restore:
+                try:
+                    if IS_SUPPORTED and DESKTOP_ID != "PLASMA":
+                        _set_hotkey(restore)
+                except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                    logger.debug("Could not restore previous shortcut grab", exc_info=True)
+            return False
+        else:
+            return True
+
+    @staticmethod
     def bind_session_hotkey(hotkey: str, on_toggle: Callable[[], None]) -> Any:
         """Bind Ctrl+Space via the GlobalShortcuts portal on compositors without a DE store.
 
@@ -159,6 +197,12 @@ class HotkeyController:
             return None
         HotkeyController._portal_session = portal
         return portal
+
+    @staticmethod
+    def rebind_portal(accel: str) -> None:
+        portal = HotkeyController._portal_session
+        if portal is not None:
+            portal.start(accel, app_id)
 
 
 def _current_gnome_grab() -> str:
