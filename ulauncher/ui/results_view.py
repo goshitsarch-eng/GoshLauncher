@@ -4,7 +4,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Callable
 
-from gi.repository import Gtk
+from gi.repository import Gtk, Pango
 
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
@@ -275,7 +275,13 @@ class ResultsView(Gtk.ScrolledWindow):
         title.set_wrap(True)
         title.set_xalign(0.5)
         detail = Gtk.Label(label=no_results_detail(query))
-        detail.set_wrap(True)
+        from ulauncher.modes.launcher.label_ellipsize import label_ellipsize_spec
+
+        spec = label_ellipsize_spec()
+        detail.set_ellipsize(Pango.EllipsizeMode.END)
+        detail.set_single_line_mode(spec["single_line"])
+        detail.set_hexpand(spec["hexpand"])
+        detail.set_max_width_chars(spec["max_width_chars"])
         detail.set_xalign(0.5)
         box.append(title)
         box.append(detail)

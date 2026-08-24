@@ -36,11 +36,17 @@ class TestResultWidget:
         result_wgt.deselect()
         assert "selected" not in style.list_classes()
 
-    def test_shortcut(self) -> None:
+    def test_shortcut(self, mocker: MockerFixture) -> None:
+        mocker.patch(
+            "ulauncher.modes.launcher.looks.chrome_from_settings",
+            return_value={"show_numbers": True, "show_result_icons": True, "density": "comfortable", "icon_size": 28},
+        )
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop, JUMP_KEYS)
-        assert result_wgt.shortcut_label.get_text() == "Alt+1"
+        assert result_wgt.shortcut_label.get_text() == "1"
         result_wgt.set_index(2)
-        assert result_wgt.shortcut_label.get_text() == "Alt+3"
+        assert result_wgt.shortcut_label.get_text() == "3"
+        result_wgt.set_index(9)
+        assert result_wgt.shortcut_label.get_text() == ""
 
     def test_wrap__name_and_description_labels_wrap_instead_of_ellipsizing(self) -> None:
         from gi.repository import Gtk, Pango
@@ -64,7 +70,7 @@ class TestResultWidget:
         descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
         for label in (name_label, descr_label):
             assert not label.get_line_wrap()
-            assert label.get_ellipsize() == Pango.EllipsizeMode.MIDDLE
+            assert label.get_ellipsize() == Pango.EllipsizeMode.END
 
     def test_wrap__highlighting_is_skipped(self) -> None:
         from gi.repository import Gtk

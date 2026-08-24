@@ -103,7 +103,7 @@ class ResultWidget(Gtk.Box):
         gtk4.pack_end(item_container, self.shortcut_label, False, True, 0)
 
         self.set_index(index if jump_index < 0 else jump_index)
-        if not self._show_numbers or not result.highlightable:
+        if not result.highlightable or not self.shortcut_label.get_text():
             self.shortcut_label.set_visible(False)
 
         gtk4.add_css_class(item_container, "small-result-item")
@@ -134,12 +134,25 @@ class ResultWidget(Gtk.Box):
     def _make_text_label(self, text: str = "") -> Gtk.Label:
         if self.result.wrap:
             return Gtk.Label(label=text, hexpand=True, xalign=0, wrap=True, wrap_mode=Pango.WrapMode.WORD_CHAR)
-        return Gtk.Label(label=text, hexpand=True, max_width_chars=1, xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
+        from ulauncher.modes.launcher.label_ellipsize import label_ellipsize_spec
+
+        spec = label_ellipsize_spec()
+        label = Gtk.Label(
+            label=text,
+            hexpand=spec["hexpand"],
+            max_width_chars=spec["max_width_chars"],
+            xalign=0,
+            ellipsize=Pango.EllipsizeMode.END,
+        )
+        label.set_single_line_mode(spec["single_line"])
+        return label
 
     def set_index(self, index: int) -> None:
+        from ulauncher.modes.launcher.result_row import number_hint
+
         self.index = index
-        if 0 <= index < len(self.jump_keys):
-            self.shortcut_label.set_text(f"Alt+{self.jump_keys[index]}")
+        hint = number_hint(index, self._show_numbers)
+        self.shortcut_label.set_text(hint or "")
 
     def select(self) -> None:
         gtk4.add_css_class(self.item_box, "selected")
@@ -168,13 +181,21 @@ class ResultWidget(Gtk.Box):
             labels = []
             for label_text, is_highlight in highlight_text(highlightable_input, self.result.name):
                 ellipsize_min = ELLIPSIZE_MIN_LENGTH if not is_highlight else ELLIPSIZE_FORCE_AT_LENGTH
-                ellipsize = Pango.EllipsizeMode.MIDDLE if len(label_text) > ellipsize_min else Pango.EllipsizeMode.NONE
-                label = Gtk.Label(label=unescape(label_text), ellipsize=ellipsize)
+                ellipsize = Pango.EllipsizeMode.END if len(label_text) > ellipsize_min else Pango.EllipsizeMode.NONE
+                label = Gtk.Label(
+                    label=unescape(label_text),
+                    ellipsize=ellipsize,
+                    hexpand=True,
+                    max_width_chars=1,
+                    xalign=0,
+                )
+                if ellipsize != Pango.EllipsizeMode.NONE:
+                    label.set_single_line_mode(True)
                 if is_highlight:
                     gtk4.add_css_class(label, "item-highlight")
                 labels.append(label)
         else:
-            labels = [Gtk.Label(label=self.result.name, ellipsize=Pango.EllipsizeMode.MIDDLE)]
+            labels = [self._make_text_label(self.result.name)]
 
         expand = self.result.wrap
         for label in labels:

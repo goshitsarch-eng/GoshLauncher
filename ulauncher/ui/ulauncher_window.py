@@ -120,13 +120,16 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.prefs_btn.set_margin_end(15)
         self.prefs_btn.set_can_focus(False)
 
-        if self._chrome.get("show_search_icon", True):
-            search_icon = Gtk.Image(icon_name="system-search", pixel_size=16)
-            gtk4.add_css_class(search_icon, "search-icon")
-            search_icon.set_margin_start(12)
-            gtk4.pack_start(self.prompt, search_icon, False, False, 0)
+        from ulauncher.modes.launcher.search_entry import SEARCH_ICON_NAME, SEARCH_ICON_PX
+
+        self.search_icon = Gtk.Image(icon_name=SEARCH_ICON_NAME, pixel_size=SEARCH_ICON_PX)
+        gtk4.add_css_class(self.search_icon, "search-icon")
+        self.search_icon.set_margin_start(12)
+        self.search_icon.set_valign(Gtk.Align.CENTER)
+        gtk4.pack_start(self.prompt, self.search_icon, False, False, 0)
         gtk4.pack_start(self.prompt, self.prompt_input, True, True, 0)
         gtk4.pack_end(self.prompt, self.prefs_btn, False, False, 0)
+        self._sync_search_entry()
 
         self.results_view = ResultsView(self.settings, self.apply_css, self._activate_clicked)
 
@@ -168,6 +171,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return
 
         self._apply_look_classes()
+        self._sync_search_entry()
         gtk4.add_css_class(self.prompt, "prompt")
         gtk4.add_css_class(self.results_view, "result-box")
         gtk4.add_css_class(self.prompt_input, "input")
@@ -202,6 +206,19 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             gtk4.add_css_class(self.theme_root, accent)
         self._ensure_accent_watch()
 
+    def _sync_search_entry(self) -> None:
+        from ulauncher.modes.launcher.search_entry import search_entry_spec
+
+        spec = search_entry_spec(
+            {
+                "look_id": getattr(self.settings, "look_id", "spotlight"),
+                "show_search_icon": bool(self._chrome.get("show_search_icon", True)),
+            }
+        )
+        self.prompt_input.set_placeholder_text(spec["placeholder"])
+        self.search_icon.set_pixel_size(spec["icon_px"])
+        self.search_icon.set_visible(spec["icon_visible"])
+
     def _ensure_accent_watch(self) -> None:
         if getattr(self, "_accent_watched", False):
             return
@@ -225,6 +242,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         ensure_look_chrome(self.settings)
         self._chrome = chrome_from_settings(self.settings)
         self._apply_look_classes()
+        self._sync_search_entry()
         self.apply_theme()
         self.position_window()
 
