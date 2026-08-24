@@ -27,6 +27,7 @@ from ulauncher.modes.launcher.windows import (
     window_result_id,
     windows_from_hypr_clients,
     windows_from_introspect_payload,
+    windows_from_lswt_csv,
     windows_from_niri_windows,
     windows_from_sway_tree,
     windows_from_wlrctl_list,
@@ -391,3 +392,11 @@ def test_x11_workspace_switch_falls_back_to_ewmh() -> None:
     )
     assert used == "ewmh"
     assert desktops == [0]
+
+
+def test_lswt_csv_lists_ext_foreign_toplevels() -> None:
+    rows = windows_from_lswt_csv('Firefox,firefox,ext-1\n"Notes, 1",org.gnome.TextEditor,ext-2\n,,\n')
+    assert [row.app_id for row in rows] == ["firefox", "org.gnome.TextEditor"]
+    assert rows[1].title == "Notes, 1"
+    assert rows[0].wid == "lswt:ext-1"
+    assert compositor_window_argv(rows[0].wid, "focus") is None

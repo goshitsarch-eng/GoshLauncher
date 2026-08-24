@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import os
@@ -394,6 +395,32 @@ def windows_from_wlrctl_list(text: str) -> list[WindowInfo]:
     return windows
 
 
+def windows_from_lswt_csv(text: str) -> list[WindowInfo]:
+    """Parse ``lswt -c tai`` (title, app-id, identifier) from ext-foreign-toplevel-list."""
+    if not text:
+        return []
+    windows: list[WindowInfo] = []
+    for row in csv.reader(text.splitlines()):
+        if not row:
+            continue
+        title = row[0].strip() if row else ""
+        app_id = row[1].strip() if len(row) > 1 else ""
+        ident = row[2].strip() if len(row) > 2 else ""
+        if not title and not app_id:
+            continue
+        wid = f"lswt:{ident}" if ident else f"lswt:{quote(app_id, safe='')} {quote(title, safe='')}"
+        windows.append(
+            WindowInfo(
+                wid=wid,
+                title=title or app_id,
+                wm_class=app_id,
+                desktop=0,
+                app_id=app_id,
+            )
+        )
+    return windows
+
+
 def compositor_list_commands(
     environ: Mapping[str, str] | None = None,
 ) -> list[tuple[list[str], Callable[[Any], list[WindowInfo]]]]:
@@ -447,6 +474,12 @@ def _compositor_windows() -> list[WindowInfo]:
         text = _text_command(["wlrctl", "toplevel", "list"])
         if text:
             parsed = windows_from_wlrctl_list(text)
+            if parsed:
+                return parsed
+    if shutil.which("lswt"):
+        text = _text_command(["lswt", "-c", "tai"])
+        if text:
+            parsed = windows_from_lswt_csv(text)
             if parsed:
                 return parsed
     return []
