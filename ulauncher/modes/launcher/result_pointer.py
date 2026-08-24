@@ -69,3 +69,47 @@ def row_touch_gesture_action(kind: str, pressed: bool, dragged: bool) -> dict[st
     if kind == "touch-end" and pressed and not dragged:
         return {"pressed": False, "dragged": False, "action": "activate"}
     return {"pressed": False, "dragged": False, "action": "propagate"}
+
+
+def touch_kind_from_event_type(event_type: object) -> str | None:
+    raw = getattr(event_type, "value_nick", None) or getattr(event_type, "name", None) or event_type
+    nick = str(raw).rsplit(".", 1)[-1].lower().replace("_", "-")
+    if nick.startswith("gdk-"):
+        nick = nick[4:]
+    if nick in {"touch-begin", "touch-update", "touch-end", "touch-cancel"}:
+        return nick
+    return None
+
+
+def event_y(event: Any) -> float | None:
+    for name in ("get_position", "get_coords"):
+        getter = getattr(event, name, None)
+        if not callable(getter):
+            continue
+        y = event_coord_y(getter())
+        if y is not None:
+            return y
+    return None
+
+
+def device_is_touchscreen(source: object) -> bool:
+    nick = str(getattr(source, "value_nick", None) or getattr(source, "name", None) or source).lower()
+    return "touchscreen" in nick.replace("_", "-")
+
+
+def next_row_touch_state(
+    kind: str,
+    y: float | None,
+    start_y: Any,
+    pressed: bool,
+    dragged: bool,
+) -> dict[str, Any]:
+    next_start = start_y
+    next_dragged = dragged
+    if kind == "touch-begin":
+        next_start = y
+        next_dragged = False
+    elif kind == "touch-update" and touch_moved_past_slop(start_y, y):
+        next_dragged = True
+    action = row_touch_gesture_action(kind, pressed, next_dragged)
+    return {"start_y": next_start, **action}

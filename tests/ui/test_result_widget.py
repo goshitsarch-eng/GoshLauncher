@@ -82,3 +82,34 @@ class TestResultWidget:
         assert len(children) == 1
         assert cast("Gtk.Label", children[0]).get_text() == "wrapped name"
         assert not any(c.has_css_class("item-highlight") for c in children)
+
+    def test_touch_tap_activates_and_pan_does_not(self) -> None:
+        from types import SimpleNamespace
+
+        from ulauncher.modes.launcher.result_pointer import TOUCH_TAP_SLOP
+
+        activated: list[tuple[int, bool]] = []
+        widget = ResultWidget(
+            Result(),
+            0,
+            Query("", None),
+            noop,
+            lambda index, alt: activated.append((index, alt)),
+            JUMP_KEYS,
+        )
+
+        def event(kind: str, y: float) -> SimpleNamespace:
+            return SimpleNamespace(
+                get_event_type=lambda: SimpleNamespace(value_nick=kind),
+                get_position=lambda: (0.0, y),
+            )
+
+        widget.on_touch_event(None, event("touch-begin", 10.0))
+        widget.on_touch_event(None, event("touch-end", 12.0))
+        assert activated == [(0, False)]
+
+        activated.clear()
+        widget.on_touch_event(None, event("touch-begin", 10.0))
+        widget.on_touch_event(None, event("touch-update", 10.0 + TOUCH_TAP_SLOP + 4))
+        widget.on_touch_event(None, event("touch-end", 10.0 + TOUCH_TAP_SLOP + 4))
+        assert activated == []

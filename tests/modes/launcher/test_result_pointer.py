@@ -42,3 +42,32 @@ def test_touch_mapping_and_slop() -> None:
     assert should_ignore_pointer_for_touch(True) is True
     assert row_touch_gesture_action("touch-end", True, False)["action"] == "activate"
     assert row_touch_gesture_action("touch-end", True, True)["action"] == "propagate"
+
+
+def test_touch_kind_and_next_state() -> None:
+    from types import SimpleNamespace
+
+    from ulauncher.modes.launcher.result_pointer import (
+        TOUCH_TAP_SLOP,
+        device_is_touchscreen,
+        event_y,
+        next_row_touch_state,
+        touch_kind_from_event_type,
+    )
+
+    assert touch_kind_from_event_type(SimpleNamespace(value_nick="touch-begin")) == "touch-begin"
+    assert touch_kind_from_event_type("Gdk.EventType.TOUCH_END") == "touch-end"
+    assert touch_kind_from_event_type("button-press") is None
+    assert device_is_touchscreen("TOUCHSCREEN") is True
+    assert device_is_touchscreen("mouse") is False
+    event = SimpleNamespace(get_position=lambda: (0.0, 12.0))
+    assert event_y(event) == 12.0
+    begin = next_row_touch_state("touch-begin", 10.0, None, False, False)
+    assert begin["pressed"] is True
+    assert begin["start_y"] == 10.0
+    dragged = next_row_touch_state("touch-update", 10.0 + TOUCH_TAP_SLOP + 1, 10.0, True, False)
+    assert dragged["dragged"] is True
+    tap = next_row_touch_state("touch-end", 11.0, 10.0, True, False)
+    assert tap["action"] == "activate"
+    pan = next_row_touch_state("touch-end", 40.0, 10.0, True, True)
+    assert pan["action"] == "propagate"

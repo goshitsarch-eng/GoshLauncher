@@ -61,6 +61,8 @@ class ResultWidget(Gtk.Box):
         gtk4.add_css_class(self, "item-frame")
         self.set_can_focus(False)
         self._pointer_pressed = False
+        self._touch_start_y = None
+        self._touch_dragged = False
 
         click = Gtk.GestureClick()
         click.connect("pressed", self.on_pointer_press)
@@ -70,6 +72,11 @@ class ResultWidget(Gtk.Box):
         motion.connect("enter", self.on_mouse_hover)
         motion.connect("leave", self.on_pointer_leave)
         self.add_controller(motion)
+        legacy = getattr(Gtk, "EventControllerLegacy", None)
+        if legacy is not None:
+            touch = legacy()
+            touch.connect("event", self.on_touch_event)
+            self.add_controller(touch)
 
         self.item_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         gtk4.add_css_class(self.item_box, "item-box")
@@ -201,9 +208,18 @@ class ResultWidget(Gtk.Box):
         for label in labels:
             gtk4.pack_start(self.title_box, label, expand, expand, 0)
 
-    def on_pointer_press(self, gesture: Gtk.GestureClick, _n_press: int, _x: float, _y: float) -> None:
-        from ulauncher.modes.launcher.result_pointer import row_pointer_action
+    def _pointer_from_touchscreen(self, gesture: Gtk.Gesture) -> bool:
+        from ulauncher.modes.launcher.result_pointer import device_is_touchscreen
 
+        device = gesture.get_device()
+        getter = getattr(device, "get_source", None) if device is not None else None
+        return device_is_touchscreen(getter() if callable(getter) else "")
+
+    def on_pointer_press(self, gesture: Gtk.GestureClick, _n_press: int, _x: float, _y: float) -> None:
+        from ulauncher.modes.launcher.result_pointer import row_pointer_action, should_ignore_pointer_for_touch
+
+        if should_ignore_pointer_for_touch(self._pointer_from_touchscreen(gesture)):
+            return
         action = row_pointer_action("press", gesture.get_current_button(), self._pointer_pressed)
         self._pointer_pressed = bool(action["pressed"])
         if action["action"] == "stop":
@@ -212,8 +228,14 @@ class ResultWidget(Gtk.Box):
                 gesture.set_state(state.CLAIMED)
 
     def on_click(self, gesture: Gtk.GestureClick, _n_press: int, _x: float, _y: float) -> None:
-        from ulauncher.modes.launcher.result_pointer import PRIMARY_BUTTON, row_pointer_action
+        from ulauncher.modes.launcher.result_pointer import (
+            PRIMARY_BUTTON,
+            row_pointer_action,
+            should_ignore_pointer_for_touch,
+        )
 
+        if should_ignore_pointer_for_touch(self._pointer_from_touchscreen(gesture)):
+            return
         button = gesture.get_current_button()
         action = row_pointer_action("release", button, self._pointer_pressed)
         self._pointer_pressed = bool(action["pressed"])
@@ -227,6 +249,33 @@ class ResultWidget(Gtk.Box):
 
         action = row_pointer_action("leave", PRIMARY_BUTTON, self._pointer_pressed)
         self._pointer_pressed = bool(action["pressed"])
+        self._touch_start_y = None
+        self._touch_dragged = False
+
+    def on_touch_event(self, _controller: object, event: object) -> bool:
+        from ulauncher.modes.launcher.result_pointer import (
+            event_y,
+            next_row_touch_state,
+            touch_kind_from_event_type,
+        )
+
+        getter = getattr(event, "get_event_type", None)
+        kind = touch_kind_from_event_type(getter() if callable(getter) else "")
+        if kind is None:
+            return False
+        state = next_row_touch_state(
+            kind,
+            event_y(event),
+            self._touch_start_y,
+            self._pointer_pressed,
+            self._touch_dragged,
+        )
+        self._touch_start_y = state["start_y"]
+        self._pointer_pressed = bool(state["pressed"])
+        self._touch_dragged = bool(state["dragged"])
+        if state["action"] == "activate":
+            self._on_activate(self.widget_index, False)
+        return False
 
     def on_mouse_hover(self, *_args: object) -> None:
         parent = self.get_ancestor(Gtk.ScrolledWindow)
