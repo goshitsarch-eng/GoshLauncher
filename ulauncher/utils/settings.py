@@ -90,6 +90,15 @@ class Settings(JsonConf):
             return status.is_enabled
         return self.keep_alive
 
+    def save(self, *args: Any, **kwargs: Any) -> bool:
+        keys = tuple(dict(*args, **kwargs)) if args or kwargs else ()
+        saved = super().save(*args, **kwargs)
+        if keys:
+            from ulauncher.utils.eventbus import EventBus
+
+            EventBus().emit("app:prefs_saved", keys)
+        return saved
+
     @classmethod
     def load(cls, *, force: bool = False) -> Settings:  # type: ignore[override]
         return super().load(_settings_file, force=force)

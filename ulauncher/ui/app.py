@@ -89,6 +89,16 @@ class UlauncherApp(Adw.Application):
         if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
             main_window.restyle_from_settings()
 
+    @events.on
+    def prefs_saved(self, keys: tuple[str, ...]) -> None:
+        from ulauncher.modes.launcher.prefs_live import live_pref_actions
+
+        actions = live_pref_actions(keys)
+        if not actions:
+            return
+        if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
+            main_window.apply_live_prefs(actions)
+
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
         Gio.ActionMap.add_action_entries(

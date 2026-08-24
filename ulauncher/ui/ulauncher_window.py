@@ -6,7 +6,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Collection, cast
 
 from gi.repository import Gdk, Gtk
 
@@ -67,6 +67,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._nav_last_time_us = 0
         self._backdrop = None
         self._backdrop_close_idle = None
+        self._prefs_layout_idle = None
         self._osk_visible = False
         self._scale_watched = False
         width_request = self.settings.base_width
@@ -250,6 +251,59 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._sync_search_entry()
         self.apply_theme()
         self.position_window()
+
+    def apply_live_prefs(self, actions: Collection[str]) -> None:
+        """Apply a prefs write the way goshos does while the popup is open."""
+        from ulauncher.modes.launcher.prefs_live import (
+            ACTION_FIT_HEIGHT,
+            ACTION_LAYOUT,
+            ACTION_POSITION,
+            ACTION_REPAINT,
+            ACTION_RESTYLE,
+            ACTION_SEARCH_ICON,
+        )
+
+        action_set = set(actions)
+        if not action_set:
+            return
+        if ACTION_RESTYLE in action_set:
+            self.restyle_from_settings()
+        else:
+            self._chrome = chrome_from_settings(self.settings)
+            if ACTION_SEARCH_ICON in action_set:
+                self._apply_look_classes()
+                self._sync_search_entry()
+        if {ACTION_LAYOUT, ACTION_POSITION, ACTION_FIT_HEIGHT} & action_set:
+            self._schedule_live_layout()
+        if ACTION_REPAINT in action_set:
+            self._on_live_search_change()
+
+    def _schedule_live_layout(self) -> None:
+        from ulauncher.modes.launcher.prefs_live import (
+            should_apply_layout_immediately,
+            should_schedule_live_idle,
+        )
+
+        is_open = bool(self.get_mapped())
+        if should_apply_layout_immediately(is_open):
+            self.position_window()
+            return
+        if not should_schedule_live_idle(bool(self._prefs_layout_idle), True):
+            return
+        self._prefs_layout_idle = scheduling.run_when_idle(self._run_live_layout)
+
+    def _run_live_layout(self) -> None:
+        from ulauncher.modes.launcher.prefs_live import should_run_live_idle
+
+        self._prefs_layout_idle = None
+        if should_run_live_idle(bool(self.get_mapped())):
+            self.position_window()
+
+    def _cancel_live_layout(self) -> None:
+        idle = getattr(self, "_prefs_layout_idle", None)
+        if idle:
+            idle.cancel()
+            self._prefs_layout_idle = None
 
     def deferred_init(self) -> None:
         if not self.get_application():
@@ -718,6 +772,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
         logger.info("Closing Ulauncher window")
+        self._cancel_live_layout()
         self._stop_live_search()
         self._stop_session_watch()
         self._stop_osk_watch()

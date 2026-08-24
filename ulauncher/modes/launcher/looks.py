@@ -289,9 +289,6 @@ def apply_look_chrome(settings: Any, look_id: str | None = None) -> dict[str, An
     else:
         for key, value in payload.items():
             setattr(settings, key, value)
-    from ulauncher.utils.eventbus import EventBus
-
-    EventBus().emit("app:restyle_launcher")
     return payload
 
 
