@@ -38,12 +38,18 @@ def detach_child() -> None:
             os.dup2(null_fd, orig_fd)
 
 
-def launch_detached(cmd: list[str], working_dir: str | None = None) -> None:
+def launch_detached(
+    cmd: list[str],
+    working_dir: str | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> None:
     use_systemd_run = SystemdController("ulauncher").status().is_active
     if use_systemd_run:
         cmd = ["systemd-run", "--user", "--scope", *cmd]
 
     env = dict(os.environ.items())
+    if extra_env:
+        env.update(extra_env)
     # Make sure GDK apps aren't forced to use x11 on wayland due to ulauncher's need to run
     # under X11 for proper centering.
     if env.get("GDK_BACKEND") != "wayland":

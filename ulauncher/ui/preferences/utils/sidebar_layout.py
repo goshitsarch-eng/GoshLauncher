@@ -151,7 +151,7 @@ class SidebarLayout(Gtk.Box):
         action_box.set_margin_start(8)
         action_box.set_margin_end(8)
 
-        icon = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.MENU)
+        icon = Gtk.Image(icon_name=icon_name)
         icon.set_pixel_size(18)
         action_box.pack_start(icon, False, False, 0)
 
@@ -183,7 +183,14 @@ class SidebarLayout(Gtk.Box):
         return row
 
     def _build_sidebar_item_content(self, item: SidebarItem) -> Gtk.Widget:
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, margin=8)
+        content = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=10,
+            margin_top=8,
+            margin_bottom=8,
+            margin_start=8,
+            margin_end=8,
+        )
         item.icon.set_valign(Gtk.Align.CENTER)
         item.icon.set_halign(Gtk.Align.CENTER)
         content.pack_start(item.icon, False, False, 0)

@@ -42,7 +42,10 @@ RUN apt-get install -y python3-all
 RUN apt-get install -y python3-gi
 RUN apt-get install -y python3-gi-cairo
 RUN apt-get install -y gir1.2-glib-2.0
-RUN apt-get install -y gir1.2-gtk-3.0
+RUN apt-get install -y gir1.2-gtk-4.0
+RUN apt-get install -y gir1.2-adw-1
+RUN apt-get install -y libgtk-4-1
+RUN apt-get install -y libadwaita-1-0
 
 # Python 3.8 (the oldest version Ulauncher supports) for the test venv.
 # The system python stays 3.10 for apt and the deb build tooling.

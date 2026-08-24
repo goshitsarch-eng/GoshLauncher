@@ -29,18 +29,23 @@ class TestResultWidget:
 
     def test_select(self) -> None:
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop, JUMP_KEYS)
-        style = result_wgt.item_box.get_style_context()
-        assert "selected" not in style.list_classes()
+        assert not result_wgt.item_box.has_css_class("selected")
         result_wgt.select()
-        assert "selected" in style.list_classes()
+        assert result_wgt.item_box.has_css_class("selected")
         result_wgt.deselect()
-        assert "selected" not in style.list_classes()
+        assert not result_wgt.item_box.has_css_class("selected")
 
-    def test_shortcut(self) -> None:
+    def test_shortcut(self, mocker: MockerFixture) -> None:
+        mocker.patch(
+            "ulauncher.modes.launcher.looks.chrome_from_settings",
+            return_value={"show_numbers": True, "show_result_icons": True, "density": "comfortable", "icon_size": 28},
+        )
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop, JUMP_KEYS)
-        assert result_wgt.shortcut_label.get_text() == "Alt+1"
+        assert result_wgt.shortcut_label.get_text() == "1"
         result_wgt.set_index(2)
-        assert result_wgt.shortcut_label.get_text() == "Alt+3"
+        assert result_wgt.shortcut_label.get_text() == "3"
+        result_wgt.set_index(9)
+        assert result_wgt.shortcut_label.get_text() == ""
 
     def test_wrap__name_and_description_labels_wrap_instead_of_ellipsizing(self) -> None:
         from gi.repository import Gtk, Pango
@@ -51,7 +56,7 @@ class TestResultWidget:
         name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
         descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
         for label in (name_label, descr_label):
-            assert label.get_line_wrap()
+            assert label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.NONE
 
     def test_wrap__defaults_to_single_ellipsized_line(self) -> None:
@@ -63,8 +68,8 @@ class TestResultWidget:
         name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
         descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
         for label in (name_label, descr_label):
-            assert not label.get_line_wrap()
-            assert label.get_ellipsize() == Pango.EllipsizeMode.MIDDLE
+            assert not label.get_wrap()
+            assert label.get_ellipsize() == Pango.EllipsizeMode.END
 
     def test_wrap__highlighting_is_skipped(self) -> None:
         from gi.repository import Gtk
@@ -76,4 +81,47 @@ class TestResultWidget:
         children = widget.title_box.get_children()
         assert len(children) == 1
         assert cast("Gtk.Label", children[0]).get_text() == "wrapped name"
-        assert not any("item-highlight" in c.get_style_context().list_classes() for c in children)
+        assert not any(c.has_css_class("item-highlight") for c in children)
+
+    def test_touch_tap_activates_and_pan_does_not(self) -> None:
+        from types import SimpleNamespace
+
+        from ulauncher.modes.launcher.result_pointer import TOUCH_TAP_SLOP
+
+        activated: list[tuple[int, bool]] = []
+        widget = ResultWidget(
+            Result(),
+            0,
+            Query("", None),
+            noop,
+            lambda index, alt: activated.append((index, alt)),
+            JUMP_KEYS,
+        )
+
+        def event(kind: str, y: float) -> SimpleNamespace:
+            return SimpleNamespace(
+                get_event_type=lambda: SimpleNamespace(value_nick=kind),
+                get_position=lambda: (0.0, y),
+            )
+
+        widget.on_touch_event(None, event("touch-begin", 10.0))
+        widget.on_touch_event(None, event("touch-end", 12.0))
+        assert activated == [(0, False)]
+
+        activated.clear()
+        widget.on_touch_event(None, event("touch-begin", 10.0))
+        widget.on_touch_event(None, event("touch-update", 10.0 + TOUCH_TAP_SLOP + 4))
+        widget.on_touch_event(None, event("touch-end", 10.0 + TOUCH_TAP_SLOP + 4))
+        assert activated == []
+
+    def test_look_css_owns_row_padding(self) -> None:
+        from ulauncher.modes.launcher.result_row import RESULT_CHILD_SPACING
+
+        widget = ResultWidget(Result(), 0, Query("", None), noop, noop, JUMP_KEYS)
+        assert widget.item_container.get_spacing() == RESULT_CHILD_SPACING
+        assert widget.item_container.get_margin_start() == 0
+        assert widget.item_container.get_margin_end() == 0
+        assert widget.item_container.get_margin_top() == 0
+        assert widget.item_container.get_margin_bottom() == 0
+        assert widget.text_container.get_margin_start() == 0
+        assert widget.text_container.get_margin_end() == 0

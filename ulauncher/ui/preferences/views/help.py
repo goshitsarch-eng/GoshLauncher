@@ -15,7 +15,14 @@ class HelpView(BaseView):
         scrolled = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
         self.pack_start(scrolled, True, True, 0)
 
-        main_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=30, spacing=30)
+        main_container = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            margin_top=30,
+            margin_bottom=30,
+            margin_start=30,
+            margin_end=30,
+            spacing=30,
+        )
         scrolled.add(main_container)
 
         # Two-column layout
@@ -41,7 +48,14 @@ class HelpView(BaseView):
         links_frame = styled(Gtk.Frame(), "view")
         links_column.pack_start(links_frame, False, False, 0)
 
-        links_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=20, spacing=8)
+        links_container = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            margin_top=20,
+            margin_bottom=20,
+            margin_start=20,
+            margin_end=20,
+            spacing=8,
+        )
         links_frame.add(links_container)
 
         links = [
@@ -90,7 +104,14 @@ class HelpView(BaseView):
         shortcuts_frame = styled(Gtk.Frame(), "view")
         shortcuts_column.pack_start(shortcuts_frame, False, False, 0)
 
-        shortcuts_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=20, spacing=15)
+        shortcuts_container = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            margin_top=20,
+            margin_bottom=20,
+            margin_start=20,
+            margin_end=20,
+            spacing=15,
+        )
         shortcuts_frame.add(shortcuts_container)
 
         # Create individual sections for better organization

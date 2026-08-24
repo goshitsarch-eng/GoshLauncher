@@ -3,9 +3,15 @@ from __future__ import annotations
 import logging
 import subprocess
 from shutil import which
+from typing import Any, Callable
 
 from ulauncher import app_id
 from ulauncher.gi import Gio, GLib
+from ulauncher.modes.launcher.shortcut import (
+    hotkey_to_restore_after_failed_grab,
+    shortcut_attempts,
+    shortcut_retry_list,
+)
 from ulauncher.ui.hotkey_dialog import HotkeyDialog
 from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME
 from ulauncher.utils.launch_detached import launch_detached
@@ -66,6 +72,8 @@ def _set_hotkey(hotkey: str) -> None:
 
 
 class HotkeyController:
+    _portal_session: Any = None
+
     @staticmethod
     def is_supported() -> bool:
         return IS_SUPPORTED
@@ -85,7 +93,20 @@ class HotkeyController:
                     return
 
         elif IS_SUPPORTED:
-            _set_hotkey(HotkeyDialog().run())
+            previous = _current_gnome_grab() if DESKTOP_ID == "GNOME" else ""
+            requested = HotkeyDialog().run()
+            if not requested:
+                return
+            try:
+                _set_hotkey(requested)
+            except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                logger.debug("Shortcut grab failed for %s", requested, exc_info=True)
+                restore = hotkey_to_restore_after_failed_grab(False, previous)
+                if restore:
+                    try:
+                        _set_hotkey(restore)
+                    except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                        logger.debug("Could not restore previous shortcut grab", exc_info=True)
 
     @staticmethod
     def setup_default(default_hotkey: str) -> bool:
@@ -97,7 +118,7 @@ class HotkeyController:
             if config.decode().strip():
                 logger.debug("Ulauncher Plasma global shortcut already created")
                 return False
-            if default_hotkey != "<Primary>space":
+            if default_hotkey not in {"<Primary>space", "<Control>space"}:
                 # We don't want to convert the hotkey, so instead we just hard code it
                 logger.warning("Ignoring hotkey argument %s and using default '%s'", default_hotkey, hotkey)
             logger.debug("Executing kwriteconfig5 commands to add Plasma global shortcut for '%s'", hotkey)
@@ -108,6 +129,88 @@ class HotkeyController:
                 plasma_service_controller.restart()
             return True
         if IS_SUPPORTED:
-            _set_hotkey(default_hotkey)
-            return True
+            current = _current_gnome_grab() if DESKTOP_ID == "GNOME" else ""
+            if current and not shortcut_retry_list(default_hotkey, current):
+                logger.debug("Keeping previous global shortcut grab")
+                return False
+            for accel in shortcut_attempts(default_hotkey):
+                try:
+                    _set_hotkey(accel)
+                except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                    logger.debug("Shortcut grab failed for %s", accel, exc_info=True)
+                else:
+                    return True
+            return False
         return False
+
+    @staticmethod
+    def current_accelerator() -> str:
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
+        from ulauncher.utils.settings import Settings
+
+        if DESKTOP_ID == "GNOME":
+            grabbed = _current_gnome_grab()
+            if grabbed:
+                return grabbed
+        return Settings.load().hotkey_show_app or DEFAULT_FALLBACK
+
+    @staticmethod
+    def apply_accelerator(accel: str) -> bool:
+        """Write a captured shortcut the way goshos writes toggle-shortcut."""
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK, hotkey_to_restore_after_failed_grab
+        from ulauncher.utils.eventbus import EventBus
+        from ulauncher.utils.settings import Settings
+
+        requested = accel or DEFAULT_FALLBACK
+        previous = HotkeyController.current_accelerator()
+        try:
+            if IS_SUPPORTED and DESKTOP_ID != "PLASMA":
+                _set_hotkey(requested)
+            Settings.load().save({"hotkey_show_app": requested})
+            EventBus().emit("app:rebind_hotkey", requested)
+        except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+            logger.debug("Shortcut grab failed for %s", requested, exc_info=True)
+            restore = hotkey_to_restore_after_failed_grab(False, previous)
+            if restore:
+                try:
+                    if IS_SUPPORTED and DESKTOP_ID != "PLASMA":
+                        _set_hotkey(restore)
+                except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                    logger.debug("Could not restore previous shortcut grab", exc_info=True)
+            return False
+        else:
+            return True
+
+    @staticmethod
+    def bind_session_hotkey(hotkey: str, on_toggle: Callable[[], None]) -> Any:
+        """Bind Ctrl+Space via the GlobalShortcuts portal on compositors without a DE store.
+
+        GNOME/XFCE/Plasma already persist a custom keybinding. Re-binding those
+        through the portal would show a second permission dialog and toggle twice.
+        """
+        from ulauncher.modes.launcher.global_shortcuts import GlobalShortcutsPortal, should_bind_portal
+
+        if not should_bind_portal(DESKTOP_ID):
+            return None
+        portal = GlobalShortcutsPortal(on_toggle)
+        if not portal.start(hotkey, app_id):
+            return None
+        HotkeyController._portal_session = portal
+        return portal
+
+    @staticmethod
+    def rebind_portal(accel: str) -> None:
+        portal = HotkeyController._portal_session
+        if portal is not None:
+            portal.start(accel, app_id)
+
+
+def _current_gnome_grab() -> str:
+    try:
+        base_schema = "org.gnome.settings-daemon.plugins.media-keys"
+        spec_schema = f"{base_schema}.custom-keybinding"
+        spec_path = f"/{spec_schema.replace('.', '/')}s/ulauncher/"
+        spec = Gio.Settings.new_with_path(spec_schema, spec_path)
+        return spec.get_string("binding") or ""
+    except (GLib.GError, AttributeError, TypeError):
+        return ""

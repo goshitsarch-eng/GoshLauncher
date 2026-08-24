@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from weakref import WeakValueDictionary
 
 import gi
-from gi.repository import Gdk, Gtk
+from gi.repository import Adw, Gtk
 
 import ulauncher
 from ulauncher import app_id, first_run, paths
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 events = EventBus("app")
 
 
-class UlauncherApp(Gtk.Application):
+class UlauncherApp(Adw.Application):
     # Gtk.Applications check if the app is already registered and if so,
     # new instances sends the signals to the registered one
     # So all methods except __init__ runs on the main app
@@ -53,6 +53,13 @@ class UlauncherApp(Gtk.Application):
         kwargs.update(application_id=app_id)
         super().__init__(*args, **kwargs)
         self.windows = WeakValueDictionary()
+        self._popup_open_idle = None
+        self._popup_close_idle = None
+        self._popup_open_pending = False
+        self._popup_close_pending = False
+        self._popup_reopen_after_close = False
+        self._popup_close_save_query = False
+        self._toggle_last_time_us = 0
         events.set_self(self)
         self.connect("startup", lambda *_: self.setup())  # runs only once on the main instance
 
@@ -84,8 +91,23 @@ class UlauncherApp(Gtk.Application):
         if "main" in self.windows:
             self.core.set_query(self.query, self.show_results)
 
+    @events.on
+    def restyle_launcher(self) -> None:
+        if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
+            main_window.restyle_from_settings()
+
+    @events.on
+    def prefs_saved(self, keys: tuple[str, ...]) -> None:
+        from ulauncher.modes.launcher.prefs_live import live_pref_actions
+
+        actions = live_pref_actions(keys)
+        if not actions:
+            return
+        if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
+            main_window.apply_live_prefs(actions)
+
     def do_startup(self) -> None:
-        Gtk.Application.do_startup(self)
+        Adw.Application.do_startup(self)
         Gio.ActionMap.add_action_entries(
             self,
             [
@@ -140,18 +162,19 @@ class UlauncherApp(Gtk.Application):
         if settings.show_tray_icon and self._persistent:
             self.toggle_tray_icon(True)
 
-        if first_run or settings.hotkey_show_app:
-            from ulauncher.ui.helpers.hotkey_controller import HotkeyController
+        from ulauncher.ui.helpers.hotkey_controller import HotkeyController
 
+        hotkey = settings.hotkey_show_app or "<Control>space"
+        # Portal sessions die with the process, so this must run on every startup.
+        portal_bound = HotkeyController.bind_session_hotkey(hotkey, self.toggle_window)
+
+        if first_run:
             if HotkeyController.is_supported():
-                hotkey = "<Primary>space"
-                if settings.hotkey_show_app and not HotkeyController.is_plasma():
-                    hotkey = settings.hotkey_show_app
                 if HotkeyController.setup_default(hotkey):
                     display_name = Gtk.accelerator_get_label(*Gtk.accelerator_parse(hotkey))
                     body = f'Ulauncher has added a global keyboard shortcut: "{display_name}" to your desktop settings'
                     self.show_notification("de_hotkey_auto_created", "Global shortcut created", body)
-            else:
+            elif not portal_bound:
                 body = (
                     "Ulauncher doesn't support setting global keyboard shortcuts for your desktop. "
                     "There are more details on this in the preferences view (click here to open)."
@@ -160,8 +183,11 @@ class UlauncherApp(Gtk.Application):
                     "de_hotkey_unsupported", "Cannot create global shortcut", body, "app.show-preferences"
                 )
 
-            # Remove json file setting so the notification won't show again
-            settings.save(hotkey_show_app="")
+    @events.on
+    def rebind_hotkey(self, accel: str) -> None:
+        from ulauncher.ui.helpers.hotkey_controller import HotkeyController
+
+        HotkeyController.rebind_portal(accel)
 
     @events.on
     def show_notification(self, notification_id: str | None, title: str, body: str, default_action: str = "-") -> None:
@@ -174,9 +200,9 @@ class UlauncherApp(Gtk.Application):
 
     @events.on
     def clipboard_store(self, data: str) -> None:
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(data, -1)
-        clipboard.store()
+        from ulauncher.ui.gtk4 import clipboard_set_text
+
+        clipboard_set_text(data)
 
     @events.on
     def copy_and_close(self, data: str) -> None:
@@ -185,7 +211,18 @@ class UlauncherApp(Gtk.Application):
 
     @events.on
     def show_launcher(self) -> None:
-        if (main_window := self.windows.get("main")) and main_window.get_window() is None:
+        from ulauncher.modes.launcher.popup_gate import can_open_popup, should_close_on_session
+        from ulauncher.modes.launcher.session_state import session_popup_blockers
+
+        locked, greeter, limits = session_popup_blockers()
+        if should_close_on_session(locked, greeter, limits):
+            if self.windows.get("main"):
+                self.close_launcher()
+            return
+        if not can_open_popup(False, False, locked, greeter, limits):
+            return
+
+        if (main_window := self.windows.get("main")) and not main_window.get_mapped():
             logger.warning("Ignoring stale main window reference")
             del self.windows["main"]
 
@@ -196,12 +233,17 @@ class UlauncherApp(Gtk.Application):
 
     def _on_window_destroyed(self, _window: Gtk.Window, key: Literal["main", "preferences"]) -> None:
         self.windows.pop(key, None)
+        self._popup_close_pending = False
+        if key == "main" and getattr(self, "_popup_reopen_after_close", False):
+            self._popup_reopen_after_close = False
+            self.show_launcher()
+            return
         if not self.windows and not self._persistent:
             # Clipboard contents only live as long as the owning app, and clipboard managers
             # (klipper, gpaste, wl-clip-persist, ...) need time to snapshot them after we set
             # ownership. X11/Wayland have no "snapshot done" event, and managers react on their
             # own schedule with non-trivial wakeup latency. GTK4's Gdk.Clipboard.store_async
-            # closes this gap properly, but we're using GTK3. So delay the quit by 1s on the
+            # can persist the selection, but compositors still race shutdown. Delay the quit by 1s on the
             # chance the user's last action was a clipboard copy. 0.25s wasn't enough; 1s seems
             # to work, but maybe not on all systems.
             #
@@ -215,8 +257,74 @@ class UlauncherApp(Gtk.Application):
 
     @events.on
     def close_launcher(self) -> None:
+        self.request_close(save_query=False)
+
+    def request_close(self, save_query: bool = False) -> None:
+        self._cancel_pending_open()
+        self._schedule_close(save_query=save_query)
+
+    def close_window(self) -> None:
+        self.close_launcher()
+
+    def _schedule_open(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import should_schedule_open
+
+        main = self.windows.get("main")
+        if not should_schedule_open(
+            self._popup_open_idle is not None or self._popup_open_pending,
+            main is not None,
+            bool(main is not None and main.get_mapped()),
+        ):
+            return
+        self._popup_open_pending = True
+        self._popup_open_idle = scheduling.run_when_idle(self._run_pending_open)
+
+    def _run_pending_open(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import next_open_error_action
+
+        self._popup_open_idle = None
+        self._popup_open_pending = False
+        try:
+            self.show_launcher()
+        except Exception:
+            logger.exception("Opening the launcher failed")
+            main = self.windows.get("main")
+            visible = bool(main is not None and main.get_mapped())
+            if next_open_error_action(main is not None, visible) == "close":
+                self.request_close()
+
+    def _cancel_pending_open(self) -> None:
+        idle = self._popup_open_idle
+        self._popup_open_idle = None
+        self._popup_open_pending = False
+        if idle is not None:
+            idle.cancel()
+
+    def _schedule_close(self, save_query: bool = False) -> None:
+        from ulauncher.modes.launcher.popup_gate import should_schedule_close
+
+        if save_query:
+            self._popup_close_save_query = True
+        if not should_schedule_close(self._popup_close_idle is not None or self._popup_close_pending):
+            return
+        self._popup_close_pending = True
+        self._popup_close_idle = scheduling.run_when_idle(self._run_pending_close)
+
+    def _run_pending_close(self) -> None:
+        self._popup_close_idle = None
+        save_query = bool(self._popup_close_save_query)
+        self._popup_close_save_query = False
         if main_window := self.windows.get("main"):
-            main_window.close()
+            main_window.close(save_query=save_query)
+        else:
+            self._popup_close_pending = False
+
+    def _arm_reopen_after_close(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import next_reopen_after_close
+
+        if not self._popup_close_pending:
+            return
+        self._popup_reopen_after_close = next_reopen_after_close(True, self._popup_reopen_after_close)
 
     @events.on
     def show_preferences(self, page: str | None = None) -> None:
@@ -234,7 +342,7 @@ class UlauncherApp(Gtk.Application):
         from ulauncher.ui.preferences.preferences_window import PreferencesWindow
 
         preferences = cast("PreferencesWindow | None", self.windows.get("preferences"))
-        if preferences and preferences.get_window() is None:
+        if preferences and not preferences.get_mapped():
             logger.warning("Ignoring stale Preferences window reference (suspecting a memory leak)")
             del self.windows["preferences"]
             preferences = None
@@ -258,10 +366,41 @@ class UlauncherApp(Gtk.Application):
 
     def toggle_window(self) -> None:
         """Toggle window visibility - for explicit toggle requests only."""
-        if "main" in self.windows:
-            self.close_launcher()
-        else:
-            self.show_launcher()
+        import time
+
+        from ulauncher.modes.launcher.popup_gate import can_open_popup, next_toggle_action
+        from ulauncher.modes.launcher.shortcut import should_ignore_shortcut_repeat
+
+        now_us = time.monotonic_ns() // 1000
+        if should_ignore_shortcut_repeat(now_us, self._toggle_last_time_us):
+            self._toggle_last_time_us = now_us
+            return
+        self._toggle_last_time_us = now_us
+
+        main = self.windows.get("main")
+        is_open = main is not None
+        visible = bool(main is not None and main.get_mapped())
+        action = next_toggle_action(
+            is_open,
+            visible,
+            bool(self._popup_open_pending),
+            bool(self._popup_close_pending),
+        )
+        if action == "toggle-reopen":
+            self._arm_reopen_after_close()
+            return
+        if action == "cancel-open":
+            self._cancel_pending_open()
+            return
+        if action == "close":
+            self.request_close()
+            return
+        from ulauncher.modes.launcher.session_state import session_popup_blockers
+
+        locked, greeter, limits = session_popup_blockers()
+        if not can_open_popup(False, False, locked, greeter, limits):
+            return
+        self._schedule_open()
 
     def delegate_custom_message(self, json_message: str) -> None:
         """Parses and delegates custom JSON messages to the EventBus listener (if any)"""

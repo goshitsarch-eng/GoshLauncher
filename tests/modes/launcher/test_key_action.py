@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from ulauncher.modes.launcher.key_action import (
+    is_nav_action,
+    normalize_key_name,
+    resolve_ctrl_nav,
+    resolve_home_end_action,
+    resolve_key_action,
+)
+
+
+def test_arrows_tab_shift_tab_and_alt_digits() -> None:
+    assert resolve_key_action("Escape", False, False, False) == {"type": "close"}
+    assert resolve_key_action("Print", False, False, False) == {"type": "close-and-propagate"}
+    assert resolve_key_action("Sys_Req", False, False, False) == {"type": "close-and-propagate"}
+    assert resolve_key_action("Down", False, False, False) == {"type": "move", "delta": 1}
+    assert resolve_key_action("Tab", False, False, False) == {"type": "move", "delta": 1}
+    assert resolve_key_action("Tab", True, False, False) == {"type": "move", "delta": -1}
+    assert resolve_key_action("ISO_Left_Tab", False, False, False) == {"type": "move", "delta": -1}
+    assert resolve_key_action("Page_Down", False, False, False) == {"type": "move", "delta": 5}
+    assert resolve_key_action("Page_Up", False, False, False) == {"type": "move", "delta": -5}
+    assert resolve_key_action("Return", False, False, False) == {"type": "activate"}
+    assert resolve_key_action("KP_Enter", False, False, False) == {"type": "activate"}
+    assert is_nav_action("close") is True
+    assert is_nav_action("move") is True
+    assert is_nav_action("activate") is True
+    assert is_nav_action("activate-index") is True
+    assert is_nav_action("propagate") is False
+    assert resolve_key_action("1", False, True, True) == {"type": "activate-index", "index": 0}
+    assert resolve_key_action("1", False, True, False) == {"type": "propagate"}
+
+
+def test_ctrl_nav_and_home_end_at_edges() -> None:
+    assert resolve_ctrl_nav("j") == {"type": "move", "delta": 1}
+    assert resolve_ctrl_nav("k") == {"type": "move", "delta": -1}
+    assert resolve_ctrl_nav("n") == {"type": "move", "delta": 1}
+    assert resolve_ctrl_nav("p") == {"type": "move", "delta": -1}
+    assert resolve_ctrl_nav("a") is None
+    assert resolve_home_end_action("Home", 0, 4) == {"type": "move", "delta": -999}
+    assert resolve_home_end_action("Home", 2, 4) == {"type": "propagate"}
+    assert resolve_home_end_action("End", 4, 4) == {"type": "move", "delta": 999}
+    assert resolve_home_end_action("End", 1, 4) == {"type": "propagate"}
+
+
+def test_preedit_defers_activate() -> None:
+    from ulauncher.modes.launcher.key_action import should_defer_activate_for_preedit
+
+    assert should_defer_activate_for_preedit("ﬀ") is True
+    assert should_defer_activate_for_preedit("") is False
+
+
+def test_keypad_aliases_match_goshos_nav() -> None:
+    assert normalize_key_name("KP_Down") == "Down"
+    assert normalize_key_name("KP_1") == "1"
+    assert resolve_key_action("KP_Down", False, False, False) == {"type": "move", "delta": 1}
+    assert resolve_key_action("KP_1", False, True, True) == {"type": "activate-index", "index": 0}
+    assert resolve_home_end_action("KP_Home", 0, 4) == {"type": "move", "delta": -999}
+
+
+def test_preedit_and_ime_propagation_match_goshos() -> None:
+    from ulauncher.modes.launcher.key_action import (
+        read_preedit,
+        should_propagate_for_ime,
+        should_propagate_for_preedit,
+    )
+
+    assert read_preedit("あ") == "あ"
+    assert read_preedit(["漢", None, 1]) == "漢"
+    assert read_preedit(None) == ""
+    assert should_propagate_for_preedit("あ") is True
+    assert should_propagate_for_preedit("") is False
+    assert should_propagate_for_ime("", True) is True
+    assert should_propagate_for_ime("", False) is False
+    assert should_propagate_for_ime("あ", False) is True
+
+
+def test_escape_and_arrows_propagate_while_ime_owns_keys() -> None:
+    """popupKeyHandler returns EVENT_PROPAGATE before resolveKeyAction while composing."""
+    from ulauncher.modes.launcher.key_action import resolve_key_action, should_propagate_for_ime
+
+    def gated(preedit: str, candidate: bool, key: str) -> str:
+        if should_propagate_for_ime(preedit, candidate):
+            return "propagate"
+        return str(resolve_key_action(key, False, False, False)["type"])
+
+    assert gated("あ", False, "Escape") == "propagate"
+    assert gated("", True, "Escape") == "propagate"
+    assert gated("", False, "Escape") == "close"
+    assert gated("あ", False, "Down") == "propagate"
+    assert gated("", True, "Return") == "propagate"
+    assert gated("", False, "Down") == "move"

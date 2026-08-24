@@ -64,7 +64,7 @@ venv:
 	fi
 	echo -e "$(BOLD)[+] Setting up virtual environment...$(RESET)"
 	$(BASE_PYTHON) -m venv --clear --system-site-packages .venv
-	PYGOBJECT_STUB_CONFIG=Gtk3,Gdk3,Soup2 .venv/bin/python -m pip install --ignore-installed --no-warn-conflicts --upgrade $(if $(QUIET),-q) -r requirements.txt
+	PYGOBJECT_STUB_CONFIG=Gtk4,Gdk4,Soup2 .venv/bin/python -m pip install --ignore-installed --no-warn-conflicts --upgrade $(if $(QUIET),-q) -r requirements.txt
 	# Keep a copy of the requirements used for this environment so make targets can
 	# tell when the local venv needs to be refreshed.
 	cp requirements.txt "$(VENV_REQUIREMENTS_SNAPSHOT)"

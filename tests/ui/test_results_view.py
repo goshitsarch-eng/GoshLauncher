@@ -22,14 +22,14 @@ def _named_widget(name: str, *, searchable: bool = True) -> MagicMock:
 
 class TestResultsView:
     @pytest.mark.parametrize(
-        ("has_wrapped", "width", "current_min", "needed", "measured_width", "expected_min", "expects_resize"),
+        ("has_wrapped", "width", "current_min", "needed", "expected_min", "expects_resize"),
         [
-            pytest.param(True, 500, 46, 180, 500, 180, True, id="requests_the_height_for_width"),
-            pytest.param(True, 500, 46, 2000, 500, 600, True, id="clamps_to_max_content_height"),
-            pytest.param(True, 500, 180, 180, 500, None, False, id="noop_when_height_is_unchanged"),
-            pytest.param(True, 500, 180, 181, 500, None, False, id="tolerates_one_pixel_oscillation"),
-            pytest.param(True, 0, 46, 180, None, None, False, id="skips_early_allocation_passes"),
-            pytest.param(False, 500, 180, 180, None, None, False, id="noop_without_wrapped_results"),
+            pytest.param(True, 500, 46, 180, 180, True, id="requests_the_height_for_width"),
+            pytest.param(True, 500, 46, 2000, 600, True, id="clamps_to_max_content_height"),
+            pytest.param(True, 500, 180, 180, None, False, id="noop_when_height_is_unchanged"),
+            pytest.param(True, 500, 180, 181, None, False, id="tolerates_one_pixel_oscillation"),
+            pytest.param(True, 0, 46, 180, None, False, id="skips_early_allocation_passes"),
+            pytest.param(False, 500, 180, 180, None, False, id="noop_without_wrapped_results"),
         ],
     )
     def test_fit_results_height(
@@ -39,38 +39,42 @@ class TestResultsView:
         width: int,
         current_min: int,
         needed: int,
-        measured_width: int | None,
         expected_min: int | None,
         expects_resize: bool,
     ) -> None:
         run_when_idle = mocker.patch("ulauncher.ui.results_view.scheduling.run_when_idle")
+        measure = mocker.patch("ulauncher.ui.results_view.gtk4.measure_height_for_width", return_value=(needed, needed))
         box = MagicMock()
-        box.get_preferred_height_for_width.return_value = (needed, needed)
-        # a fake self lets us drive the scroller's reported heights directly
         view = cast(
             "Any",
             SimpleNamespace(
                 _has_wrapped_results=has_wrapped,
+                _box=box,
+                get_width=MagicMock(return_value=width),
                 get_min_content_height=MagicMock(return_value=current_min),
-                get_property=MagicMock(return_value=600),  # max-content-height
+                get_max_content_height=MagicMock(return_value=600),
                 set_min_content_height=MagicMock(),
                 queue_resize=MagicMock(),
+                _fit_results_height=MagicMock(),
             ),
         )
 
-        ResultsView._fit_results_height(view, box, cast("Any", SimpleNamespace(width=width)))
+        ResultsView._fit_results_height(view)
 
-        if measured_width is None:
-            box.get_preferred_height_for_width.assert_not_called()
+        if width <= 0 or not has_wrapped:
+            measure.assert_not_called()
         else:
-            box.get_preferred_height_for_width.assert_called_once_with(measured_width)
+            measure.assert_called_once_with(box, width)
 
         if expected_min is None:
             view.set_min_content_height.assert_not_called()
         else:
             view.set_min_content_height.assert_called_once_with(expected_min)
 
-        assert run_when_idle.called is expects_resize
+        if width <= 0 and has_wrapped:
+            assert run_when_idle.called
+        else:
+            assert run_when_idle.called is expects_resize
 
 
 class TestResultsViewNavigation:
@@ -122,6 +126,27 @@ class TestResultsViewNavigation:
         view.go_down()
         assert view.get_active_result() is None
         assert not view.has_results
+
+    def test_pending_row_is_selectable_arrows_skip_to_ready(self) -> None:
+        view = ResultsView(cast("Any", MagicMock()), cast("Any", MagicMock()), cast("Any", MagicMock()))
+        header = MagicMock()
+        header.result.highlightable = False
+        header.result.actions = {}
+        pending = MagicMock()
+        pending.result.highlightable = True
+        pending.result.actions = {}
+        ready = MagicMock()
+        ready.result.highlightable = True
+        ready.result.actions = {"activate": {"name": "Activate"}}
+        view._widgets = cast("Any", [header, pending, ready])
+        assert view._highlightable_indices() == [1, 2]
+        assert view._nav_indices() == [2]
+        view.select(1)
+        assert view._index == 1
+        view.go_down()
+        assert view._index == 2
+        view.select_jump(0)
+        assert view._index == 1
 
 
 class TestResultsViewSelection:
@@ -180,7 +205,12 @@ class TestResultsViewStreaming:
     def _update(
         names: list[str], query: str = "q", selected_name: str | None = None, append: bool = False
     ) -> ResultsUpdate:
-        return results_update([Result(name=name) for name in names], Query(None, query), selected_name, append)
+        return results_update(
+            [Result(name=name, highlightable=True, actions={"activate": {"name": "Activate"}}) for name in names],
+            Query(None, query),
+            selected_name,
+            append,
+        )
 
     def test_replace_preserves_user_pick_within_same_query(self, view: ResultsView) -> None:
         view.render(self._update(["a", "b", "c"]))

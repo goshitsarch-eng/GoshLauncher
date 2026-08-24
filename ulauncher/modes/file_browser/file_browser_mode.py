@@ -29,7 +29,15 @@ class FileBrowserMode(Mode):
         $USER/Downloads
         /usr/bin/foo
         """
-        return f"{query_str.lstrip()} "[0] in ("~", "/", "$")
+        text = query_str.lstrip()
+        if not text:
+            return False
+        if text[0] in ("~", "/"):
+            return True
+        # `$HOME/...` is an env path; `$` / `$ firefox` is the windows prefix.
+        if text[0] == "$":
+            return len(text) > 1 and text[1] != " " and text[1] != "\t"
+        return False
 
     def list_files(self, path_str: str, sort_by_atime: bool = False) -> list[str]:
         _paths: dict[os.DirEntry[str], float | str] = {}  # temporary dict for direntry and sort key

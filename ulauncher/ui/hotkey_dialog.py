@@ -16,23 +16,27 @@ class HotkeyDialog(Gtk.Dialog):
     _hotkey = ""
 
     def __init__(self) -> None:
-        super().__init__(title="Set new hotkey", flags=Gtk.DialogFlags.MODAL)  # type: ignore[call-arg]
+        super().__init__(title="Set new hotkey", modal=True)
         self.add_buttons("Close", Gtk.ResponseType.CLOSE, "Save", Gtk.ResponseType.OK)
         self.set_response_sensitive(RESPONSES.OK, False)
 
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin=20, spacing=10)
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin_top=20, margin_bottom=20, spacing=10)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
         self._hotkey_input = Gtk.Entry(editable=False)
-        vbox.pack_start(self._hotkey_input, False, True, 0)
+        vbox.append(self._hotkey_input)
 
         notice_label = Gtk.Label(use_markup=True, label=f"<i><small>{footer_notice}</small></i>", wrap=True)
-        notice_label.set_line_wrap(True)
-        vbox.pack_start(notice_label, False, True, 0)
+        vbox.append(notice_label)
 
-        self.get_content_area().add(vbox)
+        content = self.get_content_area()
+        content.append(vbox)
 
-        self.show_all()
+        key_controller = Gtk.EventControllerKey()
+        key_controller.connect("key-pressed", self.on_key_press)
+        self._hotkey_input.add_controller(key_controller)
         self.connect("response", self.handle_response)
-        self.connect("key-press-event", self.on_key_press)
+        self.present()
 
     def handle_response(self, _widget: HotkeyDialog, response_id: int) -> None:
         if response_id == RESPONSES.OK:
@@ -41,33 +45,53 @@ class HotkeyDialog(Gtk.Dialog):
             self.close()
 
     def set_hotkey(self, key_name: str = "") -> None:
-        label = Gtk.accelerator_get_label(*Gtk.accelerator_parse(key_name))
+        from ulauncher.modes.launcher.shortcut import format_accelerator, shortcut_display_label
+
         self._hotkey = key_name
+        label = format_accelerator(key_name) if key_name else shortcut_display_label([])
         self._hotkey_input.set_text(label)
         self._hotkey_input.set_position(-1)
         self.set_response_sensitive(RESPONSES.OK, bool(key_name))
 
-    def close(self) -> None:
+    def close(self) -> None:  # type: ignore[override]
         self._hotkey = ""
         self.hide()
 
     def save_and_close(self) -> None:
         self.hide()
 
-    def on_key_press(self, _entry_widget: Gtk.Entry, event: Gdk.EventKey) -> None:
-        mods = event.state & Gtk.accelerator_get_default_mod_mask()
-        key_name = Gtk.accelerator_name(event.keyval, mods)
+    def on_key_press(self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: int) -> bool:
+        from ulauncher.modes.launcher.shortcut import build_accelerator, is_modifier_key_name, modifiers_from_mask
 
-        # treat Enter w/o modifiers as "submit"
+        key_name = Gtk.accelerator_name(keyval, 0)
+        if is_modifier_key_name(key_name):
+            return True
+
         if self._hotkey and key_name == "Return":
             self.save_and_close()
+            return True
 
         if self._hotkey and key_name == "BackSpace":
             self.set_hotkey()
+            return True
 
-        if mods:
-            # Require at least one modifier
-            self.set_hotkey(key_name)
+        mods = modifiers_from_mask(
+            int(state),
+            {
+                "super": int(Gdk.ModifierType.SUPER_MASK),
+                "control": int(Gdk.ModifierType.CONTROL_MASK),
+                "shift": int(Gdk.ModifierType.SHIFT_MASK),
+                "alt": int(Gdk.ModifierType.ALT_MASK),
+                "meta": int(Gdk.ModifierType.META_MASK),
+            },
+        )
+        if not any(mods.values()):
+            return False
+        accel = build_accelerator(key_name, mods)
+        if accel:
+            self.set_hotkey(accel)
+            return True
+        return False
 
     def run(self, *args: Any, **kwargs: Any) -> str:
         super().run(*args, **kwargs)

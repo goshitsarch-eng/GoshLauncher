@@ -57,7 +57,11 @@ def get_themes() -> dict[str, Theme]:
         *Path(paths.SYSTEM_THEMES).glob("*.css"),
         *user_themes.glob("*.css"),
     ]
-    css_themes = [Theme(name=p.stem, base_path=str(p.parent)) for p in css_paths if p not in manifest_css_paths]
+    css_themes = [
+        Theme(name=p.stem, base_path=str(p.parent))
+        for p in css_paths
+        if p not in manifest_css_paths and p.stem != "gosh-looks"
+    ]
 
     themes: dict[str, Theme] = {}
     for theme in [*manifest_themes, *css_themes]:

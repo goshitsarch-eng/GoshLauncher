@@ -3,12 +3,18 @@ from __future__ import annotations
 import logging
 from os.path import expanduser
 
-from gi.repository import Gtk
+from gi.repository import Gdk, Gtk
 
 from ulauncher.gi import GLib
 
-icon_theme = Gtk.IconTheme.get_default()
 logger = logging.getLogger(__name__)
+
+
+def _icon_theme() -> Gtk.IconTheme | None:
+    display = Gdk.Display.get_default()
+    if not display:
+        return None
+    return Gtk.IconTheme.get_for_display(display)
 
 
 def get_icon_path(icon: str, size: int = 32) -> str | None:
@@ -17,9 +23,14 @@ def get_icon_path(icon: str, size: int = 32) -> str | None:
             icon = expanduser(icon)
             if icon.startswith("/"):
                 return icon
-
-            if themed_icon := icon_theme.lookup_icon(icon, size, Gtk.IconLookupFlags.FORCE_SIZE):
-                return themed_icon.get_filename()
+            theme = _icon_theme()
+            if not theme:
+                return None
+            paintable = theme.lookup_icon(icon, None, size, 1, Gtk.TextDirection.NONE, 0)
+            if paintable:
+                file = paintable.get_file()
+                if file:
+                    return file.get_path()
 
     except GLib.Error as err:
         logger.warning("Error '%s' occurred when trying to load icon path '%s'.", err, icon)

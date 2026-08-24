@@ -174,6 +174,13 @@ banned-module-level-imports = ["typing_extensions"]
 "ulauncher/utils/lru_cache.py" = ["TID251"]  # This IS the lru_cache wrapper
 "tests/ui/**/*.py" = ["TID251"]          # UI tests need to import from ulauncher.ui
 "tests/api/**/*.py" = ["TID251"]         # API tests need to import from ulauncher.api
+"ulauncher/modes/launcher/**" = [        # Recursive-descent parsers ported from spotlight-goshos
+  "ANN001", "BLE001", "DTZ005", "E501", "E741",
+  "PERF401", "PIE810", "PLR0911", "PLR0912", "PLR0915", "PLR2004",
+  "PLW2901", "RET504", "RUF001", "RUF002", "RUF003", "RUF046",
+  "S314", "SIM102", "SIM103", "SIM108", "TRY300", "UP045",
+]
+"ulauncher/ui/gtk4.py" = ["PLR0912", "PLR0915", "SLF001", "E731", "PLW0108"]
 
 [tool.pytest.ini_options]
 log_cli = true

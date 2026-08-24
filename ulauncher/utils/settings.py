@@ -11,16 +11,16 @@ _settings_file = f"{paths.CONFIG}/settings.json"
 class Settings(JsonConf):
     arrow_key_aliases: str = "hjkl"
     auto_resume: bool = False
-    base_width: int = 750
+    base_width: int = 600
     close_on_focus_out: bool = True
     disable_desktop_filters: bool = False
     enable_application_mode: bool = True
-    grab_mouse_pointer: bool = False
+    grab_mouse_pointer: bool = True
     hotkey_show_app: str = ""  # Note that this is no longer used, other than for migrating to the DE wrapper
     jump_keys: str = "1234567890abcdefghijklmnopqrstuvwxyz"
     keep_alive: bool = True
     layer_shell: bool = True
-    max_recent_apps: int = 0
+    max_recent_apps: int = 6
     raise_if_started: bool = False
     render_on_screen: str = "mouse-pointer-monitor"
     show_tray_icon: bool = True
@@ -28,6 +28,38 @@ class Settings(JsonConf):
     theme_name: str = "light"
     tray_icon_name: str = "ulauncher-indicator-symbolic"
     window_shadow: int = 5
+    # Spotlight-goshos launcher providers and chrome
+    look_id: str = "spotlight"
+    applied_look: str = ""
+    popup_position: str = "center"
+    row_density: str = "comfortable"
+    show_result_numbers: bool = False
+    show_section_headers: bool = True
+    show_search_icon: bool = True
+    show_result_icons: bool = True
+    show_descriptions: bool = True
+    icon_size: int = 28
+    max_per_category: int = 6
+    results_max_height: int = 400
+    web_search_engine: str = "google"
+    result_order: str = "default"
+    enable_prefix_modes: bool = True
+    enable_url_open: bool = True
+    enable_path_open: bool = True
+    enable_places: bool = True
+    enable_bookmarks: bool = True
+    enable_calculator: bool = True
+    enable_unit_convert: bool = True
+    enable_color_hex: bool = True
+    enable_time_date: bool = True
+    enable_window_search: bool = True
+    enable_system_actions: bool = True
+    enable_settings_search: bool = True
+    enable_recent_files: bool = True
+    enable_command_run: bool = False
+    show_web_search: bool = True
+    enable_empty_suggestions: bool = True
+    enable_app_actions: bool = True
 
     # Convert dash to underscore
     def __setitem__(self, key: str, value: Any) -> None:  # type: ignore[override]
@@ -57,6 +89,15 @@ class Settings(JsonConf):
         if status.can_start:
             return status.is_enabled
         return self.keep_alive
+
+    def save(self, *args: Any, **kwargs: Any) -> bool:
+        keys = tuple(dict(*args, **kwargs)) if args or kwargs else ()
+        saved = super().save(*args, **kwargs)
+        if keys:
+            from ulauncher.utils.eventbus import EventBus
+
+            EventBus().emit("app:prefs_saved", keys)
+        return saved
 
     @classmethod
     def load(cls, *, force: bool = False) -> Settings:  # type: ignore[override]
