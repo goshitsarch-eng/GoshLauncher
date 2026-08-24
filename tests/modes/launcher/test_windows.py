@@ -31,6 +31,7 @@ from ulauncher.modes.launcher.windows import (
     windows_from_kwin_dump,
     windows_from_lswt_csv,
     windows_from_niri_windows,
+    windows_from_qtile_windows,
     windows_from_sway_tree,
     windows_from_wlrctl_list,
     workspace_index_in_range,
@@ -447,3 +448,39 @@ def test_kwin_dump_lists_and_activates_plasma_windows() -> None:
     assert array_rows[0].app_id == "org.kde.dolphin"
     assert compositor_window_argv("kwin:{aaa}", "focus") == ["kdotool", "windowactivate", "{aaa}"]
     assert compositor_window_argv("kwin:{aaa}", "close") == ["kdotool", "windowclose", "{aaa}"]
+
+
+def test_qtile_windows_list_and_activate() -> None:
+    rows = windows_from_qtile_windows(
+        [
+            {"id": 12, "name": "Firefox", "wm_class": ["Navigator", "firefox"], "group": "2", "pid": 8},
+            {"id": 0, "name": "scratch", "wm_class": "scratch"},
+            {"name": "missing-id", "wm_class": "x"},
+            {"id": 3, "name": "", "wm_class": []},
+        ]
+    )
+    assert [row.wid for row in rows] == ["qtile:12", "qtile:0"]
+    assert rows[0].wm_class == "firefox"
+    assert rows[0].desktop == 1
+    assert rows[0].pid == 8
+    assert compositor_window_argv("qtile:12", "focus") == [
+        "qtile",
+        "cmd-obj",
+        "-o",
+        "window",
+        "12",
+        "-f",
+        "focus",
+    ]
+    assert compositor_window_argv("qtile:12", "close") == [
+        "qtile",
+        "cmd-obj",
+        "-o",
+        "window",
+        "12",
+        "-f",
+        "kill",
+    ]
+    wrapped = windows_from_qtile_windows({"windows": [{"id": 4, "title": "Foot", "wm_class": "foot"}]})
+    assert wrapped[0].wid == "qtile:4"
+    assert wrapped[0].title == "Foot"

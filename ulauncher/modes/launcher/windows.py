@@ -373,6 +373,9 @@ def compositor_window_argv(wid: str, action: str) -> list[str] | None:
     if kind == "kwin":
         verb = "windowactivate" if action == "focus" else "windowclose"
         return ["kdotool", verb, ident]
+    if kind == "qtile":
+        verb = "focus" if action == "focus" else "kill"
+        return ["qtile", "cmd-obj", "-o", "window", ident, "-f", verb]
     return None
 
 
@@ -498,6 +501,50 @@ def windows_from_kwin_dump(payload: Any) -> list[WindowInfo]:
     return windows
 
 
+def windows_from_qtile_windows(payload: Any) -> list[WindowInfo]:
+    """Parse ``qtile cmd-obj -f windows`` (Qtile Wayland has no EWMH client list)."""
+    if isinstance(payload, dict):
+        payload = payload.get("windows") or payload.get("items") or []
+    if not isinstance(payload, list):
+        return []
+    windows: list[WindowInfo] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        ident = item.get("id")
+        if ident is None or ident == "":
+            continue
+        klass_raw = item.get("wm_class")
+        if isinstance(klass_raw, (list, tuple)):
+            klass = str(klass_raw[-1] if klass_raw else "")
+        else:
+            klass = str(klass_raw or "")
+        title = str(item.get("name") or item.get("title") or "")
+        if not title and not klass:
+            continue
+        group = str(item.get("group") or "")
+        try:
+            desktop = max(int(group) - 1, 0) if group.isdigit() else 0
+        except ValueError:
+            desktop = 0
+        try:
+            pid = int(item.get("pid") or 0)
+        except (TypeError, ValueError):
+            pid = 0
+        windows.append(
+            WindowInfo(
+                wid=f"qtile:{ident}",
+                title=title or klass,
+                wm_class=klass,
+                desktop=desktop,
+                pid=pid,
+                user_time=1 if item.get("focused") else 0,
+                app_id=klass,
+            )
+        )
+    return windows
+
+
 def compositor_list_commands(
     environ: Mapping[str, str] | None = None,
 ) -> list[tuple[list[str], Callable[[Any], list[WindowInfo]]]]:
@@ -564,6 +611,14 @@ def _compositor_windows() -> list[WindowInfo]:
         text = _text_command(["kdotool", "kwinscript", "--inline", KWIN_LIST_SCRIPT])
         if text:
             parsed = windows_from_kwin_dump(text)
+            if parsed:
+                return parsed
+    if shutil.which("qtile"):
+        payload = _json_command(["qtile", "cmd-obj", "-f", "windows"])
+        if payload is None:
+            payload = _json_command(["qtile", "cmd-obj", "-o", "cmd", "-f", "windows"])
+        if payload is not None:
+            parsed = windows_from_qtile_windows(payload)
             if parsed:
                 return parsed
     return []
@@ -944,6 +999,7 @@ def workspace_switch_steps(index: int, *, x11: bool = False) -> list[dict[str, A
         {"kind": "argv", "argv": ["i3-msg", "workspace", "number", str(number)]},
         {"kind": "argv", "argv": ["hyprctl", "dispatch", "workspace", str(number)]},
         {"kind": "argv", "argv": ["niri", "msg", "action", "focus-workspace", str(number)]},
+        {"kind": "argv", "argv": ["qtile", "cmd-obj", "-o", "group", str(number), "-f", "toscreen"]},
     ]
     x11_steps: list[dict[str, Any]] = [
         {"kind": "argv", "argv": ["wmctrl", "-s", str(index)]},
