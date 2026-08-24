@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from ulauncher.modes.launcher.number_words import replace_number_words
 from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_query, text_matches_query
@@ -24,6 +26,7 @@ class WindowInfo:
     pid: int = 0
     sticky: bool = False
     user_time: int = 0
+    app_id: str = ""
 
 
 def _ewmh_windows() -> list[WindowInfo]:
@@ -150,7 +153,8 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
         if props.get("is-hidden") or props.get("hidden"):
             continue
         title = str(props.get("title") or "")
-        wm_class = str(props.get("wm-class") or props.get("wm_class") or props.get("app-id") or "")
+        app_id = str(props.get("app-id") or props.get("gtk-app-id") or "")
+        wm_class = str(props.get("wm-class") or props.get("wm_class") or app_id or "")
         if not title and not wm_class:
             continue
         try:
@@ -161,7 +165,7 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
             wid = hex(int(xid))
         except (TypeError, ValueError):
             wid = str(xid)
-        windows.append(WindowInfo(wid=wid, title=title, wm_class=wm_class, desktop=0, pid=pid))
+        windows.append(WindowInfo(wid=wid, title=title, wm_class=wm_class, desktop=0, pid=pid, app_id=app_id))
     return windows
 
 
@@ -424,27 +428,90 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
                 "wid": win.wid,
                 "pid": win.pid,
                 "wm_class": win.wm_class,
+                "app_id": win.app_id,
                 "id": window_result_id(win.wid, title, win.wm_class, description),
             }
         )
     return take_window_results(switch_row, window_rows, limit)
 
 
-def activate_window(payload: dict) -> None:
+def application_bus_name(app_id: str) -> str:
+    name = (app_id or "").strip()
+    if name.endswith(".desktop"):
+        name = name[: -len(".desktop")]
+    return name
+
+
+def application_object_path(bus_name: str) -> str:
+    if not bus_name:
+        return ""
+    return "/" + bus_name.replace(".", "/")
+
+
+def session_has_x11_window_control(is_x11: bool | None = None) -> bool:
+    if is_x11 is None:
+        from ulauncher.utils.environment import IS_X11
+
+        is_x11 = IS_X11
+    return bool(is_x11)
+
+
+def activate_window(payload: dict, application_activate: Callable[[str], bool] | None = None) -> None:
     kind = payload.get("kind")
     if kind == "workspace":
         _switch_workspace(int(payload["payload"]))
         return
     wid = payload.get("wid") or payload.get("payload") or ""
+    pid = int(payload.get("pid") or 0)
+    app_id = str(payload.get("app_id") or "")
     if kind == "kill":
-        pid = int(payload.get("pid") or 0)
         if pid:
-            subprocess.run(["kill", "-9", str(pid)], check=False)
+            _signal_pid(pid, signal.SIGKILL)
         return
     if kind in {"close", "quit"}:
         _close_window(wid)
+        if pid and not session_has_x11_window_control():
+            _signal_pid(pid, signal.SIGTERM)
         return
     _focus_window(wid)
+    if app_id and not session_has_x11_window_control():
+        activate = application_activate or _focus_application
+        activate(app_id)
+
+
+def _signal_pid(pid: int, sig: int) -> None:
+    if pid <= 0:
+        return
+    try:
+        os.kill(pid, sig)
+    except OSError:
+        logger.debug("Could not signal pid %s", pid, exc_info=True)
+
+
+def _focus_application(app_id: str) -> bool:
+    bus_name = application_bus_name(app_id)
+    path = application_object_path(bus_name)
+    if not bus_name or not path:
+        return False
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call_sync(
+            bus_name,
+            path,
+            "org.freedesktop.Application",
+            "Activate",
+            GLib.Variant("(a{sv})", ({},)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            200,
+            None,
+        )
+        return True
+    except Exception:
+        logger.debug("Application.Activate failed for %s", bus_name, exc_info=True)
+        return False
 
 
 def _focus_window(wid: str) -> None:

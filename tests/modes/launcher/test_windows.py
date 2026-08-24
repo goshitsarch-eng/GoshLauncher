@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import signal
+
+import pytest
+
 from ulauncher.modes.launcher.windows import (
     WindowInfo,
+    activate_window,
+    application_bus_name,
+    application_object_path,
     parse_window_close_query,
     parse_window_intent,
     parse_workspace_query,
@@ -141,7 +148,9 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     assert rows[0].wid == hex(0x1A00001)
     assert rows[0].wm_class == "firefox"
     assert rows[0].pid == 42
+    assert rows[0].app_id == ""
     assert rows[1].wm_class == "org.gnome.Console"
+    assert rows[1].app_id == "org.gnome.Console"
     ranks = tab_ranks_from_introspect_payload(payload)
     assert ranks["firefox"] == 0
     native = [WindowInfo(wid="0x1", title="Only X11", wm_class="x", desktop=0)]
@@ -150,3 +159,40 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     assert picked == wayland
     assert pick_window_list(native, [], []) == native
     assert pick_window_list([], [], []) == []
+
+
+def test_application_bus_name_strips_desktop_suffix() -> None:
+    assert application_bus_name("org.gnome.Console.desktop") == "org.gnome.Console"
+    assert application_bus_name("org.gnome.Console") == "org.gnome.Console"
+    assert application_bus_name("") == ""
+    assert application_object_path("org.gnome.Console") == "/org/gnome/Console"
+    assert application_object_path("") == ""
+
+
+def test_activate_window_uses_application_activate_on_wayland(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._focus_window", lambda wid: calls.append(("x11", wid)))
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._close_window", lambda wid: calls.append(("close", wid)))
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._signal_pid", lambda pid, sig: calls.append(("sig", pid, sig))
+    )
+    activate_window(
+        {"kind": "focus", "wid": "0x1", "app_id": "org.gnome.Console"},
+        application_activate=lambda app: calls.append(("app", app)) or True,
+    )
+    assert calls == [("x11", "0x1"), ("app", "org.gnome.Console")]
+    calls.clear()
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: True)
+    activate_window(
+        {"kind": "focus", "wid": "0x1", "app_id": "org.gnome.Console"},
+        application_activate=lambda app: calls.append(("app", app)) or True,
+    )
+    assert calls == [("x11", "0x1")]
+    calls.clear()
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
+    activate_window({"kind": "close", "wid": "0x1", "pid": 9})
+    assert calls == [("close", "0x1"), ("sig", 9, signal.SIGTERM)]
+    calls.clear()
+    activate_window({"kind": "kill", "pid": 9})
+    assert calls == [("sig", 9, signal.SIGKILL)]
