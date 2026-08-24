@@ -71,6 +71,7 @@ def test_preedit_and_ime_propagation_match_goshos() -> None:
     assert should_propagate_for_ime("", False) is False
     assert should_propagate_for_ime("あ", False) is True
 
+
 def test_escape_and_arrows_propagate_while_ime_owns_keys() -> None:
     """popupKeyHandler returns EVENT_PROPAGATE before resolveKeyAction while composing."""
     from ulauncher.modes.launcher.key_action import resolve_key_action, should_propagate_for_ime

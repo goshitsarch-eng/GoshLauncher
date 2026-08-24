@@ -15,6 +15,7 @@ def test_popup_backdrop_show_and_destroy_are_idempotent() -> None:
     assert overlay.window_count() == 0
     assert ",".join(backdrop_teardown_order()) == "disconnect,hide,remove-chrome,destroy"
 
+
 def test_popup_backdrop_set_layer_accepts_top_and_overlay() -> None:
     overlay = PopupBackdrop(lambda: None)
     overlay.show()
