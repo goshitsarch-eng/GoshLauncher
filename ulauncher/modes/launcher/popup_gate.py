@@ -97,3 +97,11 @@ def next_toggle_action(is_open: bool, visible: bool, open_pending: bool, close_p
     if is_open or visible:
         return "close"
     return "open"
+
+
+def should_schedule_open(open_pending: bool, is_open: bool, visible: bool) -> bool:
+    return not open_pending and not is_open and not visible
+
+
+def should_schedule_close(close_pending: bool) -> bool:
+    return not close_pending

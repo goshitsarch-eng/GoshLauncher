@@ -350,7 +350,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             osk_contains_focus=self._osk_visible,
         )
         if action == "close" and self.settings.close_on_focus_out:
-            self.close(save_query=True)
+            self.get_app().request_close(save_query=True)
             return
         if action == "refocus-entry" and should_run_refocus(self.get_mapped(), self.get_visible()):
             self.prompt_input.grab_focus()
@@ -425,7 +425,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return False
 
         if keyname == "Escape":
-            self.close(save_query=True)
+            self.get_app().request_close(save_query=True)
             return True
 
         if ctrl and keyname == "comma":
@@ -468,7 +468,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
         action = resolve_key_action(keyname, shift, alt, show_numbers)
         if action["type"] == "close":
-            self.close(save_query=True)
+            self.get_app().request_close(save_query=True)
             return True
         if action["type"] == "move" and self.results_view.has_results:
             if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
@@ -878,13 +878,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             backdrop.destroy()
 
     def _on_backdrop_click(self) -> None:
-        if getattr(self, "_backdrop_close_idle", None) is not None:
-            return
-        self._backdrop_close_idle = scheduling.run_when_idle(self._run_backdrop_close)
-
-    def _run_backdrop_close(self) -> None:
-        self._backdrop_close_idle = None
-        self.close(save_query=True)
+        self.get_app().request_close(save_query=True)
 
     def _raise_over_backdrop(self) -> None:
         if self.get_visible():

@@ -53,6 +53,12 @@ class UlauncherApp(Adw.Application):
         kwargs.update(application_id=app_id)
         super().__init__(*args, **kwargs)
         self.windows = WeakValueDictionary()
+        self._popup_open_idle = None
+        self._popup_close_idle = None
+        self._popup_open_pending = False
+        self._popup_close_pending = False
+        self._popup_reopen_after_close = False
+        self._popup_close_save_query = False
         events.set_self(self)
         self.connect("startup", lambda *_: self.setup())  # runs only once on the main instance
 
@@ -249,11 +255,74 @@ class UlauncherApp(Adw.Application):
 
     @events.on
     def close_launcher(self) -> None:
-        if main_window := self.windows.get("main"):
-            main_window.close()
+        self.request_close(save_query=False)
+
+    def request_close(self, save_query: bool = False) -> None:
+        self._cancel_pending_open()
+        self._schedule_close(save_query=save_query)
 
     def close_window(self) -> None:
         self.close_launcher()
+
+    def _schedule_open(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import should_schedule_open
+
+        main = self.windows.get("main")
+        if not should_schedule_open(
+            self._popup_open_idle is not None or self._popup_open_pending,
+            main is not None,
+            bool(main is not None and main.get_mapped()),
+        ):
+            return
+        self._popup_open_pending = True
+        self._popup_open_idle = scheduling.run_when_idle(self._run_pending_open)
+
+    def _run_pending_open(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import next_open_error_action
+
+        self._popup_open_idle = None
+        self._popup_open_pending = False
+        try:
+            self.show_launcher()
+        except Exception:
+            logger.exception("Opening the launcher failed")
+            main = self.windows.get("main")
+            visible = bool(main is not None and main.get_mapped())
+            if next_open_error_action(main is not None, visible) == "close":
+                self.request_close()
+
+    def _cancel_pending_open(self) -> None:
+        idle = self._popup_open_idle
+        self._popup_open_idle = None
+        self._popup_open_pending = False
+        if idle is not None:
+            idle.cancel()
+
+    def _schedule_close(self, save_query: bool = False) -> None:
+        from ulauncher.modes.launcher.popup_gate import should_schedule_close
+
+        if save_query:
+            self._popup_close_save_query = True
+        if not should_schedule_close(self._popup_close_idle is not None or self._popup_close_pending):
+            return
+        self._popup_close_pending = True
+        self._popup_close_idle = scheduling.run_when_idle(self._run_pending_close)
+
+    def _run_pending_close(self) -> None:
+        self._popup_close_idle = None
+        save_query = bool(self._popup_close_save_query)
+        self._popup_close_save_query = False
+        if main_window := self.windows.get("main"):
+            main_window.close(save_query=save_query)
+        else:
+            self._popup_close_pending = False
+
+    def _arm_reopen_after_close(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import next_reopen_after_close
+
+        if not self._popup_close_pending:
+            return
+        self._popup_reopen_after_close = next_reopen_after_close(True, self._popup_reopen_after_close)
 
     @events.on
     def show_preferences(self, page: str | None = None) -> None:
@@ -303,25 +372,24 @@ class UlauncherApp(Adw.Application):
         action = next_toggle_action(
             is_open,
             visible,
-            bool(getattr(self, "_popup_open_pending", False)),
-            bool(getattr(self, "_popup_close_pending", False)),
+            bool(self._popup_open_pending),
+            bool(self._popup_close_pending),
         )
         if action == "toggle-reopen":
-            self._popup_reopen_after_close = True
-            self.close_launcher()
+            self._arm_reopen_after_close()
             return
         if action == "cancel-open":
-            self._popup_open_pending = False
+            self._cancel_pending_open()
             return
         if action == "close":
-            self.close_launcher()
+            self.request_close()
             return
         from ulauncher.modes.launcher.session_state import session_popup_blockers
 
         locked, greeter, limits = session_popup_blockers()
         if not can_open_popup(False, False, locked, greeter, limits):
             return
-        self.show_launcher()
+        self._schedule_open()
 
     def delegate_custom_message(self, json_message: str) -> None:
         """Parses and delegates custom JSON messages to the EventBus listener (if any)"""

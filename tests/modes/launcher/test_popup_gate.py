@@ -18,6 +18,8 @@ from ulauncher.modes.launcher.popup_gate import (
     should_close_on_session,
     should_close_on_shell_ui,
     should_close_on_toggle,
+    should_schedule_close,
+    should_schedule_open,
     time_limits_state,
 )
 
@@ -88,3 +90,12 @@ def test_session_limits_and_toggle_reopen() -> None:
     assert should_cancel_open_on_shell_ui(True) is True
     assert should_close_on_shell_ui(True, False) is True
     assert should_close_on_shell_ui(False, False) is False
+
+
+def test_open_and_close_are_scheduled_once() -> None:
+    assert should_schedule_open(False, False, False) is True
+    assert should_schedule_open(True, False, False) is False
+    assert should_schedule_open(False, True, False) is False
+    assert should_schedule_open(False, False, True) is False
+    assert should_schedule_close(False) is True
+    assert should_schedule_close(True) is False
