@@ -15,7 +15,7 @@ class Settings(JsonConf):
     close_on_focus_out: bool = True
     disable_desktop_filters: bool = False
     enable_application_mode: bool = True
-    grab_mouse_pointer: bool = False
+    grab_mouse_pointer: bool = True
     hotkey_show_app: str = ""  # Note that this is no longer used, other than for migrating to the DE wrapper
     jump_keys: str = "1234567890abcdefghijklmnopqrstuvwxyz"
     keep_alive: bool = True

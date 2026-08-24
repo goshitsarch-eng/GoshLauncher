@@ -42,9 +42,11 @@ def get_modes() -> list[Mode]:
     from ulauncher.modes.launcher.mode import LauncherMode
     from ulauncher.modes.shortcuts.shortcut_mode import ShortcutMode
 
+    # LauncherMode owns Spotlight-goshos search, including ~/ ./ and absolute
+    # paths, so it must run before the legacy file-browser listing.
     return [
-        FileBrowserMode(),
         LauncherMode(),
+        FileBrowserMode(),
         CalcMode(),
         ShortcutMode(),
         ExtensionMode(ext_service),

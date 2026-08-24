@@ -14,6 +14,24 @@ REMOTE_SCHEMES = frozenset({"sftp", "smb", "ftp", "dav", "davs"})
 SKIP_SCHEMES = frozenset({"http", "https", "javascript", "data"})
 
 
+def usable_recent_uri(href: str) -> str:
+    text = (href or "").strip()
+    if not text or ":" not in text:
+        return ""
+    scheme, rest = text.split(":", 1)
+    scheme = scheme.lower()
+    if scheme in SKIP_SCHEMES:
+        return ""
+    # goshos requires authority slashes so file:javascript: never looks like a path
+    if not rest.startswith("//"):
+        return ""
+    if scheme != "file" and scheme not in REMOTE_SCHEMES:
+        return ""
+    if "javascript:" in text.lower():
+        return ""
+    return canonicalize_launch_uri(text)
+
+
 def parse_xbel(text: str) -> list[dict]:
     rows: list[dict] = []
     try:
@@ -26,12 +44,7 @@ def parse_xbel(text: str) -> list[dict]:
         href = (bookmark.attrib.get("href") or "").strip()
         if not href:
             continue
-        scheme = href.split(":", 1)[0].lower()
-        if scheme in SKIP_SCHEMES:
-            continue
-        if scheme != "file" and scheme not in REMOTE_SCHEMES:
-            continue
-        uri = canonicalize_launch_uri(href)
+        uri = usable_recent_uri(href)
         if not uri:
             continue
         path = path_from_file_uri(uri)
@@ -61,11 +74,24 @@ def load_recents(limit: int = 50) -> list[dict]:
     return parse_xbel(XBEL.read_text(encoding="utf-8", errors="replace"))[:limit]
 
 
+def recent_file_matches(name: str, folder: str, query: str) -> bool:
+    if not query:
+        return True
+    if text_matches_query(name, query) or path_matches_query(folder, query):
+        return True
+    words = [word for word in query.lower().split() if word]
+    if len(words) < 2:
+        return False
+    return all(text_matches_query(name, word) or path_matches_query(folder, word) for word in words)
+
+
 def match_recents(query: str, rows: list[dict] | None = None, limit: int = 6) -> list[dict]:
     rows = rows if rows is not None else load_recents()
+    if not query.strip():
+        return rows[:limit]
     results: list[dict] = []
     for row in rows:
-        if text_matches_query(row["title"], query) or path_matches_query(row["description"], query):
+        if recent_file_matches(row["title"], row["description"], query):
             results.append(row)
         if len(results) >= limit:
             break

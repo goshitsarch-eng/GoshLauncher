@@ -105,9 +105,65 @@ def action_matches(action: dict, query: str) -> bool:
     return any(keyword_matches_query(keyword, q) for keyword in action["keywords"])
 
 
-def match_system_actions(query: str, limit: int = 6) -> list[dict]:
+_LOGIND_CAN = {
+    "shutdown": "CanPowerOff",
+    "restart": "CanReboot",
+    "suspend": "CanSuspend",
+}
+
+
+class _LogindState:
+    cache: dict[str, str] | None = None
+
+
+_logind = _LogindState()
+
+
+def probe_logind(*, force: bool = False) -> dict[str, str]:
+    if _logind.cache is not None and not force:
+        return _logind.cache
+    answers: dict[str, str] = {}
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        for method in ("CanPowerOff", "CanReboot", "CanSuspend"):
+            result = bus.call_sync(
+                "org.freedesktop.login1",
+                "/org/freedesktop/login1",
+                "org.freedesktop.login1.Manager",
+                method,
+                None,
+                GLib.VariantType.new("(s)"),
+                Gio.DBusCallFlags.NONE,
+                150,
+                None,
+            )
+            answers[method] = str(result.unpack()[0])
+    except Exception:
+        logger.debug("logind Can* probe failed", exc_info=True)
+    _logind.cache = answers
+    return answers
+
+
+def action_is_available(action_id: str, can_map: dict[str, str] | None = None) -> bool:
+    if action_id == "screenshot":
+        return True
+    method = _LOGIND_CAN.get(action_id)
+    if method is None:
+        return True
+    answer = (can_map if can_map is not None else probe_logind()).get(method)
+    if answer is None:
+        return True
+    return str(answer).lower() not in {"no", "na"}
+
+
+def match_system_actions(query: str, limit: int = 6, can_map: dict[str, str] | None = None) -> list[dict]:
+    answers = can_map if can_map is not None else probe_logind()
     results: list[dict] = []
     for action in SYSTEM_ACTIONS:
+        if not action_is_available(action["id"], answers):
+            continue
         if action_matches(action, query):
             results.append(action)
         if len(results) >= limit:

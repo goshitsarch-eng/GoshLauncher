@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from ulauncher.modes.apps.app_mode import AppMode
+from ulauncher.modes.apps.app_rankings import AppRankings
 from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
 from ulauncher.modes.launcher.word_match import (
     SUBSTRING_MIN,
@@ -20,7 +21,9 @@ _VARIANT_SUFFIX = re.compile(r"[\s-]+(esr|beta|nightly|dev|canary|stable|preview
 
 
 def iter_apps() -> list[AppResult]:
-    return list(_app_mode.get_triggers())
+    from ulauncher.modes.launcher.parental import app_is_allowed
+
+    return [app for app in _app_mode.get_triggers() if app_is_allowed(app)]
 
 
 def app_base_name(name: str) -> str:
@@ -43,7 +46,9 @@ def unique_by_base_name(apps: list[Any], limit: int) -> list[Any]:
     return unique
 
 
-def _token_tier(name_lower: str, generic_lower: str, id_lower: str, keywords: list[str], desc_lower: str, token: str) -> int:
+def _token_tier(
+    name_lower: str, generic_lower: str, id_lower: str, keywords: list[str], desc_lower: str, token: str
+) -> int:
     if name_lower.startswith(token):
         return 0
     if word_prefix_match(name_lower, token):
@@ -66,11 +71,11 @@ def app_match_tier(app: Any, query: str) -> int:
         return -1
     q = query.lower()
     name_lower = str(getattr(app, "name", "")).lower()
-    generic_lower = str(getattr(app, "description", "")).lower()
+    generic_lower = str(getattr(app, "generic_name", "") or "").lower()
     id_raw = str(getattr(app, "app_id", "")).lower()
     id_lower = id_raw[:-8] if id_raw.endswith(".desktop") else id_raw
     keywords = list(getattr(app, "keywords", []) or [])
-    desc_lower = generic_lower
+    desc_lower = str(getattr(app, "description", "") or "").lower()
 
     if name_lower.startswith(q):
         return 0
@@ -103,16 +108,63 @@ def app_matches(app: AppResult, query: str) -> bool:
     return app_match_tier(app, query) >= 0
 
 
+def _usage_rank(app_id: str) -> int:
+    ids = AppRankings.load().get_app_ids()
+    try:
+        return ids.index(app_id)
+    except ValueError:
+        return len(ids) + 1
+
+
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
     ranked = sorted(
         (app for app in iter_apps() if app_match_tier(app, query) >= 0),
-        key=lambda app: app_match_tier(app, query),
+        key=lambda app: (app_match_tier(app, query), _usage_rank(getattr(app, "app_id", ""))),
     )
     return unique_by_base_name(ranked, limit)
 
 
+def app_row_description(window_count: int) -> str:
+    if window_count > 0:
+        return "Switch to application"
+    return "Application"
+
+
+def _app_class_needles(app: Any) -> set[str]:
+    needles: set[str] = set()
+    app_id = str(getattr(app, "app_id", "") or "").lower()
+    if app_id.endswith(".desktop"):
+        app_id = app_id[:-8]
+    if app_id:
+        needles.add(app_id)
+        needles.add(app_id.split(".")[-1])
+    executable = str(getattr(app, "_executable", "") or "").lower()
+    if executable:
+        needles.add(executable)
+    return {needle for needle in needles if needle and needle != "desktop"}
+
+
+def app_window_count(app: Any, windows: list[Any] | None = None) -> int:
+    if windows is None:
+        from ulauncher.modes.launcher.windows import list_windows
+
+        windows = list_windows()
+    needles = _app_class_needles(app)
+    if not needles:
+        return 0
+    count = 0
+    for win in windows:
+        cls = str(getattr(win, "wm_class", "") or "").lower()
+        tokens = {part for part in re.split(r"[./]", cls) if part}
+        if needles & tokens:
+            count += 1
+    return count
+
+
 def home_apps(limit: int) -> list[AppResult]:
-    return _app_mode.get_home_results(limit)
+    from ulauncher.modes.launcher.parental import app_is_allowed
+
+    return [app for app in _app_mode.get_home_results(limit * 2) if app_is_allowed(app)][:limit]
 
 
 def is_new_window_action(action_id: str) -> bool:
@@ -132,7 +184,7 @@ def action_result_limit(max_results: int, _used_app_rows: int) -> int:
     return max_results
 
 
-def app_action_rows(app: Any, limit: int) -> list[dict[str, Any]]:
+def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     rows: list[dict[str, Any]] = []
@@ -140,6 +192,8 @@ def app_action_rows(app: Any, limit: int) -> list[dict[str, Any]]:
         if key == "launch" or not str(key).startswith(ACTION_PREFIX):
             continue
         action_id = str(key)[len(ACTION_PREFIX) :]
+        if is_new_window_action(action_id) and window_count <= 0:
+            continue
         name = (meta or {}).get("name") or action_id
         title = new_window_title(app.name) if is_new_window_action(action_id) else desktop_action_title(name, app.name)
         rows.append(

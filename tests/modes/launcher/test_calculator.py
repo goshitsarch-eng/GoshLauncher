@@ -25,6 +25,9 @@ def test_expression_evaluates() -> None:
     assert evaluate_arithmetic("2 to the 8th", allow_bare=False) == 256
     assert evaluate_arithmetic("2 to the eighth", allow_bare=False) == 256
     assert evaluate_arithmetic("a hundred + 1", allow_bare=False) == 101
+    assert evaluate_arithmetic("half of 80", allow_bare=False) == 40
+    assert evaluate_arithmetic("square root of 16", allow_bare=False) == 4
+    assert evaluate_arithmetic("one thousand two hundred + 1", allow_bare=False) == 1201
 
 
 def test_incomplete_tokens_are_not_math() -> None:

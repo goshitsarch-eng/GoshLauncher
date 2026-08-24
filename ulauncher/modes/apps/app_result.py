@@ -17,6 +17,7 @@ ACTION_PREFIX = "action:"
 class AppResult(Result):
     searchable: bool = True
     app_id: str = ""
+    generic_name: str = ""
     keywords: list[str] = []
     _executable: str = ""
 
@@ -28,9 +29,12 @@ class AppResult(Result):
         super().__init__(
             name=app_info.get_display_name(),
             icon=app_info.get_string("Icon") or "",
-            description=app_info.get_description() or app_info.get_generic_name() or "",
+            # Comment only. GenericName is a separate phrase so "browser" can
+            # match Firefox without treating Comment as a haystack.
+            description=app_info.get_description() or "",
             actions=actions,
         )
+        self.generic_name = app_info.get_generic_name() or ""
         self.keywords = app_info.get_keywords() or []
         self.app_id = app_info.get_id() or ""
         # TryExec is what we actually want (name of/path to exec), but it's often not specified
@@ -56,6 +60,7 @@ class AppResult(Result):
         return [
             (self.name, 1 * frequency_weight),
             (self._executable, 0.8 * frequency_weight),  # command names, such as "baobab" or "nautilus"
+            (self.generic_name, 0.7 * frequency_weight),
             (self.description, 0.7 * frequency_weight),
             *[(k, 0.6 * frequency_weight) for k in self.keywords],
         ]

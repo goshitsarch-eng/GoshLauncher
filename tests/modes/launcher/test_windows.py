@@ -4,8 +4,11 @@ from ulauncher.modes.launcher.windows import (
     WindowInfo,
     parse_window_intent,
     parse_workspace_query,
+    sort_windows_most_recent,
+    take_window_results,
     window_close_title,
     window_matches,
+    window_recency_value,
     workspace_label_matches,
     workspace_switch_title,
 )
@@ -43,3 +46,30 @@ def test_workspace_label_matches_number_and_sticky() -> None:
     win = WindowInfo(wid="0x1", title="Firefox", wm_class="firefox", desktop=1, pid=1, sticky=False)
     assert window_matches(win, "2")
     assert not window_matches(win, "workspace")
+    assert window_matches(win, "") is True
+    assert window_matches(
+        WindowInfo(wid="0x2", title="Mozilla Firefox", wm_class="Navigator.firefox", desktop=0),
+        "mozilla firefox",
+    )
+    assert not window_matches(
+        WindowInfo(wid="0x3", title="Mozilla Firefox", wm_class="Navigator.firefox", desktop=0),
+        "mozilla terminal",
+    )
+
+
+def test_take_window_results_workspace_consumes_a_slot() -> None:
+    switch = {"kind": "workspace", "title": "Switch to Workspace 2"}
+    windows = [{"kind": "focus", "title": "Firefox"}, {"kind": "focus", "title": "Terminal"}]
+    taken = take_window_results(switch, windows, 1)
+    assert taken == [switch]
+    taken = take_window_results(switch, windows, 2)
+    assert [row["title"] for row in taken] == ["Switch to Workspace 2", "Firefox"]
+
+
+def test_window_recency_prefers_front_tab_then_user_time() -> None:
+    assert window_recency_value(0, 3, 10) > window_recency_value(1, 3, 999999)
+    older = WindowInfo(wid="1", title="Old", wm_class="old", desktop=0, user_time=50)
+    newer = WindowInfo(wid="2", title="New", wm_class="new", desktop=0, user_time=5)
+    # stacking/tab order: newer is index 0
+    ordered = sort_windows_most_recent([newer, older])
+    assert [win.title for win in ordered] == ["New", "Old"]

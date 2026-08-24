@@ -84,6 +84,11 @@ class UlauncherApp(Adw.Application):
         if "main" in self.windows:
             self.core.set_query(self.query, self.show_results)
 
+    @events.on
+    def restyle_launcher(self) -> None:
+        if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
+            main_window.restyle_from_settings()
+
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
         Gio.ActionMap.add_action_entries(

@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from typing import Any
 
 from ulauncher.modes.launcher.number_words import replace_number_words
 from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_query, text_matches_query
@@ -32,6 +33,7 @@ class WindowInfo:
     desktop: int
     pid: int = 0
     sticky: bool = False
+    user_time: int = 0
 
 
 def _ewmh_windows() -> list[WindowInfo]:
@@ -70,9 +72,23 @@ def _ewmh_windows() -> list[WindowInfo]:
                 desktop=-1 if sticky else int(desktop),
                 pid=int(pid),
                 sticky=sticky,
+                user_time=_window_user_time(ewmh, win),
             )
         )
     return results
+
+
+def _window_user_time(ewmh: Any, win: Any) -> int:
+    getter = getattr(ewmh, "_getProperty", None)
+    if not callable(getter):
+        return 0
+    try:
+        arr = getter("_NET_WM_USER_TIME", win)
+        if arr:
+            return int(arr[0])
+    except Exception:
+        return 0
+    return 0
 
 
 def _wmctrl_windows() -> list[WindowInfo]:
@@ -101,15 +117,72 @@ def _wmctrl_windows() -> list[WindowInfo]:
     return rows
 
 
+def window_recency_value(tab_index: int, tab_count: int, user_time: int) -> int:
+    if isinstance(tab_index, int) and tab_index >= 0 and tab_count > tab_index:
+        return (tab_count - tab_index) * 10**12 + user_time
+    return user_time
+
+
+def sort_windows_most_recent(
+    windows: list[WindowInfo],
+    get_user_time: Any = None,
+    tab_ranks: dict[str, int] | None = None,
+) -> list[WindowInfo]:
+    indexed = list(windows)
+    count = len(indexed)
+
+    def recency(item: tuple[int, WindowInfo]) -> int:
+        index, win = item
+        if tab_ranks:
+            key = (win.wm_class or "").lower()
+            tab_index = tab_ranks.get(key, tab_ranks.get(str(win.wid), index))
+        else:
+            tab_index = index
+        stamp = get_user_time(win) if callable(get_user_time) else win.user_time
+        return window_recency_value(tab_index, count, int(stamp or 0))
+
+    return [win for _index, win in sorted(enumerate(indexed), key=recency, reverse=True)]
+
+
+def _introspect_tab_ranks() -> dict[str, int]:
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        result = bus.call_sync(
+            "org.gnome.Shell.Introspect",
+            "/org/gnome/Shell/Introspect",
+            "org.gnome.Shell.Introspect",
+            "GetWindows",
+            None,
+            GLib.VariantType.new("(a{ta{sv}})"),
+            Gio.DBusCallFlags.NONE,
+            80,
+            None,
+        )
+        payload = result.unpack()[0]
+        ranks: dict[str, int] = {}
+        for index, (xid, props) in enumerate(payload.items()):
+            wm_class = str(props.get("wm-class") or props.get("app-id") or "").lower()
+            if wm_class:
+                ranks[wm_class] = index
+            ranks[str(xid)] = index
+        return ranks
+    except Exception:
+        return {}
+
+
 def list_windows() -> list[WindowInfo]:
     try:
-        return _ewmh_windows()
+        windows = _ewmh_windows()
     except Exception:
         logger.debug("EWMH window list failed", exc_info=True)
         try:
-            return _wmctrl_windows()
+            windows = _wmctrl_windows()
         except (OSError, subprocess.CalledProcessError):
             return []
+    ranks = _introspect_tab_ranks()
+    return sort_windows_most_recent(windows, tab_ranks=ranks or None)
 
 
 def _workspace_label(win: WindowInfo) -> str:
@@ -177,9 +250,21 @@ def window_close_title(intent: str, title: str) -> str:
     return f"Close {title}"
 
 
+def _window_fields_match_all_words(title: str, wm_class: str, query: str) -> bool:
+    words = [word for word in query.lower().split() if word]
+    if len(words) < 2:
+        return False
+    return all(
+        text_matches_query(title, word)
+        or id_matches_query(wm_class.replace(".", " "), word)
+        or id_matches_query(wm_class, word)
+        for word in words
+    )
+
+
 def window_matches(win: WindowInfo, query: str) -> bool:
     if not query:
-        return False
+        return True
     q = query.lower()
     if q in {"workspace", "spa"}:
         return False
@@ -187,31 +272,49 @@ def window_matches(win: WindowInfo, query: str) -> bool:
         return True
     if id_matches_query(win.wm_class.replace(".", " "), query) or id_matches_query(win.wm_class, query):
         return True
+    if _window_fields_match_all_words(win.title, win.wm_class, query):
+        return True
     return workspace_label_matches(_workspace_label(win), query)
+
+
+def take_window_results(
+    switch_row: dict | None,
+    window_rows: list[dict],
+    max_results: int,
+) -> list[dict]:
+    if max_results <= 0:
+        return []
+    results: list[dict] = []
+    if switch_row:
+        results.append(switch_row)
+    for row in window_rows:
+        if len(results) >= max_results:
+            break
+        results.append(row)
+    return results
 
 
 def match_windows(query: str, limit: int = 6) -> list[dict]:
     intent, rest = parse_window_intent(query)
     workspace = parse_workspace_query(query)
-    results: list[dict] = []
+    switch_row = None
     if workspace is not None and intent == "focus":
-        results.append(
-            {
-                "kind": "workspace",
-                "title": workspace_switch_title(workspace + 1),
-                "description": "Workspace",
-                "icon": "workspace-switcher",
-                "payload": str(workspace),
-                "wid": "",
-            }
-        )
+        switch_row = {
+            "kind": "workspace",
+            "title": workspace_switch_title(workspace + 1),
+            "description": "Workspace",
+            "icon": "workspace-switcher",
+            "payload": str(workspace),
+            "wid": "",
+        }
+    window_rows: list[dict] = []
     for win in list_windows():
         target = rest if intent != "focus" else query
         if not window_matches(win, target):
             continue
         name = win.title or win.wm_class
         title = name if intent == "focus" else window_close_title(intent, name)
-        results.append(
+        window_rows.append(
             {
                 "kind": intent,
                 "title": title,
@@ -223,9 +326,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
                 "wm_class": win.wm_class,
             }
         )
-        if len(results) >= limit:
-            break
-    return results
+    return take_window_results(switch_row, window_rows, limit)
 
 
 def activate_window(payload: dict) -> None:

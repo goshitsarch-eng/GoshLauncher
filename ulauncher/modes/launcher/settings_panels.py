@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+from collections.abc import Callable
+from pathlib import Path
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 
@@ -127,11 +130,35 @@ def settings_argv(panel_id: str) -> list[str] | None:
     return None
 
 
-def match_settings_panels(query: str, limit: int = 6) -> list[dict]:
+def settings_panel_desktop(panel_id: str) -> str:
+    panel_id = "background" if panel_id == "appearance" else panel_id
+    return f"gnome-{panel_id}-panel.desktop"
+
+
+def _desktop_exists(desktop_id: str) -> bool:
+    dirs = os.environ.get("XDG_DATA_DIRS", "/usr/share:/usr/local/share").split(":")
+    home = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local/share")
+    return any(Path(directory, "applications", desktop_id).is_file() for directory in [home, *dirs])
+
+
+def settings_panel_available(panel_id: str, has_desktop: Callable[[str], bool] | None = None) -> bool:
+    if panel_id != "wellbeing":
+        return True
+    checker = has_desktop or _desktop_exists
+    try:
+        return bool(checker(settings_panel_desktop(panel_id)))
+    except Exception:
+        return True
+
+
+def match_settings_panels(query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None) -> list[dict]:
+    available = is_available or settings_panel_available
     lower = query.lower()
     normalized = lower.replace("-", "").replace("_", "").replace(" ", "")
     matches: list[dict] = []
     for panel in SETTINGS_PANELS:
+        if not available(panel["id"]):
+            continue
         title_lower = panel["title"].lower()
         normalized_title = title_lower.replace("-", "").replace("_", "").replace(" ", "")
         normalized_id = panel["id"].replace("-", "").replace("_", "")

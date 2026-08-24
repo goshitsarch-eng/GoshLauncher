@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from ulauncher.modes.launcher.apps import (
     app_action_rows,
     app_base_name,
     app_match_tier,
+    app_row_description,
+    app_window_count,
     desktop_action_title,
     is_new_window_action,
+    match_apps,
     new_window_title,
     unique_by_base_name,
 )
+from ulauncher.modes.launcher.windows import WindowInfo
 
 
 def test_app_base_name_strips_channel_suffix() -> None:
@@ -26,17 +32,29 @@ def test_unique_by_base_name_keeps_first_sorted() -> None:
     assert [app.name for app in unique] == ["Firefox"]
 
 
-def test_app_match_tier_prefers_name_prefix() -> None:
+def test_app_match_tier_splits_generic_name_and_comment() -> None:
     firefox = SimpleNamespace(
         name="Firefox",
-        description="Web Browser",
+        generic_name="Web Browser",
+        description="Browse the Web",
         app_id="org.mozilla.firefox.desktop",
-        keywords=["browser"],
+        keywords=["internet"],
     )
     assert app_match_tier(firefox, "fire") == 0
     assert app_match_tier(firefox, "browser") == 3
     assert app_match_tier(firefox, "mozilla") == 4
+    # "browse" is a prefix of GenericName "Browser", so it is a generic-name hit.
+    assert app_match_tier(firefox, "browse") == 3
+    assert app_match_tier(firefox, "ows") == -1
     assert app_match_tier(firefox, "zzz") == -1
+    comment_only = SimpleNamespace(
+        name="Firefox",
+        generic_name="Web Browser",
+        description="Surf the net",
+        app_id="org.mozilla.firefox.desktop",
+        keywords=["internet"],
+    )
+    assert app_match_tier(comment_only, "surf") == 6
 
 
 def test_new_window_and_desktop_action_titles() -> None:
@@ -47,7 +65,7 @@ def test_new_window_and_desktop_action_titles() -> None:
     assert desktop_action_title("Private Window", "Firefox") == "Private Window — Firefox"
 
 
-def test_app_action_rows_from_first_app() -> None:
+def test_app_action_rows_hide_new_window_when_not_running() -> None:
     app = SimpleNamespace(
         name="Firefox",
         icon="firefox",
@@ -58,8 +76,49 @@ def test_app_action_rows_from_first_app() -> None:
             "action:private": {"name": "Private"},
         },
     )
-    rows = app_action_rows(app, 6)
-    assert [row["action_name"] for row in rows] == ["new-window", "private"]
-    assert rows[0]["title"] == "New window — Firefox"
-    assert rows[1]["title"] == "Private — Firefox"
-    assert rows[0]["description"] == "Application action"
+    idle = app_action_rows(app, 6, window_count=0)
+    assert [row["action_name"] for row in idle] == ["private"]
+    running = app_action_rows(app, 6, window_count=1)
+    assert [row["action_name"] for row in running] == ["new-window", "private"]
+    assert running[0]["title"] == "New window — Firefox"
+    assert running[1]["title"] == "Private — Firefox"
+    assert running[0]["description"] == "Application action"
+
+
+def test_app_row_description_and_window_count() -> None:
+    app = SimpleNamespace(app_id="firefox.desktop", _executable="firefox")
+    windows = [
+        WindowInfo(wid="1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=1),
+        WindowInfo(wid="2", title="Terminal", wm_class="gnome-terminal.Gnome-terminal", desktop=0, pid=2),
+    ]
+    assert app_window_count(app, windows) == 1
+    assert app_row_description(1) == "Switch to application"
+    assert app_row_description(0) == "Application"
+
+
+def test_match_apps_keeps_more_used_variant(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    esr = SimpleNamespace(
+        name="Firefox ESR",
+        app_id="firefox-esr.desktop",
+        generic_name="",
+        description="",
+        keywords=[],
+    )
+    stable = SimpleNamespace(
+        name="Firefox",
+        app_id="firefox.desktop",
+        generic_name="",
+        description="",
+        keywords=[],
+    )
+
+    class _Rankings:
+        def get_app_ids(self) -> list[str]:
+            return ["firefox.desktop", "firefox-esr.desktop"]
+
+    monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, stable])
+    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda cls: _Rankings()))
+    matched = match_apps("fire", 6)
+    assert [app.name for app in matched] == ["Firefox"]

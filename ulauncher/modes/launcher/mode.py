@@ -7,7 +7,7 @@ from ulauncher.internals import effects
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
 from ulauncher.modes.launcher.looks import chrome_from_settings
-from ulauncher.modes.launcher.plan import flags_from_settings, is_path_query, merge_empty_suggestions, plan_search
+from ulauncher.modes.launcher.plan import flags_from_settings, merge_empty_suggestions, plan_search
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
 from ulauncher.modes.mode import Mode
 from ulauncher.utils.eventbus import EventBus
@@ -21,11 +21,7 @@ class LauncherMode(Mode):
     """Spotlight-style search: URLs, paths, apps, calc, units, color, clock, windows, settings, recents, web."""
 
     def matches_query_str(self, query_str: str) -> bool:
-        if not query_str:
-            return False
-        if is_path_query(query_str):
-            return False
-        return True
+        return bool(query_str)
 
     def handle_query(self, query: Query, callback: Callable[[effects.EffectMessage], None]) -> None:
         settings = Settings.load()
@@ -40,7 +36,7 @@ class LauncherMode(Mode):
         settings = Settings.load()
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []
-        from ulauncher.modes.launcher.apps import home_apps
+        from ulauncher.modes.launcher.apps import app_row_description, app_window_count, home_apps
         from ulauncher.modes.launcher.windows import list_windows
 
         chrome = chrome_from_settings(settings)
@@ -49,6 +45,7 @@ class LauncherMode(Mode):
         if order == "default":
             order = chrome.get("result_order") or "default"
         app_limit = min(limit, max(1, int(getattr(settings, "max_recent_apps", 6) or 6)))
+        open_windows = list_windows() if flags.get("windows") or flags.get("apps") else []
         app_rows: list[dict[str, Any]] = []
         if flags.get("apps"):
             for app in home_apps(app_limit):
@@ -56,14 +53,14 @@ class LauncherMode(Mode):
                     {
                         "kind": "app",
                         "title": app.name,
-                        "description": app.description,
+                        "description": app_row_description(app_window_count(app, open_windows)),
                         "icon": app.icon,
                         "app_id": app.app_id,
                     }
                 )
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
-            for win in list_windows():
+            for win in open_windows:
                 if win.sticky or win.desktop < 0:
                     workspace = "On all workspaces"
                 else:
@@ -198,7 +195,11 @@ class LauncherMode(Mode):
         providers = planned["providers"]
         web_fallback = planned["web_fallback"]
         cap = max(1, int(getattr(settings, "max_per_category", 6) or 6))
-        rows: list[dict[str, Any]] = []
+        buckets: dict[str, list[dict[str, Any]]] = {name: [] for name in providers}
+
+        def add(name: str, row: dict[str, Any]) -> None:
+            if name in buckets:
+                buckets[name].append(row)
 
         if "url" in providers:
             from ulauncher.modes.launcher.urls import match_url
@@ -209,7 +210,8 @@ class LauncherMode(Mode):
 
                 url = canonicalize_launch_uri(str(hit["url"]))
                 if url:
-                    rows.append(
+                    add(
+                        "url",
                         {
                             "kind": "url",
                             "score": 200,
@@ -217,7 +219,7 @@ class LauncherMode(Mode):
                             "description": hit.get("description") or "",
                             "icon": hit.get("icon") or "web-browser",
                             "url": url,
-                        }
+                        },
                     )
 
         if "path" in providers:
@@ -227,7 +229,8 @@ class LauncherMode(Mode):
             if hit:
                 from ulauncher.modes.launcher.paths import terminal_row_meta
 
-                rows.append(
+                add(
+                    "path",
                     {
                         "kind": "path",
                         "score": 190,
@@ -237,17 +240,18 @@ class LauncherMode(Mode):
                         "path": hit["path"],
                         "in_terminal": False,
                         "exists": hit.get("exists", True),
-                    }
+                    },
                 )
                 if hit.get("is_dir") and hit.get("exists"):
                     term = terminal_row_meta(hit["path"])
-                    rows.append({"kind": "path", "score": 189, **term})
+                    add("path", {"kind": "path", "score": 189, **term})
 
         if "places" in providers:
             from ulauncher.modes.launcher.places import match_places
 
             for index, hit in enumerate(match_places(q)[:cap]):
-                rows.append(
+                add(
+                    "places",
                     {
                         "kind": "path",
                         "score": 80,
@@ -255,13 +259,13 @@ class LauncherMode(Mode):
                         "description": hit.get("description") or "",
                         "path": hit["path"],
                         "in_terminal": False,
-                    }
+                    },
                 )
                 if index == 0:
                     from ulauncher.modes.launcher.paths import terminal_row_meta
 
                     term = terminal_row_meta(str(hit["path"]))
-                    rows.append({"kind": "path", "score": 79, **term})
+                    add("places", {"kind": "path", "score": 79, **term})
 
         if "bookmarks" in providers:
             from ulauncher.modes.launcher.bookmarks import match_bookmarks
@@ -269,34 +273,37 @@ class LauncherMode(Mode):
             for hit in match_bookmarks(q)[:cap]:
                 row = _row_from_uri(hit, score=75)
                 if row:
-                    rows.append(row)
+                    add("bookmarks", row)
 
         if "apps" in providers:
-            from ulauncher.modes.launcher.apps import match_apps
+            from ulauncher.modes.launcher.apps import app_action_rows, app_row_description, app_window_count, match_apps
+            from ulauncher.modes.launcher.windows import list_windows
 
             matched = match_apps(q, cap)
+            open_windows = list_windows()
             for app in matched:
                 actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
                 if not getattr(settings, "enable_app_actions", True):
                     actions = (
                         {"launch": actions["launch"]} if "launch" in actions else {"activate": {"name": "Activate"}}
                     )
-                rows.append(
+                window_count = app_window_count(app, open_windows)
+                add(
+                    "apps",
                     {
                         "kind": "app",
                         "score": 70,
                         "title": app.name,
-                        "description": app.description,
+                        "description": app_row_description(window_count),
                         "icon": app.icon,
                         "app_id": app.app_id,
                         "actions": actions,
-                    }
+                    },
                 )
             if matched and getattr(settings, "enable_app_actions", True):
-                from ulauncher.modes.launcher.apps import app_action_rows
-
-                for action in app_action_rows(matched[0], cap):
-                    rows.append(
+                for action in app_action_rows(matched[0], cap, app_window_count(matched[0], open_windows)):
+                    add(
+                        "apps",
                         {
                             "kind": "app",
                             "score": 69,
@@ -306,7 +313,7 @@ class LauncherMode(Mode):
                             "app_id": action["app_id"],
                             "action_name": action["action_name"],
                             "actions": {"activate": {"name": "Activate"}},
-                        }
+                        },
                     )
 
         if "calculator" in providers:
@@ -315,14 +322,15 @@ class LauncherMode(Mode):
             value = evaluate_arithmetic(q, allow_bare=(mode == "calculator"))
             if value is not None:
                 formatted = format_number(value)
-                rows.append(
+                add(
+                    "calculator",
                     {
                         "kind": "calculator",
                         "score": 95,
                         "title": formatted,
                         "description": calculator_description(value),
                         "copy_text": formatted,
-                    }
+                    },
                 )
 
         if "units" in providers:
@@ -330,14 +338,15 @@ class LauncherMode(Mode):
 
             hit = convert_query(q)
             if hit:
-                rows.append(
+                add(
+                    "units",
                     {
                         "kind": "units",
                         "score": 90,
                         "title": hit["title"],
                         "description": hit["description"],
                         "copy_text": hit["copy_text"],
-                    }
+                    },
                 )
 
         if "color" in providers:
@@ -346,14 +355,15 @@ class LauncherMode(Mode):
             hit = parse_color(q)
             if hit:
                 hue, sat, light = rgb_to_hsl(int(hit["r"]), int(hit["g"]), int(hit["b"]))
-                rows.append(
+                add(
+                    "color",
                     {
                         "kind": "color",
                         "score": 85,
                         "title": hit["hex"],
                         "description": f"rgb({hit['r']}, {hit['g']}, {hit['b']}) · hsl({hue}, {sat}%, {light}%)",
                         "copy_text": hit["hex"],
-                    }
+                    },
                 )
 
         if "time" in providers:
@@ -361,21 +371,23 @@ class LauncherMode(Mode):
 
             hit = match_clock(q)
             if hit:
-                rows.append(
+                add(
+                    "time",
                     {
                         "kind": "clock",
                         "score": 60,
                         "title": hit["title"],
                         "description": hit["description"],
                         "copy_text": hit["copy_text"],
-                    }
+                    },
                 )
 
         if "windows" in providers:
             from ulauncher.modes.launcher.windows import match_windows
 
             for win in match_windows(q, cap):
-                rows.append(
+                add(
+                    "windows",
                     {
                         "kind": "window",
                         "score": 65,
@@ -387,14 +399,15 @@ class LauncherMode(Mode):
                         "wm_class": win.get("wm_class") or "",
                         "window_kind": win.get("kind") or "focus",
                         "payload": win.get("payload"),
-                    }
+                    },
                 )
 
         if "system" in providers:
             from ulauncher.modes.launcher.system_actions import match_system_actions
 
             for hit in match_system_actions(q)[:cap]:
-                rows.append(
+                add(
+                    "system",
                     {
                         "kind": "system",
                         "score": 50,
@@ -402,14 +415,15 @@ class LauncherMode(Mode):
                         "description": "System",
                         "icon": hit.get("icon") or "system-shutdown",
                         "action_id": hit["id"],
-                    }
+                    },
                 )
 
         if "settings" in providers:
             from ulauncher.modes.launcher.settings_panels import match_settings_panels
 
             for hit in match_settings_panels(q)[:cap]:
-                rows.append(
+                add(
+                    "settings",
                     {
                         "kind": "settings",
                         "score": 55,
@@ -417,7 +431,7 @@ class LauncherMode(Mode):
                         "description": "Settings",
                         "icon": hit.get("icon") or "preferences-system",
                         "panel_id": hit["id"],
-                    }
+                    },
                 )
 
         if "files" in providers:
@@ -426,14 +440,15 @@ class LauncherMode(Mode):
             for hit in match_recents(q)[:cap]:
                 row = _row_from_uri(hit, score=45)
                 if row:
-                    rows.append(row)
+                    add("files", row)
 
         if "command" in providers:
             from ulauncher.modes.launcher.commands import resolve_command_row
 
             hit = resolve_command_row(q)
             if hit:
-                rows.append(
+                add(
+                    "command",
                     {
                         "kind": "command",
                         "score": 40,
@@ -442,10 +457,29 @@ class LauncherMode(Mode):
                         "icon": hit.get("icon") or "utilities-terminal",
                         "argv": hit.get("argv") or [],
                         "ready": bool(hit.get("ready")),
-                    }
+                        "cwd": hit.get("cwd"),
+                    },
                 )
 
-        if "web" in providers or (web_fallback and not rows):
+        if "web" in providers:
+            from ulauncher.modes.launcher.web import web_result
+
+            engine_id = getattr(settings, "web_search_engine", "google")
+            hit = web_result(q, engine_id)
+            add(
+                "web",
+                {
+                    "kind": "web",
+                    "score": 10,
+                    "title": hit["title"],
+                    "description": hit.get("description") or "",
+                    "icon": hit.get("icon") or "web-browser",
+                    "url": hit["url"],
+                },
+            )
+
+        rows = [row for name in providers for row in buckets.get(name, [])]
+        if web_fallback and not rows:
             from ulauncher.modes.launcher.web import web_result
 
             engine_id = getattr(settings, "web_search_engine", "google")

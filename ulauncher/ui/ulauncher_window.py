@@ -119,6 +119,12 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         drag.connect("released", lambda *_: self.on_mouse_up())
         self.prompt.add_controller(drag)
 
+        backdrop = Gtk.GestureClick()
+        backdrop.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        backdrop.connect("pressed", self.on_backdrop_pressed)
+        backdrop.connect("released", self.on_backdrop_released)
+        self.add_controller(backdrop)
+
         self.prompt_input.connect("changed", lambda *_: self.on_input_changed())
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_input_key_press)
@@ -136,11 +142,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if self.get_opacity() == 1:
             return
 
-        gtk4.add_css_class(self.theme_root, "app")
-        gtk4.add_css_class(self.theme_root, f"gosh-theme-{getattr(self.settings, 'look_id', 'spotlight')}")
-        gtk4.add_css_class(self.theme_root, f"gosh-density-{self._chrome.get('density') or 'comfortable'}")
-        if not self._chrome.get("show_search_icon", True):
-            gtk4.add_css_class(self.theme_root, "gosh-no-search-icon")
+        self._apply_look_classes()
         gtk4.add_css_class(self.prompt, "prompt")
         gtk4.add_css_class(self.results_view, "result-box")
         gtk4.add_css_class(self.prompt_input, "input")
@@ -151,6 +153,24 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.apply_theme()
         self.position_window()
         self.set_opacity(1)
+
+    def _apply_look_classes(self) -> None:
+        for css_class in list(self.theme_root.get_css_classes()):
+            if css_class.startswith(("gosh-theme-", "gosh-density-")) or css_class == "gosh-no-search-icon":
+                gtk4.remove_css_class(self.theme_root, css_class)
+        gtk4.add_css_class(self.theme_root, "app")
+        gtk4.add_css_class(self.theme_root, f"gosh-theme-{getattr(self.settings, 'look_id', 'spotlight')}")
+        gtk4.add_css_class(self.theme_root, f"gosh-density-{self._chrome.get('density') or 'comfortable'}")
+        if not self._chrome.get("show_search_icon", True):
+            gtk4.add_css_class(self.theme_root, "gosh-no-search-icon")
+
+    def restyle_from_settings(self) -> None:
+        self.settings = Settings.load(force=True)
+        ensure_look_chrome(self.settings)
+        self._chrome = chrome_from_settings(self.settings)
+        self._apply_look_classes()
+        self.apply_theme()
+        self.position_window()
 
     def deferred_init(self) -> None:
         if not self.get_application():
@@ -276,6 +296,39 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
     def on_mouse_up(self, *_args: Any) -> None:
         self.is_dragging = False
+
+    def _click_outside_card(self, x: float, y: float) -> bool:
+        from ulauncher.modes.launcher.click_outside import click_is_outside_card
+
+        compute = getattr(self.theme_root, "compute_bounds", None)
+        if callable(compute):
+            ok, bounds = compute(self)
+            if ok:
+                return click_is_outside_card(
+                    x - bounds.get_x(),
+                    y - bounds.get_y(),
+                    bounds.get_width(),
+                    bounds.get_height(),
+                )
+        width = float(self.theme_root.get_width() or 0)
+        height = float(self.theme_root.get_height() or 0)
+        return click_is_outside_card(x, y, width, height)
+
+    def on_backdrop_pressed(self, gesture: Gtk.GestureClick, _n_press: int, x: float, y: float) -> None:
+        from ulauncher.modes.launcher.click_outside import backdrop_claims_event
+
+        if not self._click_outside_card(x, y):
+            return
+        if backdrop_claims_event("button-press"):
+            state = getattr(Gtk, "EventSequenceState", None)
+            if state is not None:
+                gesture.set_state(state.CLAIMED)
+
+    def on_backdrop_released(self, _gesture: Gtk.GestureClick, _n_press: int, x: float, y: float) -> None:
+        from ulauncher.modes.launcher.click_outside import backdrop_should_close
+
+        if self._click_outside_card(x, y) and backdrop_should_close("button-release"):
+            self.close(save_query=True)
 
     def get_app(self) -> UlauncherApp:
         return cast("UlauncherApp", self.get_application())

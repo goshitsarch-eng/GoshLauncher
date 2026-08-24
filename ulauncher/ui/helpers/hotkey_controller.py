@@ -6,6 +6,7 @@ from shutil import which
 
 from ulauncher import app_id
 from ulauncher.gi import Gio, GLib
+from ulauncher.modes.launcher.shortcut import shortcut_attempts, shortcut_retry_list
 from ulauncher.ui.hotkey_dialog import HotkeyDialog
 from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME
 from ulauncher.utils.launch_detached import launch_detached
@@ -108,6 +109,27 @@ class HotkeyController:
                 plasma_service_controller.restart()
             return True
         if IS_SUPPORTED:
-            _set_hotkey(default_hotkey)
-            return True
+            current = _current_gnome_grab() if DESKTOP_ID == "GNOME" else ""
+            if current and not shortcut_retry_list(default_hotkey, current):
+                logger.debug("Keeping previous global shortcut grab")
+                return False
+            for accel in shortcut_attempts(default_hotkey):
+                try:
+                    _set_hotkey(accel)
+                except (GLib.GError, OSError, subprocess.CalledProcessError, TypeError, ValueError):
+                    logger.debug("Shortcut grab failed for %s", accel, exc_info=True)
+                else:
+                    return True
+            return False
         return False
+
+
+def _current_gnome_grab() -> str:
+    try:
+        base_schema = "org.gnome.settings-daemon.plugins.media-keys"
+        spec_schema = f"{base_schema}.custom-keybinding"
+        spec_path = f"/{spec_schema.replace('.', '/')}s/ulauncher/"
+        spec = Gio.Settings.new_with_path(spec_schema, spec_path)
+        return spec.get_string("binding") or ""
+    except (GLib.GError, AttributeError, TypeError):
+        return ""

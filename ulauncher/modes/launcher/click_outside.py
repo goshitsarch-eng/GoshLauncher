@@ -1,0 +1,48 @@
+"""Click-outside claiming, ported from Spotlight-goshos backdropBox.js."""
+
+from __future__ import annotations
+
+from typing import Any
+
+# swallow the press so click-outside does not activate a window below
+_STOP_KINDS = frozenset({"button-press", "touch-begin", "touch-update", "touch-cancel"})
+_CLOSE_KINDS = frozenset({"button-release", "touch-end"})
+
+
+def backdrop_pointer_action(kind: str) -> str:
+    if kind in _STOP_KINDS:
+        return "stop"
+    if kind in _CLOSE_KINDS:
+        return "close"
+    return "propagate"
+
+
+def backdrop_claims_event(kind: str) -> bool:
+    return backdrop_pointer_action(kind) != "propagate"
+
+
+def backdrop_should_close(kind: str) -> bool:
+    return backdrop_pointer_action(kind) == "close"
+
+
+def click_is_outside_card(x: float, y: float, width: float, height: float) -> bool:
+    return x < 0 or y < 0 or x > width or y > height
+
+
+def backdrop_box(monitors: list[Any]) -> dict[str, float]:
+    if not monitors:
+        return {"x": 0, "y": 0, "width": 0, "height": 0}
+    min_x = float(getattr(monitors[0], "x", 0))
+    min_y = float(getattr(monitors[0], "y", 0))
+    max_x = min_x + float(getattr(monitors[0], "width", 0))
+    max_y = min_y + float(getattr(monitors[0], "height", 0))
+    for monitor in monitors[1:]:
+        left = float(getattr(monitor, "x", 0))
+        top = float(getattr(monitor, "y", 0))
+        right = left + float(getattr(monitor, "width", 0))
+        bottom = top + float(getattr(monitor, "height", 0))
+        min_x = min(min_x, left)
+        min_y = min(min_y, top)
+        max_x = max(max_x, right)
+        max_y = max(max_y, bottom)
+    return {"x": min_x, "y": min_y, "width": max_x - min_x, "height": max_y - min_y}
