@@ -101,3 +101,17 @@ def test_every_look_has_theme_css() -> None:
     assert len(ids) == 17
     for look_id in ids:
         assert f".gosh-theme-{look_id}" in text
+
+
+def test_hidden_search_icon_inset_follows_goshos_order() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    compact = text.find(".app.gosh-density-compact .input")
+    no_icon_20 = text.find(".app.gosh-no-search-icon .input {\n  padding-left: 20px;")
+    compact_no = text.find(".app.gosh-density-compact.gosh-no-search-icon .input {\n  padding-left: 16px;")
+    rofi = text.find(".app.gosh-theme-rofi.gosh-no-search-icon .input")
+    assert compact != -1
+    assert compact < no_icon_20 < compact_no < rofi
+    leftover_16 = text.find(".app.gosh-no-search-icon .input {\n  padding-left: 16px;")
+    assert leftover_16 == -1

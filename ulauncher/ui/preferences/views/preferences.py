@@ -50,6 +50,7 @@ class PreferencesView(BaseView):
         # Add sections
         self._updating_chrome = False
         self._prefs_signals = None
+        self._feature_switches: dict[str, Gtk.Switch] = {}
         self._add_general_section(prefs_view)
         self._add_chrome_section(prefs_view)
         self._add_applications_section(prefs_view)
@@ -402,6 +403,17 @@ class PreferencesView(BaseView):
             bind_settings_changed(
                 self._prefs_signals, "enable_prefix_modes", self._command_switch, self._sync_dependent_switches
             )
+        for attr, switch in getattr(self, "_chrome_switches", {}).items():
+            bind_settings_changed(self._prefs_signals, attr, switch, self._sync_chrome_widgets)
+        for attr, spin in (
+            ("results_max_height", getattr(self, "_height_spin", None)),
+            ("max_per_category", getattr(self, "_max_spin", None)),
+            ("icon_size", getattr(self, "_icon_spin", None)),
+        ):
+            if spin is not None:
+                bind_settings_changed(self._prefs_signals, attr, spin, self._sync_chrome_widgets)
+        for attr, switch in getattr(self, "_feature_switches", {}).items():
+            bind_settings_changed(self._prefs_signals, attr, switch, self._sync_feature_switches)
 
     def _follow_combo(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
         self._updating_chrome = True
@@ -429,6 +441,17 @@ class PreferencesView(BaseView):
         if hasattr(self, "_command_switch"):
             self._command_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_prefix_modes))
 
+    def _sync_feature_switches(self) -> None:
+        self._updating_chrome = True
+        try:
+            for attr, switch in getattr(self, "_feature_switches", {}).items():
+                desired = bool(getattr(self.settings, attr))
+                if switch.get_active() != desired:
+                    switch.set_active(desired)
+        finally:
+            self._updating_chrome = False
+        self._sync_dependent_switches()
+
     def _add_applications_section(self, parent: Gtk.Box) -> None:
         """Add applications settings section"""
         applications_box = self._create_section_container(parent, "Applications")
@@ -437,6 +460,7 @@ class PreferencesView(BaseView):
         app_mode_switch = Gtk.Switch(active=self.settings.enable_application_mode)
         app_mode_switch.connect("notify::active", self._on_app_mode_toggled)
         self._app_mode_switch = app_mode_switch
+        self._feature_switches["enable_application_mode"] = app_mode_switch
         desc = "Include desktop applications alongside shortcuts and extensions in search results."
         self._add_setting_row(applications_box, "Include applications in search", app_mode_switch, desc)
 
@@ -468,6 +492,7 @@ class PreferencesView(BaseView):
         prefix_switch = Gtk.Switch(active=self.settings.enable_prefix_modes)
         prefix_switch.connect("notify::active", self._on_prefix_modes_toggled)
         self._prefix_switch = prefix_switch
+        self._feature_switches["enable_prefix_modes"] = prefix_switch
         self._add_setting_row(
             launcher_box,
             "Prefix modes",
@@ -478,6 +503,7 @@ class PreferencesView(BaseView):
 
         empty_switch = Gtk.Switch(active=self.settings.enable_empty_suggestions)
         empty_switch.connect("notify::active", self._on_bool_setting("enable_empty_suggestions"))
+        self._feature_switches["enable_empty_suggestions"] = empty_switch
         self._add_setting_row(
             launcher_box,
             "Empty-state suggestions",
@@ -493,6 +519,7 @@ class PreferencesView(BaseView):
         )
         app_actions_switch.connect("notify::active", self._on_bool_setting("enable_app_actions"))
         self._app_actions_switch = app_actions_switch
+        self._feature_switches["enable_app_actions"] = app_actions_switch
         self._add_setting_row(
             launcher_box,
             "Application actions",
@@ -533,6 +560,7 @@ class PreferencesView(BaseView):
         ):
             switch = Gtk.Switch(active=bool(getattr(self.settings, attr)))
             switch.connect("notify::active", self._on_bool_setting(attr))
+            self._feature_switches[attr] = switch
             self._add_setting_row(launcher_box, title, switch, description)
 
         from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
@@ -542,6 +570,7 @@ class PreferencesView(BaseView):
             sensitive=dependent_row_sensitive(self.settings.enable_prefix_modes),
         )
         self._command_switch.connect("notify::active", self._on_bool_setting("enable_command_run"))
+        self._feature_switches["enable_command_run"] = self._command_switch
         self._add_setting_row(
             launcher_box,
             "Command runner",

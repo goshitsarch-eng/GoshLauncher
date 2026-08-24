@@ -1283,9 +1283,6 @@
   padding-top: 2px;
   padding-bottom: 2px;
 }
-.app.gosh-no-search-icon .input {
-  padding-left: 16px;
-}
 .gosh-theme-omarchy .item-box,
 .gosh-theme-anyrun .item-box {
   border-left: 3px solid transparent;

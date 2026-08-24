@@ -119,11 +119,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.prompt = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.prompt.set_can_focus(False)
         gtk4.add_css_class(self.prompt, "prompt")
-        self.prompt_input = Gtk.Entry(hexpand=True, height_request=30)
-        self.prompt_input.set_margin_top(15)
-        self.prompt_input.set_margin_bottom(15)
-        self.prompt_input.set_margin_start(20)
-        self.prompt_input.set_margin_end(20)
+        self.prompt_input = Gtk.Entry(hexpand=True)
+        # CSS .input padding is the inset; widget margins would ignore look/no-icon rules
 
         self.prefs_btn = Gtk.Button(name="prefs_btn", width_request=24, height_request=24)
         self.prefs_btn.set_halign(Gtk.Align.CENTER)
@@ -137,7 +134,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.search_icon = Gtk.Image(icon_name=SEARCH_ICON_NAME, pixel_size=SEARCH_ICON_PX)
         self.search_icon.set_can_focus(popup_chrome_should_focus())
         gtk4.add_css_class(self.search_icon, "search-icon")
-        self.search_icon.set_margin_start(12)
         self.search_icon.set_valign(Gtk.Align.CENTER)
         gtk4.pack_start(self.prompt, self.search_icon, False, False, 0)
         gtk4.pack_start(self.prompt, self.prompt_input, True, True, 0)
