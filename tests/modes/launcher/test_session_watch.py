@@ -11,6 +11,7 @@ from ulauncher.modes.launcher.session_watch import (
     screensaver_active_changed_should_close,
     session_signal_should_close,
 )
+from ulauncher.modes.launcher.system_modal import SYSTEM_MODAL_WATCHES
 from ulauncher.modes.launcher.time_limits import (
     MALCONTENT_TIMER_IFACE,
     MALCONTENT_TIMER_SIGNAL,
@@ -63,7 +64,24 @@ def test_overview_and_login_signals_close_the_popup() -> None:
     assert ALL_WATCHES[:2] == SCREENSAVER_WATCHES
     assert OVERVIEW_WATCHES[0] in ALL_WATCHES
     assert TIME_LIMITS_WATCHES[0] in ALL_WATCHES
+    assert SYSTEM_MODAL_WATCHES[0] in ALL_WATCHES
     assert session_signal_should_close(MALCONTENT_TIMER_IFACE, MALCONTENT_TIMER_SIGNAL, ()) is False
+    assert (
+        session_signal_should_close(
+            "org.freedesktop.DBus",
+            "NameOwnerChanged",
+            ("org.gnome.Screenshot", "", ":1.20"),
+        )
+        is True
+    )
+    assert (
+        session_signal_should_close(
+            "org.freedesktop.DBus",
+            "NameOwnerChanged",
+            ("org.freedesktop.PolicyKit1", "", ":1.20"),
+        )
+        is False
+    )
 
 
 def test_session_watcher_injected_subscribe_and_close() -> None:

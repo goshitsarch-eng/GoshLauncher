@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any, Callable
 
+from ulauncher.modes.launcher.system_modal import SYSTEM_MODAL_WATCHES, name_owner_changed_should_close
 from ulauncher.modes.launcher.time_limits import (
     MALCONTENT_TIMER_IFACE,
     MALCONTENT_TIMER_SIGNAL,
@@ -54,7 +55,13 @@ LOGIN_WATCHES = (
     ),
 )
 
-ALL_WATCHES = (*SCREENSAVER_WATCHES, *OVERVIEW_WATCHES, *LOGIN_WATCHES, *TIME_LIMITS_WATCHES)
+ALL_WATCHES = (
+    *SCREENSAVER_WATCHES,
+    *OVERVIEW_WATCHES,
+    *LOGIN_WATCHES,
+    *TIME_LIMITS_WATCHES,
+    *SYSTEM_MODAL_WATCHES,
+)
 
 
 def next_session_watch_action(was_listening: bool, want_listening: bool) -> str:
@@ -128,6 +135,12 @@ def session_signal_should_close(interface_name: str, signal_name: str, args: Any
             iface = str(payload[0])
             changed = payload[1] if len(payload) > 1 else {}
             return properties_changed_should_close(iface, changed)
+        return False
+    if signal_name == "NameOwnerChanged":
+        if interface_name != "org.freedesktop.DBus":
+            return False
+        if isinstance(payload, (list, tuple)) and len(payload) >= 3:
+            return name_owner_changed_should_close(payload[0], payload[1], payload[2])
         return False
     return False
 

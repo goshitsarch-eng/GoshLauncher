@@ -7,6 +7,7 @@ import gi
 from gi.repository import Gtk
 
 from ulauncher.gi import GLib
+from ulauncher.modes.launcher.system_modal import launcher_keyboard_mode
 
 LayerShell = None
 try:
@@ -35,7 +36,7 @@ def enable(window: Gtk.Window) -> bool:
     LayerShell.set_namespace(window, "ulauncher")
     keyboard_mode = getattr(LayerShell, "KeyboardMode", None)
     if keyboard_mode is not None:
-        LayerShell.set_keyboard_mode(window, keyboard_mode.EXCLUSIVE)
+        LayerShell.set_keyboard_mode(window, launcher_keyboard_mode(keyboard_mode))
     LayerShell.set_layer(window, LayerShell.Layer.OVERLAY)
     LayerShell.set_exclusive_zone(window, 0)
     return True
