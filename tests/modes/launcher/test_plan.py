@@ -67,3 +67,12 @@ def test_merge_empty_suggestions_windows_first() -> None:
     assert merged == ["w1", "w2", "a1"]
     merged_apps = merge_empty_suggestions("default", ["w1"], ["a1", "a2"], 2)
     assert merged_apps == ["a1", "a2"]
+
+
+def test_spoken_open_firefox_strips_verb() -> None:
+    from ulauncher.modes.launcher.plan import strip_leading_verb
+
+    assert strip_leading_verb("open firefox") == "firefox"
+    assert strip_leading_verb("please open firefox") == "firefox"
+    assert strip_leading_verb("open source") == "open source"
+    assert strip_leading_verb("find windows firefox") == "firefox"

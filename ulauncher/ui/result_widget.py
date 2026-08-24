@@ -44,13 +44,13 @@ class ResultWidget(Gtk.Box):
         self._on_activate = on_activate
         self.jump_keys = jump_keys
         text_scaling_factor = get_text_scaling_factor()
-        from ulauncher.modes.launcher.looks import get_look, icon_size_for_look
+        from ulauncher.modes.launcher.looks import chrome_from_settings, icon_size_for_look
         from ulauncher.utils.settings import Settings
 
-        look = get_look(getattr(Settings.load(), "look_id", "spotlight"))
-        chrome = look["look"]
+        chrome = chrome_from_settings(Settings.load())
         icon_size = icon_size_for_look(chrome, str(chrome.get("density") or "comfortable"))
         self._show_numbers = bool(chrome.get("show_numbers"))
+        show_icons = bool(chrome.get("show_result_icons", True))
         inner_margin_x = int(12.0 * text_scaling_factor)
         outer_margin_x = int(18.0 * text_scaling_factor)
         margin_y = (3 if result.compact else 5) * text_scaling_factor
@@ -72,10 +72,13 @@ class ResultWidget(Gtk.Box):
         gtk4.add_css_class(item_container, "item-container")
         self.item_box.append(item_container)
 
-        icon = Gtk.Image()
-        icon.set_from_paintable(load_icon_paintable(result.icon or "image-missing", icon_size, self.get_scale_factor()))
-        gtk4.add_css_class(icon, "item-icon")
-        gtk4.pack_start(item_container, icon, False, True, 0)
+        if show_icons:
+            icon = Gtk.Image()
+            icon.set_from_paintable(
+                load_icon_paintable(result.icon or "image-missing", icon_size, self.get_scale_factor())
+            )
+            gtk4.add_css_class(icon, "item-icon")
+            gtk4.pack_start(item_container, icon, False, True, 0)
 
         self.text_container = Gtk.Box(
             width_request=int(350.0 * text_scaling_factor),

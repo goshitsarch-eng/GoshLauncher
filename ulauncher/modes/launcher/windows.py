@@ -14,16 +14,14 @@ from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_
 logger = logging.getLogger(__name__)
 
 _CLOSE_RE = re.compile(
-    r"^(?:please\s+|can\s+you\s+|could\s+you\s+)?"
-    r"(?:close|quit)\s+(?:the\s+)?(?:(.+?)\s+)?(?:window|application|app)?\s*(.*)$",
+    r"^(?:please\s+|can you\s+|could you\s+)?"
+    r"(close|quit|kill|force-?quit|force\s+quit|force\s+close)\s+(.+)$",
     re.IGNORECASE,
 )
-_KILL_RE = re.compile(
-    r"^(?:please\s+|can\s+you\s+|could\s+you\s+)?"
-    r"(?:kill|force[\s-]*(?:quit|close)|forcequit)\s+(?:the\s+)?(.+)$",
+_WS_RE = re.compile(
+    r"^(?:(?:go to|switch to|move to)\s+)?(?:workspace|ws)\s+(.+)$",
     re.IGNORECASE,
 )
-_WS_RE = re.compile(r"^(?:workspace|ws)\s+(.+)$", re.IGNORECASE)
 
 
 @dataclass
@@ -123,9 +121,6 @@ def _workspace_label(win: WindowInfo) -> str:
 def parse_workspace_query(query: str) -> int | None:
     match = _WS_RE.match(query.strip())
     if not match:
-        if query.strip().isdigit():
-            value = int(query.strip())
-            return value - 1 if value >= 1 else None
         return None
     rest = replace_number_words(match.group(1)).strip()
     if rest.isdigit():
@@ -134,17 +129,26 @@ def parse_workspace_query(query: str) -> int | None:
     return None
 
 
+def _strip_close_title(title: str) -> str:
+    text = title.strip()
+    article = re.match(r"^(?:my|the|an?)\s+(.+)$", text, re.IGNORECASE)
+    if article:
+        text = article.group(1).strip()
+    stripped = re.sub(r"\s+(windows?|applications?|apps?)$", "", text, flags=re.IGNORECASE).strip()
+    return stripped or text
+
+
 def parse_window_intent(query: str) -> tuple[str, str]:
     text = query.strip()
-    kill = _KILL_RE.match(text)
-    if kill:
-        return "kill", kill.group(1).strip()
-    close = _CLOSE_RE.match(text)
-    if close and (close.group(1) or close.group(2)):
-        rest = " ".join(p for p in close.groups() if p).strip()
-        if rest:
-            return "close", rest
-    return "focus", text
+    match = _CLOSE_RE.match(text)
+    if not match:
+        return "focus", text
+    raw = re.sub(r"[\s-]", "", match.group(1).lower())
+    intent = "kill" if raw in {"kill", "forcequit", "forceclose"} else ("quit" if raw == "quit" else "close")
+    title = _strip_close_title(match.group(2))
+    if not title:
+        return "focus", text
+    return intent, title
 
 
 def window_matches(win: WindowInfo, query: str) -> bool:
@@ -181,7 +185,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
             continue
         if not window_matches(win, target):
             continue
-        verb = {"focus": "Switch to", "close": "Close", "kill": "Force quit"}[intent]
+        verb = {"focus": "Switch to", "close": "Close", "quit": "Quit", "kill": "Force quit"}[intent]
         results.append(
             {
                 "kind": intent,

@@ -11,7 +11,7 @@ _settings_file = f"{paths.CONFIG}/settings.json"
 class Settings(JsonConf):
     arrow_key_aliases: str = "hjkl"
     auto_resume: bool = False
-    base_width: int = 750
+    base_width: int = 600
     close_on_focus_out: bool = True
     disable_desktop_filters: bool = False
     enable_application_mode: bool = True
@@ -30,6 +30,15 @@ class Settings(JsonConf):
     window_shadow: int = 5
     # Spotlight-goshos launcher providers and chrome
     look_id: str = "spotlight"
+    applied_look: str = "spotlight"
+    popup_position: str = "center"
+    row_density: str = "comfortable"
+    show_result_numbers: bool = False
+    show_section_headers: bool = True
+    show_search_icon: bool = True
+    show_result_icons: bool = True
+    show_descriptions: bool = True
+    icon_size: int = 28
     max_per_category: int = 6
     results_max_height: int = 400
     web_search_engine: str = "google"

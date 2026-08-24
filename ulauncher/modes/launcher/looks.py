@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 class LookChrome(TypedDict):
@@ -218,3 +218,56 @@ def icon_size_for_look(chrome: LookChrome, density: str) -> int:
     if density == "compact":
         return round(chrome["icon_size"] * 0.8)
     return chrome["icon_size"]
+
+
+_CHROME_SETTINGS = (
+    ("position", "popup_position"),
+    ("density", "row_density"),
+    ("show_numbers", "show_result_numbers"),
+    ("show_headers", "show_section_headers"),
+    ("show_search_icon", "show_search_icon"),
+    ("show_result_icons", "show_result_icons"),
+    ("show_descriptions", "show_descriptions"),
+    ("result_order", "result_order"),
+    ("icon_size", "icon_size"),
+)
+
+
+def look_chrome_fields(look: Look) -> dict[str, Any]:
+    chrome = look["look"]
+    fields: dict[str, Any] = {"applied_look": look["id"]}
+    for chrome_key, settings_key in _CHROME_SETTINGS:
+        fields[settings_key] = chrome[chrome_key]
+    return fields
+
+
+def apply_look_chrome(settings: Any, look_id: str | None = None) -> dict[str, Any]:
+    """Stamp a look's chrome onto settings, matching goshos applyLookSettings."""
+    look = get_look(look_id or getattr(settings, "look_id", "spotlight"))
+    payload = {"look_id": look["id"], **look_chrome_fields(look)}
+    save = getattr(settings, "save", None)
+    if callable(save):
+        save(payload)
+    else:
+        for key, value in payload.items():
+            setattr(settings, key, value)
+    return payload
+
+
+def ensure_look_chrome(settings: Any) -> None:
+    look = get_look(getattr(settings, "look_id", "spotlight"))
+    if getattr(settings, "applied_look", "") != look["id"]:
+        apply_look_chrome(settings, look["id"])
+
+
+def chrome_from_settings(settings: Any) -> LookChrome:
+    look = get_look(getattr(settings, "look_id", "spotlight"))
+    chrome: LookChrome = dict(look["look"])
+    if getattr(settings, "applied_look", "") != look["id"]:
+        return chrome
+    for chrome_key, settings_key in _CHROME_SETTINGS:
+        if hasattr(settings, settings_key):
+            value = getattr(settings, settings_key)
+            if value not in (None, ""):
+                chrome[chrome_key] = value  # type: ignore[literal-required]
+    return chrome

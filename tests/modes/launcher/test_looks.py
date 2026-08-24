@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.looks import LOOKS, get_look, look_ids
+from types import SimpleNamespace
+
+from ulauncher.modes.launcher.looks import LOOKS, apply_look_chrome, chrome_from_settings, get_look, look_ids
 
 
 def test_seventeen_looks() -> None:
@@ -12,3 +14,17 @@ def test_seventeen_looks() -> None:
     pop = get_look("popos")
     assert pop["look"]["result_order"] == "windows-first"
     assert pop["look"]["show_numbers"] is True
+
+
+def test_apply_look_chrome_stamps_popos() -> None:
+    settings = SimpleNamespace(look_id="spotlight", applied_look="spotlight")
+    apply_look_chrome(settings, "popos")
+    assert settings.look_id == "popos"
+    assert settings.applied_look == "popos"
+    assert settings.popup_position == "top"
+    assert settings.show_result_numbers is True
+    assert settings.result_order == "windows-first"
+    chrome = chrome_from_settings(settings)
+    assert chrome["position"] == "top"
+    assert chrome["show_numbers"] is True
+    assert chrome["result_order"] == "windows-first"

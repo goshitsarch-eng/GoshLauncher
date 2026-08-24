@@ -1,77 +1,1292 @@
-/* Spotlight-goshos launcher looks. Applied as .gosh-theme-{id} on .app */
+/* Gosh Is Launcher looks, converted from spotlight-goshos stylesheet.css for GTK4.
+   Theme classes hang on .app. No blur. Width is not part of a look. */
+/* gosh is launcher - stylesheet */
+/* theme classes hang on the outer container and restyle children */
+/* no blur effects - gnome blur is expensive and noisy on some hardware */
 
-.gosh-theme-spotlight.app {
-  background-color: #1c1c1e;
-  border-radius: 18px;
-  border: 1px solid #2c2c2e;
+.app,
+.app * {
+  border: none;
+  outline: none;
 }
-.gosh-theme-spotlight .input { color: #f2f2f7; caret-color: #0a84ff; }
-.gosh-theme-spotlight .item-box.selected { background-color: #0a84ff; border-radius: 10px; }
 
-.gosh-theme-omarchy.app { background-color: #1a1b26; border-radius: 8px; border: 1px solid #24283b; }
-.gosh-theme-omarchy .input { color: #c0caf5; caret-color: #7aa2f7; }
-.gosh-theme-omarchy .item-box.selected { background-color: #33467c; }
+.app {
+  padding: 0;
+}
 
-.gosh-theme-popos.app { background-color: #2b2e38; border-radius: 12px; }
-.gosh-theme-popos .input { color: #f6f6f6; caret-color: #94ebff; }
-.gosh-theme-popos .item-box.selected { background-color: #4d5568; }
+.search-icon {
+  icon-size: 20px;
+  padding: 0 14px 0 20px;
+  color: #98989d;
+}
 
-.gosh-theme-ulauncher.app { background-color: #3c4141; border-radius: 4px; }
-.gosh-theme-ulauncher .input { color: #ddd; caret-color: #faa41a; }
-.gosh-theme-ulauncher .item-box.selected { background-color: #285c99; }
+.prompt {
+  background-color: rgb(28, 28, 30);
+  border-radius: 32px;
+  padding: 4px 4px 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
 
-.gosh-theme-krunner.app { background-color: #2a2e32; border-radius: 4px; border: 1px solid #3daee9; }
-.gosh-theme-krunner .input { color: #fcfcfc; caret-color: #3daee9; }
-.gosh-theme-krunner .item-box.selected { background-color: #3daee9; }
+.input {
+  background-color: transparent;
+  color: #f5f5f7;
+  border: none;
+  border-radius: 32px;
+  padding: 16px 20px 16px 0;
+  font-size: 20px;
+  font-weight: 400;
+  caret-color: #ffffff;
+  selection-background-color: #0a84ff;
+}
 
-.gosh-theme-gnome.app { background-color: #242424; border-radius: 16px; }
-.gosh-theme-gnome .input { color: #eeeeee; caret-color: @theme_selected_bg_color; }
-.gosh-theme-gnome .item-box.selected { background-color: alpha(@theme_selected_bg_color, 0.35); border-radius: 10px; }
+.input:focus {
+  border: none;
+  outline: none;
+}
 
-.gosh-theme-rofi.app { background-color: #222222; border-radius: 0; }
-.gosh-theme-rofi .input { color: #cccccc; caret-color: #005577; }
-.gosh-theme-rofi .item-box.selected { background-color: #005577; }
+.result-box {
+  background-color: rgb(28, 28, 30);
+  border-radius: 24px;
+  padding: 6px;
+  max-height: 400px;
+  margin-top: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
 
-.gosh-theme-raycast.app { background-color: #1c1c1c; border-radius: 12px; }
-.gosh-theme-raycast .input { color: #ffffff; caret-color: #ff6363; }
-.gosh-theme-raycast .item-box.selected { background-color: #2e2e2e; border-radius: 8px; }
+.item-header {
+  color: #98989d;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 8px 14px 2px 14px;
+}
 
-.gosh-theme-albert.app { background-color: #232629; border-radius: 8px; }
-.gosh-theme-albert .input { color: #eff0f1; caret-color: #1d99f3; }
-.gosh-theme-albert .item-box.selected { background-color: #1d99f3; }
+.item-box {
+  padding: 8px 12px;
+  border-radius: 16px;
+  color: #f5f5f7;
+}
 
-.gosh-theme-wofi.app { background-color: #1d1f21; border-radius: 0; }
-.gosh-theme-wofi .input { color: #c5c8c6; caret-color: #285577; }
-.gosh-theme-wofi .item-box.selected { background-color: #285577; }
+.item-box:hover,
+.item-box:focus,
+.item-box.selected {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
 
-.gosh-theme-fuzzel.app { background-color: #fdf6e3; border-radius: 10px; border: 2px solid #93a1a1; }
-.gosh-theme-fuzzel .input { color: #657b83; caret-color: #268bd2; }
-.gosh-theme-fuzzel .item-box.selected { background-color: #eee8d5; }
-.gosh-theme-fuzzel .item-name, .gosh-theme-fuzzel .item-descr { color: #657b83; }
+.item-icon {
+  padding-right: 12px;
+}
 
-.gosh-theme-anyrun.app { background-color: #1e1e2e; border-radius: 16px; }
-.gosh-theme-anyrun .input { color: #cdd6f4; caret-color: #89b4fa; }
-.gosh-theme-anyrun .item-box.selected { background-color: #313244; border-radius: 10px; }
+.item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+}
 
-.gosh-theme-tofi.app { background-color: #000000; border-radius: 0; }
-.gosh-theme-tofi .input { color: #ffffff; caret-color: #ffffff; }
-.gosh-theme-tofi .item-box.selected { background-color: #ffffff; }
-.gosh-theme-tofi .item-box.selected .item-name { color: #000000; }
+.item-descr {
+  font-size: 11px;
+  color: #98989d;
+  padding-top: 1px;
+}
 
-.gosh-theme-light.app { background-color: #f6f5f4; border-radius: 16px; }
-.gosh-theme-light .input { color: #241f31; caret-color: @theme_selected_bg_color; }
-.gosh-theme-light .item-box.selected { background-color: alpha(@theme_selected_bg_color, 0.25); border-radius: 10px; }
-.gosh-theme-light .item-name { color: #241f31; }
+.item-box:hover .item-descr,
+.item-box:focus .item-descr,
+.item-box.selected .item-descr {
+  color: rgba(255, 255, 255, 0.85);
+}
 
-.gosh-theme-powertoys.app { background-color: #2c2c2c; border-radius: 8px; }
-.gosh-theme-powertoys .input { color: #ffffff; caret-color: #0078d4; }
-.gosh-theme-powertoys .item-box.selected { background-color: #0078d4; border-radius: 4px; }
+.item-shortcut {
+  font-size: 12px;
+  font-weight: 600;
+  color: #98989d;
+  padding-left: 10px;
+}
 
-.gosh-theme-synapse.app { background-color: #2d2d2d; border-radius: 6px; }
-.gosh-theme-synapse .input { color: #eeeeee; caret-color: #e95420; }
-.gosh-theme-synapse .item-box.selected { background-color: #e95420; }
+.gosh-no-results {
+  padding: 28px 24px;
+  color: #98989d;
+  font-size: 14px;
+  text-align: center;
+}
 
-.gosh-theme-onagre.app { background-color: #2b2a27; border-radius: 10px; }
-.gosh-theme-onagre .input { color: #e6e4df; caret-color: #e9a825; }
-.gosh-theme-onagre .item-box.selected { background-color: #e9a825; }
-.gosh-theme-onagre .item-box.selected .item-name { color: #1a1916; }
+.gosh-no-results-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f5f5f7;
+  padding-bottom: 4px;
+}
+
+/* spotlight look is the default chrome on .app */
+.gosh-theme-spotlight.app {
+  padding: 0;
+}
+
+/* omarchy look - tokyo night single panel */
+.gosh-theme-omarchy.app {
+  background-color: #1a1b26;
+  border-radius: 12px;
+  border: 1px solid #3b4261;
+  padding: 8px;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
+}
+
+.gosh-theme-omarchy .prompt,
+.gosh-theme-omarchy .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-omarchy .input {
+  color: #c0caf5;
+  caret-color: #7aa2f7;
+  selection-background-color: #7aa2f7;
+  font-size: 16px;
+  padding: 10px 12px 12px 0;
+  border-radius: 0;
+}
+
+.gosh-theme-omarchy .search-icon {
+  color: #7aa2f7;
+  padding: 0 10px 0 8px;
+}
+
+.gosh-theme-omarchy .item-header {
+  color: #565f89;
+}
+
+.gosh-theme-omarchy .item-box {
+  color: #a9b1d6;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+}
+
+.gosh-theme-omarchy .item-box:hover,
+.gosh-theme-omarchy .item-box:focus,
+.gosh-theme-omarchy .item-box.selected {
+  background-color: rgba(122, 162, 247, 0.18);
+  color: #c0caf5;
+}
+
+/* reserve the leading edge so selection does not shift the title */
+.gosh-theme-omarchy .item-box.selected {
+  border-left-color: #7aa2f7;
+}
+
+.gosh-theme-omarchy .item-descr,
+.gosh-theme-omarchy .item-shortcut {
+  color: #565f89;
+}
+
+.gosh-theme-omarchy .item-box.selected .item-descr,
+.gosh-theme-omarchy .item-box:hover .item-descr,
+.gosh-theme-omarchy .item-box.selected .item-shortcut,
+.gosh-theme-omarchy .item-box:hover .item-shortcut {
+  color: #c0caf5;
+}
+
+.gosh-theme-omarchy .gosh-no-results-title {
+  color: #c0caf5;
+}
+
+/* popos look - single card cooler gray roomy rows */
+.gosh-theme-popos.app {
+  background-color: #242426;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.gosh-theme-popos .prompt,
+.gosh-theme-popos .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-popos .input {
+  color: #f2f2f2;
+  caret-color: #6ba4f8;
+  selection-background-color: #6ba4f8;
+  font-size: 18px;
+  padding: 12px 12px 14px 0;
+  border-radius: 0;
+}
+
+.gosh-theme-popos .search-icon {
+  color: #6ba4f8;
+}
+
+.gosh-theme-popos .item-box {
+  color: #f2f2f2;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.gosh-theme-popos .item-box:hover,
+.gosh-theme-popos .item-box:focus,
+.gosh-theme-popos .item-box.selected {
+  background-color: rgba(107, 164, 248, 0.22);
+  color: #ffffff;
+}
+
+.gosh-theme-popos .item-shortcut {
+  color: #6ba4f8;
+  font-size: 13px;
+  min-width: 18px;
+}
+
+.gosh-theme-popos .item-box.selected .item-descr,
+.gosh-theme-popos .item-box:hover .item-descr,
+.gosh-theme-popos .item-box.selected .item-shortcut,
+.gosh-theme-popos .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-popos .item-header {
+  color: #9a9aa0;
+}
+
+/* ulauncher look - warmer dark panel larger type orange accent */
+.gosh-theme-ulauncher.app {
+  background-color: #2b2b2b;
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+.gosh-theme-ulauncher .prompt,
+.gosh-theme-ulauncher .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-ulauncher .input {
+  color: #ededed;
+  caret-color: #ff8c42;
+  selection-background-color: #ff8c42;
+  font-size: 18px;
+  padding: 12px 12px 12px 0;
+}
+
+.gosh-theme-ulauncher .search-icon {
+  color: #ff8c42;
+}
+
+.gosh-theme-ulauncher .item-box {
+  color: #ededed;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.gosh-theme-ulauncher .item-box:hover,
+.gosh-theme-ulauncher .item-box:focus,
+.gosh-theme-ulauncher .item-box.selected {
+  background-color: rgba(255, 140, 66, 0.22);
+  color: #ffffff;
+}
+
+.gosh-theme-ulauncher .item-box.selected .item-descr,
+.gosh-theme-ulauncher .item-box:hover .item-descr,
+.gosh-theme-ulauncher .item-box.selected .item-shortcut,
+.gosh-theme-ulauncher .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-ulauncher .item-header {
+  color: #b0b0b0;
+}
+
+/* krunner look - compact bar with a thin accent edge */
+.gosh-theme-krunner.app {
+  background-color: #2a2e32;
+  border-radius: 4px;
+  border: 1px solid #3daee9;
+  padding: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.gosh-theme-krunner .prompt,
+.gosh-theme-krunner .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-krunner .input {
+  color: #fcfcfc;
+  caret-color: #3daee9;
+  selection-background-color: #3daee9;
+  font-size: 15px;
+  padding: 8px 10px 8px 0;
+  border-radius: 0;
+}
+
+.gosh-theme-krunner .search-icon {
+  color: #3daee9;
+  padding: 0 8px 0 8px;
+}
+
+.gosh-theme-krunner .item-box {
+  color: #fcfcfc;
+  border-radius: 2px;
+  padding: 5px 8px;
+}
+
+.gosh-theme-krunner .item-box:hover,
+.gosh-theme-krunner .item-box:focus,
+.gosh-theme-krunner .item-box.selected {
+  background-color: #3daee9;
+  color: #ffffff;
+}
+
+.gosh-theme-krunner .item-box.selected .item-descr,
+.gosh-theme-krunner .item-box:hover .item-descr,
+.gosh-theme-krunner .item-box.selected .item-shortcut,
+.gosh-theme-krunner .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-krunner .item-header {
+  color: #7f8c8d;
+  padding: 4px 8px 2px 8px;
+}
+
+/* gnome look - adwaita card */
+.gosh-theme-gnome.app {
+  background-color: #303030;
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+.gosh-theme-gnome .prompt,
+.gosh-theme-gnome .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-gnome .input {
+  color: #eeeeec;
+  caret-color: #3584e4;
+  selection-background-color: #3584e4;
+  font-size: 16px;
+  padding: 10px 12px 10px 0;
+}
+
+.gosh-theme-gnome .search-icon {
+  color: #3584e4;
+}
+
+.gosh-theme-gnome .item-box {
+  color: #eeeeec;
+  border-radius: 10px;
+}
+
+.gosh-theme-gnome .item-box:hover,
+.gosh-theme-gnome .item-box:focus,
+.gosh-theme-gnome .item-box.selected {
+  background-color: #3584e4;
+  color: #ffffff;
+}
+
+.gosh-theme-gnome .item-box.selected .item-descr,
+.gosh-theme-gnome .item-box:hover .item-descr,
+.gosh-theme-gnome .item-box.selected .item-shortcut,
+.gosh-theme-gnome .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-gnome .item-header {
+  color: #c0bfbc;
+}
+
+/* rofi look - square list classic teal selection */
+.gosh-theme-rofi.app {
+  background-color: #111111;
+  border-radius: 0;
+  border: 1px solid #222222;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.gosh-theme-rofi .prompt,
+.gosh-theme-rofi .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-rofi .input {
+  color: #eeeeee;
+  caret-color: #005577;
+  selection-background-color: #005577;
+  font-size: 14px;
+  padding: 8px 10px 8px 0;
+  border-radius: 0;
+}
+
+.gosh-theme-rofi .search-icon {
+  color: #005577;
+  padding: 0 8px 0 6px;
+}
+
+.gosh-theme-rofi .item-box {
+  color: #bbbbbb;
+  border-radius: 0;
+  padding: 4px 8px;
+}
+
+.gosh-theme-rofi .item-box:hover,
+.gosh-theme-rofi .item-box:focus,
+.gosh-theme-rofi .item-box.selected {
+  background-color: #005577;
+  color: #ffffff;
+}
+
+.gosh-theme-rofi .item-box.selected .item-descr,
+.gosh-theme-rofi .item-box:hover .item-descr,
+.gosh-theme-rofi .item-box.selected .item-shortcut,
+.gosh-theme-rofi .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.gosh-theme-rofi .item-header {
+  color: #666666;
+  padding: 4px 8px 2px 8px;
+}
+
+/* raycast look - dark rounded panel red caret */
+.gosh-theme-raycast.app {
+  background-color: #161618;
+  border-radius: 16px;
+  padding: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.gosh-theme-raycast .prompt,
+.gosh-theme-raycast .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-raycast .input {
+  color: #f5f5f5;
+  caret-color: #ff6363;
+  selection-background-color: #ff6363;
+  font-size: 17px;
+  padding: 12px 12px 14px 0;
+}
+
+.gosh-theme-raycast .search-icon {
+  color: #ff6363;
+}
+
+.gosh-theme-raycast .item-box {
+  color: #ececec;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.gosh-theme-raycast .item-box:hover,
+.gosh-theme-raycast .item-box:focus,
+.gosh-theme-raycast .item-box.selected {
+  background-color: #3a3a3e;
+  color: #ffffff;
+}
+
+.gosh-theme-raycast .item-descr,
+.gosh-theme-raycast .item-shortcut {
+  color: #8e8e93;
+}
+
+.gosh-theme-raycast .item-box.selected .item-descr,
+.gosh-theme-raycast .item-box:hover .item-descr,
+.gosh-theme-raycast .item-box.selected .item-shortcut,
+.gosh-theme-raycast .item-box:hover .item-shortcut {
+  color: #c2c6d2;
+}
+
+.gosh-theme-raycast .gosh-no-results-title {
+  color: #f5f5f5;
+}
+
+/* albert look - breeze-dark card blue selected row */
+.gosh-theme-albert.app {
+  background-color: #31363b;
+  border-radius: 6px;
+  border: 1px solid #3d4248;
+  padding: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+
+.gosh-theme-albert .prompt,
+.gosh-theme-albert .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-albert .input {
+  color: #eff0f1;
+  caret-color: #1d99f3;
+  selection-background-color: #1d99f3;
+  font-size: 16px;
+  padding: 10px 12px 12px 0;
+}
+
+.gosh-theme-albert .search-icon {
+  color: #1d99f3;
+}
+
+.gosh-theme-albert .item-box {
+  color: #eff0f1;
+  border-radius: 4px;
+}
+
+.gosh-theme-albert .item-box:hover,
+.gosh-theme-albert .item-box:focus,
+.gosh-theme-albert .item-box.selected {
+  background-color: #1d99f3;
+  color: #ffffff;
+}
+
+.gosh-theme-albert .item-box.selected .item-descr,
+.gosh-theme-albert .item-box:hover .item-descr,
+.gosh-theme-albert .item-box.selected .item-shortcut,
+.gosh-theme-albert .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-albert .item-header {
+  color: #7f8c8d;
+}
+
+/* wofi look - gray list steel-blue selection */
+.gosh-theme-wofi.app {
+  background-color: #1d1f21;
+  border-radius: 6px;
+  border: 1px solid #282a2e;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.gosh-theme-wofi .prompt,
+.gosh-theme-wofi .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-wofi .input {
+  color: #c5c8c6;
+  caret-color: #81a2be;
+  selection-background-color: #285577;
+  font-size: 14px;
+  padding: 8px 10px 8px 0;
+}
+
+.gosh-theme-wofi .search-icon {
+  color: #81a2be;
+  padding: 0 8px 0 6px;
+}
+
+.gosh-theme-wofi .item-box {
+  color: #c5c8c6;
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+
+.gosh-theme-wofi .item-box:hover,
+.gosh-theme-wofi .item-box:focus,
+.gosh-theme-wofi .item-box.selected {
+  background-color: #285577;
+  color: #ffffff;
+}
+
+.gosh-theme-wofi .item-box.selected .item-descr,
+.gosh-theme-wofi .item-box:hover .item-descr,
+.gosh-theme-wofi .item-box.selected .item-shortcut,
+.gosh-theme-wofi .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.gosh-theme-wofi .item-header {
+  color: #707880;
+  padding: 4px 8px 2px 8px;
+}
+
+/* fuzzel look - solarized light rounded frame */
+.gosh-theme-fuzzel.app {
+  background-color: #fdf6e3;
+  border-radius: 10px;
+  border: 1px solid #002b36;
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 43, 54, 0.22);
+}
+
+.gosh-theme-fuzzel .prompt,
+.gosh-theme-fuzzel .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-fuzzel .input {
+  color: #657b83;
+  caret-color: #cb4b16;
+  selection-background-color: #eee8d5;
+  font-size: 15px;
+  padding: 8px 10px 8px 0;
+}
+
+.gosh-theme-fuzzel .search-icon {
+  color: #cb4b16;
+  padding: 0 8px 0 6px;
+}
+
+.gosh-theme-fuzzel .item-box {
+  color: #657b83;
+  border-radius: 0;
+  padding: 5px 8px;
+}
+
+.gosh-theme-fuzzel .item-box:hover,
+.gosh-theme-fuzzel .item-box:focus,
+.gosh-theme-fuzzel .item-box.selected {
+  background-color: #eee8d5;
+  color: #586e75;
+}
+
+.gosh-theme-fuzzel .item-descr,
+.gosh-theme-fuzzel .item-shortcut {
+  color: #93a1a1;
+}
+
+.gosh-theme-fuzzel .item-box.selected .item-descr,
+.gosh-theme-fuzzel .item-box:hover .item-descr,
+.gosh-theme-fuzzel .item-box.selected .item-shortcut,
+.gosh-theme-fuzzel .item-box:hover .item-shortcut {
+  color: #586e75;
+}
+
+.gosh-theme-fuzzel .item-header {
+  color: #93a1a1;
+  padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-fuzzel .gosh-no-results {
+  color: #93a1a1;
+}
+
+.gosh-theme-fuzzel .gosh-no-results-title {
+  color: #586e75;
+}
+
+/* anyrun look - catppuccin mocha rounded panel */
+.gosh-theme-anyrun.app {
+  background-color: #1e1e2e;
+  border-radius: 16px;
+  border: 1px solid #313244;
+  padding: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+}
+
+.gosh-theme-anyrun .prompt,
+.gosh-theme-anyrun .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-anyrun .input {
+  color: #cdd6f4;
+  caret-color: #89b4fa;
+  selection-background-color: #89b4fa;
+  font-size: 16px;
+  padding: 10px 12px 12px 0;
+}
+
+.gosh-theme-anyrun .search-icon {
+  color: #89b4fa;
+}
+
+.gosh-theme-anyrun .item-box {
+  color: #cdd6f4;
+  border-radius: 10px;
+  padding: 8px 12px;
+  border-left: 3px solid transparent;
+}
+
+.gosh-theme-anyrun .item-box:hover,
+.gosh-theme-anyrun .item-box:focus,
+.gosh-theme-anyrun .item-box.selected {
+  background-color: rgba(137, 180, 250, 0.22);
+  color: #ffffff;
+}
+
+/* reserve the leading edge so selection does not shift the title */
+.gosh-theme-anyrun .item-box.selected {
+  border-left-color: #89b4fa;
+}
+
+.gosh-theme-anyrun .item-descr,
+.gosh-theme-anyrun .item-shortcut {
+  color: #6c7086;
+}
+
+.gosh-theme-anyrun .item-box.selected .item-descr,
+.gosh-theme-anyrun .item-box:hover .item-descr,
+.gosh-theme-anyrun .item-box.selected .item-shortcut,
+.gosh-theme-anyrun .item-box:hover .item-shortcut {
+  color: #a6adc8;
+}
+
+.gosh-theme-anyrun .item-header {
+  color: #6c7086;
+}
+
+.gosh-theme-anyrun .gosh-no-results-title {
+  color: #cdd6f4;
+}
+
+/* tofi look - stark black bar white selection */
+.gosh-theme-tofi.app {
+  background-color: #000000;
+  border-radius: 0;
+  padding: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
+.gosh-theme-tofi .prompt,
+.gosh-theme-tofi .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-tofi .input {
+  color: #ffffff;
+  caret-color: #ffffff;
+  /* white entry text on a white selection band is invisible so drag or
+     ctrl+a selection in the search field needs a darker highlight */
+  selection-background-color: #555555;
+  font-size: 14px;
+  padding: 6px 8px 6px 0;
+  border-radius: 0;
+}
+
+.gosh-theme-tofi .search-icon {
+  color: #ffffff;
+  padding: 0 8px 0 4px;
+}
+
+.gosh-theme-tofi .item-box {
+  color: #ffffff;
+  border-radius: 0;
+  padding: 4px 8px;
+}
+
+.gosh-theme-tofi .item-box:hover,
+.gosh-theme-tofi .item-box:focus,
+.gosh-theme-tofi .item-box.selected {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.gosh-theme-tofi .item-box.selected .item-descr,
+.gosh-theme-tofi .item-box:hover .item-descr,
+.gosh-theme-tofi .item-box.selected .item-shortcut,
+.gosh-theme-tofi .item-box:hover .item-shortcut {
+  color: #333333;
+}
+
+.gosh-theme-tofi .item-header {
+  color: #888888;
+  padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-tofi .gosh-no-results {
+  color: #888888;
+}
+
+.gosh-theme-tofi .gosh-no-results-title {
+  color: #ffffff;
+}
+
+/* light look - adwaita light card */
+.gosh-theme-light.app {
+  background-color: #f6f5f4;
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.gosh-theme-light .prompt,
+.gosh-theme-light .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-light .input {
+  color: #2e3436;
+  caret-color: #3584e4;
+  selection-background-color: #3584e4;
+  font-size: 16px;
+  padding: 10px 12px 10px 0;
+}
+
+.gosh-theme-light .search-icon {
+  color: #3584e4;
+}
+
+.gosh-theme-light .item-box {
+  color: #2e3436;
+  border-radius: 10px;
+}
+
+.gosh-theme-light .item-descr,
+.gosh-theme-light .item-shortcut {
+  color: #5e5c64;
+}
+
+.gosh-theme-light .item-box:hover,
+.gosh-theme-light .item-box:focus {
+  background-color: rgba(46, 52, 54, 0.08);
+  color: #2e3436;
+}
+
+.gosh-theme-light .item-box:hover .item-descr,
+.gosh-theme-light .item-box:focus .item-descr {
+  color: #5e5c64;
+}
+
+.gosh-theme-light .item-box.selected {
+  background-color: #3584e4;
+  color: #ffffff;
+}
+
+.gosh-theme-light .item-box.selected .item-descr,
+.gosh-theme-light .item-box.selected .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-light .item-header {
+  color: #5e5c64;
+}
+
+.gosh-theme-light .gosh-no-results {
+  color: #5e5c64;
+}
+
+.gosh-theme-light .gosh-no-results-title {
+  color: #2e3436;
+}
+
+/* gnome and light follow the session accent when it is not blue */
+.gosh-theme-gnome.gosh-accent-teal .input,
+.gosh-theme-light.gosh-accent-teal .input {
+  caret-color: #2190a4;
+  selection-background-color: #2190a4;
+}
+
+.gosh-theme-gnome.gosh-accent-teal .search-icon,
+.gosh-theme-light.gosh-accent-teal .search-icon {
+  color: #2190a4;
+}
+
+.gosh-theme-gnome.gosh-accent-teal .item-box:hover,
+.gosh-theme-gnome.gosh-accent-teal .item-box:focus,
+.gosh-theme-gnome.gosh-accent-teal .item-box.selected,
+.gosh-theme-light.gosh-accent-teal .item-box.selected {
+  background-color: #2190a4;
+}
+
+.gosh-theme-gnome.gosh-accent-green .input,
+.gosh-theme-light.gosh-accent-green .input {
+  caret-color: #3a944a;
+  selection-background-color: #3a944a;
+}
+
+.gosh-theme-gnome.gosh-accent-green .search-icon,
+.gosh-theme-light.gosh-accent-green .search-icon {
+  color: #3a944a;
+}
+
+.gosh-theme-gnome.gosh-accent-green .item-box:hover,
+.gosh-theme-gnome.gosh-accent-green .item-box:focus,
+.gosh-theme-gnome.gosh-accent-green .item-box.selected,
+.gosh-theme-light.gosh-accent-green .item-box.selected {
+  background-color: #3a944a;
+}
+
+.gosh-theme-gnome.gosh-accent-yellow .input,
+.gosh-theme-light.gosh-accent-yellow .input {
+  caret-color: #c88800;
+  selection-background-color: #c88800;
+}
+
+.gosh-theme-gnome.gosh-accent-yellow .search-icon,
+.gosh-theme-light.gosh-accent-yellow .search-icon {
+  color: #c88800;
+}
+
+.gosh-theme-gnome.gosh-accent-yellow .item-box:hover,
+.gosh-theme-gnome.gosh-accent-yellow .item-box:focus,
+.gosh-theme-gnome.gosh-accent-yellow .item-box.selected,
+.gosh-theme-light.gosh-accent-yellow .item-box.selected {
+  background-color: #c88800;
+}
+
+.gosh-theme-gnome.gosh-accent-orange .input,
+.gosh-theme-light.gosh-accent-orange .input {
+  caret-color: #ed5b00;
+  selection-background-color: #ed5b00;
+}
+
+.gosh-theme-gnome.gosh-accent-orange .search-icon,
+.gosh-theme-light.gosh-accent-orange .search-icon {
+  color: #ed5b00;
+}
+
+.gosh-theme-gnome.gosh-accent-orange .item-box:hover,
+.gosh-theme-gnome.gosh-accent-orange .item-box:focus,
+.gosh-theme-gnome.gosh-accent-orange .item-box.selected,
+.gosh-theme-light.gosh-accent-orange .item-box.selected {
+  background-color: #ed5b00;
+}
+
+.gosh-theme-gnome.gosh-accent-red .input,
+.gosh-theme-light.gosh-accent-red .input {
+  caret-color: #e62d42;
+  selection-background-color: #e62d42;
+}
+
+.gosh-theme-gnome.gosh-accent-red .search-icon,
+.gosh-theme-light.gosh-accent-red .search-icon {
+  color: #e62d42;
+}
+
+.gosh-theme-gnome.gosh-accent-red .item-box:hover,
+.gosh-theme-gnome.gosh-accent-red .item-box:focus,
+.gosh-theme-gnome.gosh-accent-red .item-box.selected,
+.gosh-theme-light.gosh-accent-red .item-box.selected {
+  background-color: #e62d42;
+}
+
+.gosh-theme-gnome.gosh-accent-pink .input,
+.gosh-theme-light.gosh-accent-pink .input {
+  caret-color: #d56199;
+  selection-background-color: #d56199;
+}
+
+.gosh-theme-gnome.gosh-accent-pink .search-icon,
+.gosh-theme-light.gosh-accent-pink .search-icon {
+  color: #d56199;
+}
+
+.gosh-theme-gnome.gosh-accent-pink .item-box:hover,
+.gosh-theme-gnome.gosh-accent-pink .item-box:focus,
+.gosh-theme-gnome.gosh-accent-pink .item-box.selected,
+.gosh-theme-light.gosh-accent-pink .item-box.selected {
+  background-color: #d56199;
+}
+
+.gosh-theme-gnome.gosh-accent-purple .input,
+.gosh-theme-light.gosh-accent-purple .input {
+  caret-color: #9141ac;
+  selection-background-color: #9141ac;
+}
+
+.gosh-theme-gnome.gosh-accent-purple .search-icon,
+.gosh-theme-light.gosh-accent-purple .search-icon {
+  color: #9141ac;
+}
+
+.gosh-theme-gnome.gosh-accent-purple .item-box:hover,
+.gosh-theme-gnome.gosh-accent-purple .item-box:focus,
+.gosh-theme-gnome.gosh-accent-purple .item-box.selected,
+.gosh-theme-light.gosh-accent-purple .item-box.selected {
+  background-color: #9141ac;
+}
+
+.gosh-theme-gnome.gosh-accent-slate .input,
+.gosh-theme-light.gosh-accent-slate .input {
+  caret-color: #6f8396;
+  selection-background-color: #6f8396;
+}
+
+.gosh-theme-gnome.gosh-accent-slate .search-icon,
+.gosh-theme-light.gosh-accent-slate .search-icon {
+  color: #6f8396;
+}
+
+.gosh-theme-gnome.gosh-accent-slate .item-box:hover,
+.gosh-theme-gnome.gosh-accent-slate .item-box:focus,
+.gosh-theme-gnome.gosh-accent-slate .item-box.selected,
+.gosh-theme-light.gosh-accent-slate .item-box.selected {
+  background-color: #6f8396;
+}
+
+/* powertoys look - fluent dark runner card */
+.gosh-theme-powertoys.app {
+  background-color: #2c2c2c;
+  border-radius: 8px;
+  border: 1px solid #3d3d3d;
+  padding: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+.gosh-theme-powertoys .prompt,
+.gosh-theme-powertoys .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-powertoys .input {
+  color: #ffffff;
+  caret-color: #60cdff;
+  selection-background-color: #0078d4;
+  font-size: 18px;
+  padding: 12px 12px 14px 0;
+}
+
+.gosh-theme-powertoys .search-icon {
+  color: #60cdff;
+}
+
+.gosh-theme-powertoys .item-box {
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+.gosh-theme-powertoys .item-box:hover,
+.gosh-theme-powertoys .item-box:focus,
+.gosh-theme-powertoys .item-box.selected {
+  background-color: #0078d4;
+  color: #ffffff;
+}
+
+.gosh-theme-powertoys .item-descr,
+.gosh-theme-powertoys .item-shortcut {
+  color: #b3b3b3;
+}
+
+.gosh-theme-powertoys .item-box.selected .item-descr,
+.gosh-theme-powertoys .item-box:hover .item-descr,
+.gosh-theme-powertoys .item-box.selected .item-shortcut,
+.gosh-theme-powertoys .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.gosh-theme-powertoys .item-header {
+  color: #9a9a9a;
+}
+
+.gosh-theme-powertoys .gosh-no-results-title {
+  color: #ffffff;
+}
+
+/* synapse look - large icons orange caret */
+.gosh-theme-synapse.app {
+  background-color: #3c3b37;
+  border-radius: 6px;
+  padding: 10px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+}
+
+.gosh-theme-synapse .prompt,
+.gosh-theme-synapse .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-synapse .input {
+  color: #f2f1eb;
+  caret-color: #f07746;
+  selection-background-color: #f07746;
+  font-size: 20px;
+  padding: 12px 12px 14px 0;
+}
+
+.gosh-theme-synapse .search-icon {
+  color: #f07746;
+}
+
+.gosh-theme-synapse .item-box {
+  color: #f2f1eb;
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.gosh-theme-synapse .item-box:hover,
+.gosh-theme-synapse .item-box:focus,
+.gosh-theme-synapse .item-box.selected {
+  background-color: rgba(240, 119, 70, 0.28);
+  color: #ffffff;
+}
+
+.gosh-theme-synapse .item-descr,
+.gosh-theme-synapse .item-shortcut {
+  color: #a39e93;
+}
+
+.gosh-theme-synapse .item-box.selected .item-descr,
+.gosh-theme-synapse .item-box:hover .item-descr,
+.gosh-theme-synapse .item-box.selected .item-shortcut,
+.gosh-theme-synapse .item-box:hover .item-shortcut {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.gosh-theme-synapse .item-header {
+  color: #a39e93;
+}
+
+.gosh-theme-synapse .gosh-no-results-title {
+  color: #f2f1eb;
+}
+
+/* onagre look - stone dark panel amber selected row */
+.gosh-theme-onagre.app {
+  background-color: #1c1917;
+  border-radius: 14px;
+  border: 1px solid #44403c;
+  padding: 10px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+
+.gosh-theme-onagre .prompt,
+.gosh-theme-onagre .result-box {
+  background-color: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  margin-top: 0;
+  padding: 0;
+}
+
+.gosh-theme-onagre .input {
+  color: #e7e5e4;
+  caret-color: #f59e0b;
+  selection-background-color: #f59e0b;
+  font-size: 16px;
+  padding: 10px 12px 12px 0;
+}
+
+.gosh-theme-onagre .search-icon {
+  color: #f59e0b;
+}
+
+.gosh-theme-onagre .item-box {
+  color: #e7e5e4;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.gosh-theme-onagre .item-box:hover,
+.gosh-theme-onagre .item-box:focus,
+.gosh-theme-onagre .item-box.selected {
+  background-color: #f59e0b;
+  color: #1c1917;
+}
+
+.gosh-theme-onagre .item-descr,
+.gosh-theme-onagre .item-shortcut {
+  color: #a8a29e;
+}
+
+.gosh-theme-onagre .item-box.selected .item-descr,
+.gosh-theme-onagre .item-box:hover .item-descr,
+.gosh-theme-onagre .item-box.selected .item-shortcut,
+.gosh-theme-onagre .item-box:hover .item-shortcut {
+  color: #44403c;
+}
+
+.gosh-theme-onagre .item-header {
+  color: #a8a29e;
+}
+
+.gosh-theme-onagre .gosh-no-results-title {
+  color: #e7e5e4;
+}
+
+/* last so compact still wins over theme-specific row padding */
+.app.gosh-density-compact .item-box {
+  padding: 5px 10px;
+}
+
+.app.gosh-density-compact .input {
+  padding: 10px 16px 10px 0;
+  font-size: 16px;
+}
+
+/* hiding the magnifier used to leave the query flush against the card */
+.app.gosh-no-search-icon .input {
+  padding-left: 20px;
+}
+
+.app.gosh-density-compact.gosh-no-search-icon .input {
+  padding-left: 16px;
+}
+
+.app.gosh-theme-rofi.gosh-no-search-icon .input,
+.app.gosh-theme-wofi.gosh-no-search-icon .input,
+.app.gosh-theme-tofi.gosh-no-search-icon .input,
+.app.gosh-theme-fuzzel.gosh-no-search-icon .input {
+  padding-left: 8px;
+}
+
+.app.gosh-theme-anyrun.gosh-no-search-icon .input {
+  padding-left: 12px;
+}
+
+.app.gosh-density-compact .item-container {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.app.gosh-no-search-icon .input {
+  padding-left: 16px;
+}
+.gosh-theme-omarchy .item-box,
+.gosh-theme-anyrun .item-box {
+  border-left: 3px solid transparent;
+}

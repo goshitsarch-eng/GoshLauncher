@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterator, Sequence
 from ulauncher.internals import effects
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
-from ulauncher.modes.launcher.looks import get_look
+from ulauncher.modes.launcher.looks import chrome_from_settings
 from ulauncher.modes.launcher.plan import flags_from_settings, is_path_query, merge_empty_suggestions, plan_search
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
 from ulauncher.modes.mode import Mode
@@ -30,8 +30,7 @@ class LauncherMode(Mode):
     def handle_query(self, query: Query, callback: Callable[[effects.EffectMessage], None]) -> None:
         settings = Settings.load()
         flags = flags_from_settings(settings)
-        look = get_look(getattr(settings, "look_id", "spotlight"))
-        chrome = look["look"]
+        chrome = chrome_from_settings(settings)
         if flags.get("result_order") in (None, "", "default"):
             flags["result_order"] = chrome.get("result_order") or "default"
         planned = plan_search(str(query), flags)
@@ -44,8 +43,7 @@ class LauncherMode(Mode):
         from ulauncher.modes.launcher.apps import home_apps
         from ulauncher.modes.launcher.windows import list_windows
 
-        look = get_look(getattr(settings, "look_id", "spotlight"))
-        chrome = look["look"]
+        chrome = chrome_from_settings(settings)
         flags = flags_from_settings(settings)
         order = flags.get("result_order") or chrome.get("result_order") or "default"
         if order == "default":

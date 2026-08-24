@@ -12,7 +12,7 @@ from gi.repository import Gdk, Gtk
 
 from ulauncher import paths
 from ulauncher.internals.results_update import ResultsUpdate
-from ulauncher.modes.launcher.looks import get_look
+from ulauncher.modes.launcher.looks import chrome_from_settings, ensure_look_chrome
 from ulauncher.ui import gtk4
 from ulauncher.ui.helpers import layer_shell
 from ulauncher.ui.helpers.monitor import get_monitor, get_monitor_geometries
@@ -38,8 +38,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def __init__(self, **kwargs: Any) -> None:  # noqa: PLR0915
         logger.info("Opening Ulauncher window")
         self.settings = Settings.load(force=True)
-        look = get_look(getattr(self.settings, "look_id", "spotlight"))
-        self._chrome = look["look"]
+        ensure_look_chrome(self.settings)
+        self._chrome = chrome_from_settings(self.settings)
         width_request = self.settings.base_width
         height_request = -1
 
@@ -82,6 +82,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         gtk4.pack_start(shadow_container, self.theme_root, True, True, 0)
 
         self.prompt = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        gtk4.add_css_class(self.prompt, "prompt")
         self.prompt_input = Gtk.Entry(hexpand=True, height_request=30)
         self.prompt_input.set_margin_top(15)
         self.prompt_input.set_margin_bottom(15)
@@ -137,6 +138,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
         gtk4.add_css_class(self.theme_root, "app")
         gtk4.add_css_class(self.theme_root, f"gosh-theme-{getattr(self.settings, 'look_id', 'spotlight')}")
+        gtk4.add_css_class(self.theme_root, f"gosh-density-{self._chrome.get('density') or 'comfortable'}")
+        if not self._chrome.get("show_search_icon", True):
+            gtk4.add_css_class(self.theme_root, "gosh-no-search-icon")
+        gtk4.add_css_class(self.prompt, "prompt")
+        gtk4.add_css_class(self.results_view, "result-box")
         gtk4.add_css_class(self.prompt_input, "input")
         gtk4.add_css_class(self.prefs_btn, "prefs-btn")
         paintable = load_icon_paintable(f"{paths.ASSETS}/icons/gear.svg", 16, self.get_scale_factor())
@@ -248,6 +254,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 return True
             string = chr(Gdk.keyval_to_unicode(keyval)) if Gdk.keyval_to_unicode(keyval) else ""
             if alt and string in jump_keys:
+                if string.isdigit() and not self._chrome.get("show_numbers"):
+                    return False
                 self.results_view.select_jump(jump_keys.index(string))
                 return True
         return False

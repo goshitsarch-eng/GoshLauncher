@@ -48,7 +48,9 @@ class PreferencesView(BaseView):
         scrolled.add(prefs_view)
 
         # Add sections
+        self._updating_chrome = False
         self._add_general_section(prefs_view)
+        self._add_chrome_section(prefs_view)
         self._add_applications_section(prefs_view)
         self._add_launcher_section(prefs_view)
         self._add_advanced_section(prefs_view)
@@ -224,6 +226,117 @@ class PreferencesView(BaseView):
         grab_desc = "Capture the pointer to prevent focus-follows-mouse setups from stealing the launcher focus."
         self._add_setting_row(general_box, "Grab mouse pointer focus", grab_mouse_switch, grab_desc)
 
+    def _add_chrome_section(self, parent: Gtk.Box) -> None:
+        """Look chrome overrides from spotlight-goshos appearance page."""
+        chrome_box = self._create_section_container(parent, "Launcher chrome")
+
+        position_combo = Gtk.ComboBoxText()
+        position_combo.append("center", "Center")
+        position_combo.append("top", "Top")
+        position_combo.set_active_id(self.settings.popup_position)
+        position_combo.connect("changed", self._on_chrome_combo("popup_position"))
+        self._position_combo = position_combo
+        self._add_setting_row(
+            chrome_box,
+            "Position",
+            position_combo,
+            "Center stays put and grows down. Top matches Pop!_OS and KRunner.",
+        )
+
+        density_combo = Gtk.ComboBoxText()
+        density_combo.append("comfortable", "Comfortable")
+        density_combo.append("compact", "Compact")
+        density_combo.set_active_id(self.settings.row_density)
+        density_combo.connect("changed", self._on_chrome_combo("row_density"))
+        self._density_combo = density_combo
+        self._add_setting_row(chrome_box, "Row density", density_combo, "Compact still shrinks the look's icon size.")
+
+        height_adjust = Gtk.Adjustment(
+            value=self.settings.results_max_height, lower=160, upper=800, step_increment=20
+        )
+        height_spin = Gtk.SpinButton(adjustment=height_adjust)
+        height_spin.connect("value-changed", self._on_int_setting("results_max_height"))
+        self._height_spin = height_spin
+        self._add_setting_row(chrome_box, "Results max height", height_spin, "Scroll after this height.")
+
+        max_adjust = Gtk.Adjustment(value=self.settings.max_per_category, lower=1, upper=20, step_increment=1)
+        max_spin = Gtk.SpinButton(adjustment=max_adjust)
+        max_spin.connect("value-changed", self._on_int_setting("max_per_category"))
+        self._max_spin = max_spin
+        self._add_setting_row(chrome_box, "Max results per category", max_spin, "Cap for each provider group.")
+
+        icon_adjust = Gtk.Adjustment(value=self.settings.icon_size, lower=16, upper=64, step_increment=2)
+        icon_spin = Gtk.SpinButton(adjustment=icon_adjust)
+        icon_spin.connect("value-changed", self._on_int_setting("icon_size"))
+        self._icon_spin = icon_spin
+        self._add_setting_row(chrome_box, "Result icon size", icon_spin, "Pixels. Compact density still shrinks this.")
+
+        self._chrome_switches: dict[str, Gtk.Switch] = {}
+        for attr, title, description in (
+            ("show_search_icon", "Search icon", "Magnifying glass in the entry."),
+            ("show_section_headers", "Section headers", "Category labels above result groups."),
+            ("show_result_icons", "Result icons", "Show icons on result rows."),
+            ("show_descriptions", "Result descriptions", "Show the second line on result rows."),
+            ("show_result_numbers", "Number hints", "Show 1-9 and activate with Alt+digit."),
+        ):
+            switch = Gtk.Switch(active=bool(getattr(self.settings, attr)))
+            switch.connect("notify::active", self._on_bool_setting(attr))
+            self._chrome_switches[attr] = switch
+            self._add_setting_row(chrome_box, title, switch, description)
+
+        reset_btn = Gtk.Button(label="Reset")
+        reset_btn.connect("clicked", self._on_reset_look_clicked)
+        self._add_setting_row(
+            chrome_box,
+            "Reset look",
+            reset_btn,
+            "Restore this look's position, density, headers, icons, descriptions, number hints, icon size, and order.",
+        )
+
+    def _on_chrome_combo(self, attr: str) -> Any:
+        def on_changed(combo: Gtk.ComboBoxText) -> None:
+            if self._updating_chrome:
+                return
+            value = combo.get_active_id()
+            if value:
+                self.settings.save({attr: value})
+
+        return on_changed
+
+    def _on_int_setting(self, attr: str) -> Any:
+        def on_changed(spin: Gtk.SpinButton) -> None:
+            if self._updating_chrome:
+                return
+            self.settings.save({attr: spin.get_value_as_int()})
+
+        return on_changed
+
+    def _on_reset_look_clicked(self, _: Gtk.Button) -> None:
+        from ulauncher.modes.launcher.looks import apply_look_chrome
+
+        apply_look_chrome(self.settings, self.settings.look_id)
+        self._sync_chrome_widgets()
+
+    def _sync_chrome_widgets(self) -> None:
+        self._updating_chrome = True
+        try:
+            if hasattr(self, "_position_combo"):
+                self._position_combo.set_active_id(self.settings.popup_position)
+            if hasattr(self, "_density_combo"):
+                self._density_combo.set_active_id(self.settings.row_density)
+            if hasattr(self, "_order_combo"):
+                self._order_combo.set_active_id(self.settings.result_order)
+            if hasattr(self, "_height_spin"):
+                self._height_spin.set_value(self.settings.results_max_height)
+            if hasattr(self, "_max_spin"):
+                self._max_spin.set_value(self.settings.max_per_category)
+            if hasattr(self, "_icon_spin"):
+                self._icon_spin.set_value(self.settings.icon_size)
+            for attr, switch in getattr(self, "_chrome_switches", {}).items():
+                switch.set_active(bool(getattr(self.settings, attr)))
+        finally:
+            self._updating_chrome = False
+
     def _add_applications_section(self, parent: Gtk.Box) -> None:
         """Add applications settings section"""
         applications_box = self._create_section_container(parent, "Applications")
@@ -352,6 +465,7 @@ class PreferencesView(BaseView):
         order_combo.append("windows-first", "Windows first (Pop!_OS)")
         order_combo.set_active_id(self.settings.result_order)
         order_combo.connect("changed", self._on_result_order_changed)
+        self._order_combo = order_combo
         self._add_setting_row(
             launcher_box,
             "Result order",
@@ -361,6 +475,8 @@ class PreferencesView(BaseView):
 
     def _on_bool_setting(self, attr: str) -> Any:
         def on_toggle(switch: Gtk.Switch, _: Any) -> None:
+            if self._updating_chrome:
+                return
             self.settings.save({attr: switch.get_active()})
 
         return on_toggle
@@ -377,6 +493,8 @@ class PreferencesView(BaseView):
             self.settings.save({"web_search_engine": engine_id})
 
     def _on_result_order_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if self._updating_chrome:
+            return
         order = combo.get_active_id()
         if order:
             self.settings.save({"result_order": order})
@@ -460,7 +578,10 @@ class PreferencesView(BaseView):
     def _on_look_changed(self, combo: Gtk.ComboBoxText) -> None:
         look_id = combo.get_active_id()
         if look_id:
-            self.settings.save({"look_id": look_id})
+            from ulauncher.modes.launcher.looks import apply_look_chrome
+
+            apply_look_chrome(self.settings, look_id)
+            self._sync_chrome_widgets()
 
     def _on_screen_changed(self, combo: Gtk.ComboBoxText) -> None:
         screen = combo.get_active_id()
