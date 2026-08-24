@@ -9,7 +9,9 @@ from ulauncher.modes.launcher.windows import (
     window_close_title,
     window_matches,
     window_recency_value,
+    window_result_id,
     workspace_label_matches,
+    workspace_result_id,
     workspace_switch_title,
 )
 
@@ -85,3 +87,9 @@ def test_window_recency_prefers_front_tab_then_user_time() -> None:
     # stacking/tab order: newer is index 0
     ordered = sort_windows_most_recent([newer, older])
     assert [win.title for win in ordered] == ["New", "Old"]
+
+
+def test_window_and_workspace_result_ids() -> None:
+    assert workspace_result_id(2) == "workspace:2"
+    assert window_result_id("0x42", "Firefox", "Navigator", "Workspace 1") == "0x42"
+    assert window_result_id("", "Firefox", "Navigator", "Workspace 1") == "Firefox\0Navigator\0Workspace 1"

@@ -13,6 +13,7 @@ class LauncherResult(Result):
     kind: str = ""
     payload: dict[str, Any] = {}
     highlightable: bool = True
+    searchable: bool = True
     actions: dict[str, dict[str, str]] = {"activate": {"name": "Activate"}}
 
 

@@ -242,6 +242,16 @@ def workspace_switch_title(number: int) -> str:
     return f"Switch to Workspace {number}"
 
 
+def workspace_result_id(number: int) -> str:
+    return f"workspace:{number}"
+
+
+def window_result_id(window_id: str, title: str, wm_class: str, description: str) -> str:
+    if window_id:
+        return window_id
+    return f"{title}\0{wm_class}\0{description}"
+
+
 def window_close_title(intent: str, title: str) -> str:
     if intent == "kill":
         return f"Kill {title}"
@@ -304,6 +314,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
             "icon": "workspace-switcher-symbolic",
             "payload": str(workspace),
             "wid": "",
+            "id": workspace_result_id(workspace + 1),
         }
     window_rows: list[dict] = []
     for win in list_windows():
@@ -312,16 +323,18 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
             continue
         name = win.title or win.wm_class
         title = name if intent == "focus" else window_close_title(intent, name)
+        description = _workspace_label(win)
         window_rows.append(
             {
                 "kind": intent,
                 "title": title,
-                "description": _workspace_label(win),
+                "description": description,
                 "icon": "focus-windows-symbolic",
                 "payload": win.wid,
                 "wid": win.wid,
                 "pid": win.pid,
                 "wm_class": win.wm_class,
+                "id": window_result_id(win.wid, title, win.wm_class, description),
             }
         )
     return take_window_results(switch_row, window_rows, limit)

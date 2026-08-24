@@ -17,6 +17,7 @@ from ulauncher.modes.launcher.plan import (
     should_refresh_recent_files,
 )
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
+from ulauncher.modes.launcher.search_run import safe_provider_results
 from ulauncher.modes.mode import Mode
 from ulauncher.utils import scheduling
 from ulauncher.utils.eventbus import EventBus
@@ -315,7 +316,7 @@ class LauncherMode(Mode):
         if "path" in providers:
             from ulauncher.modes.launcher.paths import search_path
 
-            for hit in search_path(q):
+            for hit in safe_provider_results(lambda: search_path(q)):
                 add(
                     "path",
                     {
@@ -334,7 +335,7 @@ class LauncherMode(Mode):
         if "places" in providers:
             from ulauncher.modes.launcher.places import match_places
 
-            for index, hit in enumerate(match_places(q)[:cap]):
+            for index, hit in enumerate(safe_provider_results(lambda: match_places(q))[:cap]):
                 add(
                     "places",
                     {
@@ -355,7 +356,7 @@ class LauncherMode(Mode):
         if "bookmarks" in providers:
             from ulauncher.modes.launcher.bookmarks import search_bookmarks
 
-            for hit in search_bookmarks(q, cap):
+            for hit in safe_provider_results(lambda: search_bookmarks(q, cap)):
                 row = _row_from_uri(hit, score=75, kind="bookmark")
                 if row:
                     add("bookmarks", row)
@@ -364,8 +365,8 @@ class LauncherMode(Mode):
             from ulauncher.modes.launcher.apps import app_action_rows, app_row_description, app_window_count, match_apps
             from ulauncher.modes.launcher.windows import list_windows
 
-            matched = match_apps(q, cap)
-            open_windows = list_windows()
+            matched = safe_provider_results(lambda: match_apps(q, cap))
+            open_windows = safe_provider_results(list_windows)
             for app in matched:
                 actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
                 if not getattr(settings, "enable_app_actions", True):
@@ -382,6 +383,7 @@ class LauncherMode(Mode):
                         "description": app_row_description(window_count),
                         "icon": app.icon,
                         "app_id": app.app_id,
+                        "id": app.app_id,
                         "actions": actions,
                     },
                 )
@@ -476,7 +478,7 @@ class LauncherMode(Mode):
         if "windows" in providers:
             from ulauncher.modes.launcher.windows import match_windows
 
-            for win in match_windows(q, cap):
+            for win in safe_provider_results(lambda: match_windows(q, cap)):
                 raw_kind = win.get("kind") or "focus"
                 if raw_kind == "workspace":
                     row_kind = "workspace"
@@ -497,13 +499,14 @@ class LauncherMode(Mode):
                         "wm_class": win.get("wm_class") or "",
                         "window_kind": raw_kind,
                         "payload": win.get("payload"),
+                        "id": win.get("id"),
                     },
                 )
 
         if "system" in providers:
             from ulauncher.modes.launcher.system_actions import match_system_actions
 
-            for hit in match_system_actions(q)[:cap]:
+            for hit in safe_provider_results(lambda: match_system_actions(q))[:cap]:
                 add(
                     "system",
                     {
@@ -519,7 +522,7 @@ class LauncherMode(Mode):
         if "settings" in providers:
             from ulauncher.modes.launcher.settings_panels import match_settings_panels
 
-            for hit in match_settings_panels(q)[:cap]:
+            for hit in safe_provider_results(lambda: match_settings_panels(q))[:cap]:
                 add(
                     "settings",
                     {
@@ -535,7 +538,7 @@ class LauncherMode(Mode):
         if "files" in providers:
             from ulauncher.modes.launcher.recents import search_recents
 
-            for hit in search_recents(q, cap):
+            for hit in safe_provider_results(lambda: search_recents(q, cap)):
                 row = _row_from_uri(hit, score=45, kind="file")
                 if row:
                     add("files", row)
@@ -543,7 +546,7 @@ class LauncherMode(Mode):
         if "command" in providers:
             from ulauncher.modes.launcher.commands import search_command
 
-            for hit in search_command(q):
+            for hit in safe_provider_results(lambda: search_command(q)):
                 add(
                     "command",
                     {

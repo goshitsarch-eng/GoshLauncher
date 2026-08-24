@@ -8,6 +8,13 @@ from gi.repository import Gtk
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
 from ulauncher.modes.launcher.no_results import no_results_detail, no_results_title, should_show_no_results
+from ulauncher.modes.launcher.paint_selection import (
+    first_selectable_index,
+    paint_selection_index,
+    result_selection_key,
+    row_matches_previous,
+)
+from ulauncher.modes.launcher.selection_math import next_activatable_index
 from ulauncher.ui import gtk4
 from ulauncher.utils import scheduling
 
@@ -97,38 +104,17 @@ class ResultsView(Gtk.ScrolledWindow):
         self._move(5)
 
     def go_home(self) -> None:
-        nav = self._nav_indices()
-        if nav:
-            self.select(nav[0])
+        self._move(-999)
 
     def go_end(self) -> None:
-        nav = self._nav_indices()
-        if nav:
-            self.select(nav[-1])
+        self._move(999)
 
     def _move(self, step: int) -> None:
-        nav = self._nav_indices()
-        if not nav:
+        results = [widget.result for widget in self._widgets]
+        nxt = next_activatable_index(self._index, step, results)
+        if nxt < 0:
             return
-        try:
-            pos = nav.index(self._index)
-        except ValueError:
-            if step > 0:
-                after = [index for index in nav if index > self._index]
-                self.select(after[0] if after else nav[0])
-            else:
-                before = [index for index in nav if index < self._index]
-                self.select(before[-1] if before else nav[-1])
-            return
-        if abs(step) == 1:
-            self.select(nav[(pos + step) % len(nav)])
-            return
-        next_pos = pos + step
-        if next_pos < 0:
-            next_pos = 0
-        elif next_pos >= len(nav):
-            next_pos = len(nav) - 1
-        self.select(nav[next_pos])
+        self.select(nxt)
 
     def _highlightable_indices(self) -> list[int]:
         return [i for i, widget in enumerate(self._widgets) if widget.result.highlightable]
@@ -203,11 +189,13 @@ class ResultsView(Gtk.ScrolledWindow):
         self._activate_result(alt)
 
     def _apply_selection(self, selected_name: str | None, previous_pick: Result | None) -> None:
+        rows = [widget.result for widget in self._widgets]
         if previous_pick:
-            for index, widget in enumerate(self._widgets):
-                if widget.result.name == previous_pick.name and widget.result.highlightable:
-                    self.select(index)
-                    return
+            key = result_selection_key(previous_pick, self._index)
+            index = paint_selection_index(key, rows)
+            if index >= 0 and row_matches_previous(key, rows[index]):
+                self.select(index)
+                return
             self._user_selected = False
         self._select(self._index_for_name(selected_name))
 
@@ -216,7 +204,8 @@ class ResultsView(Gtk.ScrolledWindow):
         if not self._widgets:
             return
         if index not in highlightable:
-            index = highlightable[0] if highlightable else 0
+            first = first_selectable_index([widget.result for widget in self._widgets])
+            index = first if first >= 0 else (highlightable[0] if highlightable else 0)
         if self._selected:
             self._selected.deselect()
         self._index = index
@@ -236,6 +225,9 @@ class ResultsView(Gtk.ScrolledWindow):
         for index, widget in enumerate(self._widgets):
             if widget.result.searchable and widget.result.name == name:
                 return index
+        first = first_selectable_index([widget.result for widget in self._widgets])
+        if first >= 0:
+            return first
         highlightable = self._highlightable_indices()
         return highlightable[0] if highlightable else 0
 

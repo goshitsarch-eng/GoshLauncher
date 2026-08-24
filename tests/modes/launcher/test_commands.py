@@ -9,8 +9,11 @@ from ulauncher.modes.launcher.commands import (
     command_needs_async,
     command_row_meta,
     ensure_command,
+    extra_path_dirs,
+    find_user_program,
     flush_command_lookup,
     invalidate_command_lookup,
+    join_path_dirs,
     parse_command_argv,
     resolve_command_row,
     search_command,
@@ -25,6 +28,22 @@ def test_extra_path_dirs_follow_goshos_order() -> None:
     assert suffixes[2].endswith("/.cargo/bin")
     assert suffixes[3].endswith("/go/bin")
     assert suffixes[4].endswith("/bin")
+    assert extra_path_dirs("/home/u") == [
+        "/home/u/.local/bin",
+        "/home/u/.local/share/flatpak/exports/bin",
+        "/home/u/.cargo/bin",
+        "/home/u/go/bin",
+        "/home/u/bin",
+        "/var/lib/flatpak/exports/bin",
+    ]
+    assert extra_path_dirs() == ["/var/lib/flatpak/exports/bin"]
+    assert join_path_dirs(["/home/u/bin"], "/usr/bin") == "/home/u/bin:/usr/bin"
+    dirs = extra_path_dirs("/home/u")
+    assert find_user_program("tool", lambda _name: None, lambda path: path == "/home/u/go/bin/tool", dirs) == (
+        "/home/u/go/bin/tool"
+    )
+    assert find_user_program("ls", lambda _name: "/bin/ls", lambda _path: False, dirs) == "/bin/ls"
+    assert find_user_program("", lambda _name: "/bin/ls", lambda _path: True, dirs) is None
 
 
 def test_command_row_meta_states() -> None:

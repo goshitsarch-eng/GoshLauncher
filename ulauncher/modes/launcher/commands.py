@@ -19,10 +19,51 @@ EXTRA_PATH_DIRS = (
 )
 
 
+def extra_path_dirs(home: str | None = None) -> list[str]:
+    dirs: list[str] = []
+    if home:
+        dirs.extend(
+            [
+                f"{home}/.local/bin",
+                f"{home}/.local/share/flatpak/exports/bin",
+                f"{home}/.cargo/bin",
+                f"{home}/go/bin",
+                f"{home}/bin",
+            ]
+        )
+    dirs.append("/var/lib/flatpak/exports/bin")
+    return dirs
+
+
+def join_path_dirs(extra_dirs: list[str], current_path: str | None) -> str:
+    parts = list(extra_dirs)
+    if current_path:
+        parts.append(current_path)
+    return os.pathsep.join(parts)
+
+
 def extra_path() -> str:
-    parts = [str(p) for p in EXTRA_PATH_DIRS if p.is_dir()]
+    parts = [path for path in extra_path_dirs(str(Path.home())) if Path(path).is_dir()]
     current = os.environ.get("PATH", "")
-    return os.pathsep.join([*parts, current]) if parts else current
+    return join_path_dirs(parts, current)
+
+
+def find_user_program(
+    name: str,
+    find_in_path: Callable[[str], str | None],
+    path_exists: Callable[[str], bool],
+    extra_dirs: list[str],
+) -> str | None:
+    if not name:
+        return None
+    found = find_in_path(name)
+    if found:
+        return found
+    for directory in extra_dirs:
+        candidate = f"{directory}/{name}"
+        if path_exists(candidate):
+            return candidate
+    return None
 
 
 def first_command_arg(argv: list[str] | None) -> str:
