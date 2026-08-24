@@ -83,6 +83,15 @@ def get_themes() -> dict[str, Theme]:
     return themes
 
 
+def launcher_popup_css() -> str:
+    """Looks own popup colors. Do not layer Ulauncher color-theme CSS on top."""
+    looks = Path(paths.ASSETS) / "themes" / "gosh-looks.css"
+    css = CSS_RESET
+    if looks.is_file():
+        css += "\n" + looks.read_text()
+    return css
+
+
 class Theme(JsonConf):
     name: str = ""
     base_path: str = ""  # Runtime value, should not be stored

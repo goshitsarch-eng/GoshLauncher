@@ -32,6 +32,16 @@ window.background,
   color: #98989d;
 }
 
+.prefs-btn {
+  border-radius: 12px;
+  opacity: 0.8;
+  background-color: transparent;
+}
+
+.prefs-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
 .prompt {
   background-color: rgb(28, 28, 30);
   border-radius: 32px;
