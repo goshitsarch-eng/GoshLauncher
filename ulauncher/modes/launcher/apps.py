@@ -117,11 +117,17 @@ def _usage_rank(app_id: str) -> int:
 
 
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
-    ranked = sorted(
-        (app for app in iter_apps() if app_match_tier(app, query) >= 0),
-        key=lambda app: (app_match_tier(app, query), _usage_rank(getattr(app, "app_id", ""))),
-    )
-    return unique_by_base_name(ranked, limit)
+    scored: list[tuple[int, int, AppResult]] = []
+    for app in iter_apps():
+        try:
+            tier = app_match_tier(app, query)
+        except Exception:  # noqa: S112
+            continue
+        if tier < 0:
+            continue
+        scored.append((tier, _usage_rank(getattr(app, "app_id", "")), app))
+    scored.sort(key=lambda item: (item[0], item[1]))
+    return unique_by_base_name([app for _tier, _rank, app in scored], limit)
 
 
 def app_row_description(window_count: int) -> str:
@@ -207,6 +213,12 @@ def action_result_limit(max_results: int, _used_app_rows: int) -> int:
     return max_results
 
 
+def take_app_actions(actions: list[Any], max_results: int) -> list[Any]:
+    if max_results <= 0:
+        return []
+    return actions[:max_results]
+
+
 def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
@@ -230,4 +242,4 @@ def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[st
         )
         if len(rows) >= limit:
             break
-    return rows
+    return take_app_actions(rows, limit)

@@ -58,12 +58,16 @@ class ResultWidget(Gtk.Box):
 
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         gtk4.add_css_class(self, "item-frame")
+        self.set_can_focus(False)
+        self._pointer_pressed = False
 
         click = Gtk.GestureClick()
+        click.connect("pressed", self.on_pointer_press)
         click.connect("released", self.on_click)
         self.add_controller(click)
         motion = Gtk.EventControllerMotion()
         motion.connect("enter", self.on_mouse_hover)
+        motion.connect("leave", self.on_pointer_leave)
         self.add_controller(motion)
 
         self.item_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -73,7 +77,9 @@ class ResultWidget(Gtk.Box):
         gtk4.add_css_class(item_container, "item-container")
         self.item_box.append(item_container)
 
-        if show_icons:
+        from ulauncher.modes.launcher.result_icon import should_build_result_icon
+
+        if should_build_result_icon(show_icons):
             icon = Gtk.Image()
             icon.set_from_paintable(
                 load_icon_paintable(result.icon or "image-missing", icon_size, self.get_scale_factor())
@@ -176,10 +182,37 @@ class ResultWidget(Gtk.Box):
         for label in labels:
             gtk4.pack_start(self.title_box, label, expand, expand, 0)
 
+    def on_pointer_press(self, gesture: Gtk.GestureClick, _n_press: int, _x: float, _y: float) -> None:
+        from ulauncher.modes.launcher.result_pointer import row_pointer_action
+
+        action = row_pointer_action("press", gesture.get_current_button(), self._pointer_pressed)
+        self._pointer_pressed = bool(action["pressed"])
+        if action["action"] == "stop":
+            state = getattr(Gtk, "EventSequenceState", None)
+            if state is not None:
+                gesture.set_state(state.CLAIMED)
+
     def on_click(self, gesture: Gtk.GestureClick, _n_press: int, _x: float, _y: float) -> None:
-        alt = gesture.get_current_button() != 1
+        from ulauncher.modes.launcher.result_pointer import PRIMARY_BUTTON, row_pointer_action
+
+        button = gesture.get_current_button()
+        action = row_pointer_action("release", button, self._pointer_pressed)
+        self._pointer_pressed = bool(action["pressed"])
+        if action["action"] != "activate":
+            return
+        alt = button != PRIMARY_BUTTON
         self._on_activate(self.widget_index, alt)
 
+    def on_pointer_leave(self, *_args: object) -> None:
+        from ulauncher.modes.launcher.result_pointer import PRIMARY_BUTTON, row_pointer_action
+
+        action = row_pointer_action("leave", PRIMARY_BUTTON, self._pointer_pressed)
+        self._pointer_pressed = bool(action["pressed"])
+
     def on_mouse_hover(self, *_args: object) -> None:
+        parent = self.get_ancestor(Gtk.ScrolledWindow)
+        hover_ok = getattr(parent, "hover_allowed", None)
+        if callable(hover_ok) and not hover_ok():
+            return
         if self.result.highlightable:
             self._on_select(self.widget_index)

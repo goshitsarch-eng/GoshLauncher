@@ -6,11 +6,15 @@ import pytest
 
 from ulauncher.modes.launcher.commands import (
     EXTRA_PATH_DIRS,
+    command_file_is_ready,
+    command_is_ready,
     command_needs_async,
     command_row_meta,
+    command_uses_path_lookup,
     ensure_command,
     extra_path_dirs,
     find_user_program,
+    first_command_arg,
     flush_command_lookup,
     invalidate_command_lookup,
     join_path_dirs,
@@ -58,6 +62,24 @@ def test_command_row_meta_states() -> None:
     assert ready["description"] == "Run command"
     assert ready["icon"] == "utilities-terminal-symbolic"
     assert ready["ready"] is True
+    assert checking["activatable"] is False
+    assert checking["type"] == "command"
+    assert checking["id"] == "command:ls"
+    assert missing["activatable"] is False
+    assert missing["id"] == "command:nope"
+    assert "activatable" not in ready
+    assert first_command_arg([]) == ""
+    assert first_command_arg(["ls", "-la"]) == "ls"
+    assert command_uses_path_lookup("ls") is True
+    assert command_uses_path_lookup("/bin/ls") is False
+    assert command_uses_path_lookup("./tool") is False
+    assert command_is_ready("ls", lambda name: "/bin/ls" if name == "ls" else None, lambda _path: False) is True
+    assert command_is_ready("nope", lambda _name: None, lambda _path: False) is False
+    assert command_is_ready("/bin/ls", lambda _name: None, lambda path: path == "/bin/ls") is True
+    assert command_is_ready("/no/such", lambda _name: "/bin/true", lambda _path: False) is False
+    assert command_file_is_ready(False, True) is True
+    assert command_file_is_ready(True, True) is False
+    assert command_file_is_ready(False, False) is False
 
 
 def test_parse_command_argv_expands_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

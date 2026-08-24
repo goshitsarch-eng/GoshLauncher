@@ -58,9 +58,22 @@ class ParentalControls:
 
 class _ParentalHolder:
     controls: ParentalControls | None = None
+    gave_up: bool = False
 
 
 _holder = _ParentalHolder()
+
+
+def has_parental_give_up() -> bool:
+    return _holder.gave_up
+
+
+def mark_parental_give_up() -> None:
+    _holder.gave_up = True
+
+
+def reset_parental_give_up() -> None:
+    _holder.gave_up = False
 
 
 def probe_malcontent() -> dict[str, Any]:

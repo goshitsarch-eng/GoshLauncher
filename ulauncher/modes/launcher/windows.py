@@ -14,16 +14,6 @@ from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_
 
 logger = logging.getLogger(__name__)
 
-_CLOSE_RE = re.compile(
-    r"^(?:please\s+|can you\s+|could you\s+)?"
-    r"(close|quit|kill|force-?quit|force\s+quit|force\s+close)\s+(.+)$",
-    re.IGNORECASE,
-)
-_WS_RE = re.compile(
-    r"^(?:(?:go to|switch to|move to)\s+)?(?:workspace|ws)\s+(.+)$",
-    re.IGNORECASE,
-)
-
 
 @dataclass
 class WindowInfo:
@@ -191,15 +181,30 @@ def _workspace_label(win: WindowInfo) -> str:
     return f"Workspace {win.desktop + 1}"
 
 
-def parse_workspace_query(query: str) -> int | None:
-    match = _WS_RE.match(query.strip())
+_SWITCH_WS_RE = re.compile(
+    r"^(?:(?:go to|switch to|move to)\s+)?(?:workspace|ws)\s+(\d+)$",
+    re.IGNORECASE,
+)
+
+
+def parse_workspace_switch_query(query: str) -> dict[str, int] | None:
+    text = replace_number_words(query.strip())
+    match = _SWITCH_WS_RE.match(text)
     if not match:
         return None
-    rest = replace_number_words(match.group(1)).strip()
-    if rest.isdigit():
-        value = int(rest)
-        return value - 1 if value >= 1 else None
-    return None
+    number = int(match.group(1))
+    if number < 1:
+        return None
+    return {"index": number - 1, "number": number}
+
+
+def parse_workspace_query(query: str) -> int | None:
+    parsed = parse_workspace_switch_query(query)
+    return None if parsed is None else parsed["index"]
+
+
+def workspace_index_in_range(index: int, workspace_count: int) -> bool:
+    return isinstance(index, int) and not isinstance(index, bool) and 0 <= index < workspace_count
 
 
 def _strip_close_title(title: str) -> str:
@@ -211,17 +216,36 @@ def _strip_close_title(title: str) -> str:
     return stripped or text
 
 
-def parse_window_intent(query: str) -> tuple[str, str]:
+_GOSHOS_CLOSE_RE = re.compile(
+    r"^(close|kill|quit|force-?quit|force\s+quit|force\s+close)\s+(.+)$",
+    re.IGNORECASE,
+)
+_POLITE_RE = re.compile(r"^(?:please\s+|can you\s+|could you\s+)", re.IGNORECASE)
+
+
+def parse_window_close_query(query: str) -> dict[str, str] | None:
     text = query.strip()
-    match = _CLOSE_RE.match(text)
+    match = _GOSHOS_CLOSE_RE.match(text)
     if not match:
-        return "focus", text
-    raw = re.sub(r"[\s-]", "", match.group(1).lower())
-    intent = "kill" if raw in {"kill", "forcequit", "forceclose"} else ("quit" if raw == "quit" else "close")
+        return None
     title = _strip_close_title(match.group(2))
     if not title:
+        return None
+    raw = re.sub(r"[\s-]", "", match.group(1).lower())
+    intent = "kill" if raw in {"kill", "forcequit", "forceclose"} else ("quit" if raw == "quit" else "close")
+    return {"intent": intent, "title": title}
+
+
+def should_force_quit_window(intent: str) -> bool:
+    return intent == "kill"
+
+
+def parse_window_intent(query: str) -> tuple[str, str]:
+    text = query.strip()
+    parsed = parse_window_close_query(_POLITE_RE.sub("", text, count=1))
+    if parsed is None:
         return "focus", text
-    return intent, title
+    return parsed["intent"], parsed["title"]
 
 
 def workspace_label_matches(label: str, query: str) -> bool:

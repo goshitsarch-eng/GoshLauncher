@@ -4,7 +4,7 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
-from gi.repository import Gtk
+from gi.repository import Gdk, Gtk
 
 logger = logging.getLogger(__name__)
 footer_notice = "Be aware that keyboard shortcuts may be reserved by, or conflict with your system."
@@ -45,8 +45,10 @@ class HotkeyDialog(Gtk.Dialog):
             self.close()
 
     def set_hotkey(self, key_name: str = "") -> None:
-        label = Gtk.accelerator_get_label(*Gtk.accelerator_parse(key_name))
+        from ulauncher.modes.launcher.shortcut import format_accelerator, shortcut_display_label
+
         self._hotkey = key_name
+        label = format_accelerator(key_name) if key_name else shortcut_display_label([])
         self._hotkey_input.set_text(label)
         self._hotkey_input.set_position(-1)
         self.set_response_sensitive(RESPONSES.OK, bool(key_name))
@@ -59,8 +61,11 @@ class HotkeyDialog(Gtk.Dialog):
         self.hide()
 
     def on_key_press(self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: int) -> bool:
-        mods = state & Gtk.accelerator_get_default_mod_mask()
-        key_name = Gtk.accelerator_name(keyval, mods)
+        from ulauncher.modes.launcher.shortcut import build_accelerator, is_modifier_key_name, modifiers_from_mask
+
+        key_name = Gtk.accelerator_name(keyval, 0)
+        if is_modifier_key_name(key_name):
+            return True
 
         if self._hotkey and key_name == "Return":
             self.save_and_close()
@@ -70,8 +75,21 @@ class HotkeyDialog(Gtk.Dialog):
             self.set_hotkey()
             return True
 
-        if mods:
-            self.set_hotkey(key_name)
+        mods = modifiers_from_mask(
+            int(state),
+            {
+                "super": int(Gdk.ModifierType.SUPER_MASK),
+                "control": int(Gdk.ModifierType.CONTROL_MASK),
+                "shift": int(Gdk.ModifierType.SHIFT_MASK),
+                "alt": int(Gdk.ModifierType.ALT_MASK),
+                "meta": int(Gdk.ModifierType.META_MASK),
+            },
+        )
+        if not any(mods.values()):
+            return False
+        accel = build_accelerator(key_name, mods)
+        if accel:
+            self.set_hotkey(accel)
             return True
         return False
 

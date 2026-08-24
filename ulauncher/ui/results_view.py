@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Callable
 
 from gi.repository import Gtk
@@ -41,7 +42,7 @@ class ResultsView(Gtk.ScrolledWindow):
         activate_result: Callable[[bool], None],
     ) -> None:
         super().__init__(
-            can_focus=True,
+            can_focus=False,
             hscrollbar_policy=Gtk.PolicyType.NEVER,
             vscrollbar_policy=Gtk.PolicyType.AUTOMATIC,
             propagate_natural_height=True,
@@ -50,6 +51,8 @@ class ResultsView(Gtk.ScrolledWindow):
         self._apply_css = apply_css
         self._activate_result = activate_result
         self._widgets: list[ResultWidget] = []
+        self._painting = False
+        self._hover_suppressed_until_us = 0
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         gtk4.add_css_class(self._box, "result-box")
         self.set_child(self._box)
@@ -109,11 +112,21 @@ class ResultsView(Gtk.ScrolledWindow):
     def go_end(self) -> None:
         self._move(999)
 
+    def suppress_hover(self, duration_us: int = 150_000) -> None:
+        self._hover_suppressed_until_us = time.monotonic_ns() // 1000 + duration_us
+
+    def hover_allowed(self) -> bool:
+        from ulauncher.modes.launcher.result_pointer import should_apply_hover_selection
+
+        now = time.monotonic_ns() // 1000
+        return should_apply_hover_selection(self._painting, now, self._hover_suppressed_until_us)
+
     def _move(self, step: int) -> None:
         results = [widget.result for widget in self._widgets]
         nxt = next_activatable_index(self._index, step, results)
         if nxt < 0:
             return
+        self.suppress_hover()
         self.select(nxt)
 
     def _highlightable_indices(self) -> list[int]:
@@ -126,34 +139,38 @@ class ResultsView(Gtk.ScrolledWindow):
         return self._highlightable_indices()
 
     def _replace_results(self, update: ResultsUpdate) -> None:
-        previous_pick = self.get_active_result() if self._user_selected else None
-        gtk4.remove_all_children(self._box)
-        self._widgets = []
-        self._index = 0
+        self._painting = True
+        try:
+            previous_pick = self.get_active_result() if self._user_selected else None
+            gtk4.remove_all_children(self._box)
+            self._widgets = []
+            self._index = 0
 
-        result_list = update["results"][: self._limit()]
-        self._has_wrapped_results = any(result.wrap for result in result_list)
-        if not self._has_wrapped_results:
-            self.set_min_content_height(-1)
+            result_list = update["results"][: self._limit()]
+            self._has_wrapped_results = any(result.wrap for result in result_list)
+            if not self._has_wrapped_results:
+                self.set_min_content_height(-1)
 
-        if not result_list:
-            self._user_selected = False
-            query_text = str(update["query"])
-            if should_show_no_results(query_text, 0):
-                self._show_no_results(query_text)
-            else:
-                self.set_visible(False)
-            logger.debug("Hiding results container, no results found")
-            return
+            if not result_list:
+                self._user_selected = False
+                query_text = str(update["query"])
+                if should_show_no_results(query_text, 0):
+                    self._show_no_results(query_text)
+                else:
+                    self.set_visible(False)
+                logger.debug("Hiding results container, no results found")
+                return
 
-        self._add_widgets(result_list, update["query"], start_index=0)
-        self._apply_selection(update["selected_name"], previous_pick)
-        self._box.set_margin_bottom(10)
-        self._box.set_margin_top(3)
-        self._apply_css(self._box)
-        gtk4.show_all(self)
-        self._fit_results_height()
-        logger.debug("Render %s results", len(self._widgets))
+            self._add_widgets(result_list, update["query"], start_index=0)
+            self._apply_selection(update["selected_name"], previous_pick)
+            self._box.set_margin_bottom(10)
+            self._box.set_margin_top(3)
+            self._apply_css(self._box)
+            gtk4.show_all(self)
+            self._fit_results_height()
+            logger.debug("Render %s results", len(self._widgets))
+        finally:
+            self._painting = False
 
     def _append_results(self, update: ResultsUpdate) -> None:
         existing = len(self._widgets)

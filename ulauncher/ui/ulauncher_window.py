@@ -249,8 +249,16 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         scheduling.run_when_idle(self.deferred_init)
 
     def on_focus_out(self) -> None:
-        if self.settings.close_on_focus_out and not self.is_dragging:
+        from ulauncher.modes.launcher.focus_loss import gtk_window_focus_action, should_run_refocus
+
+        if self.is_dragging:
+            return
+        action = gtk_window_focus_action(bool(self.is_active()), self.get_focus(), self.prompt_input)
+        if action == "close" and self.settings.close_on_focus_out:
             self.close(save_query=True)
+            return
+        if action == "refocus-entry" and should_run_refocus(self.get_mapped(), self.get_visible()):
+            self.prompt_input.grab_focus()
 
     def on_focus_in(self) -> None:
         if self.settings.grab_mouse_pointer:

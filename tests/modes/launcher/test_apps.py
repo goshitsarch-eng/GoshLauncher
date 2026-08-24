@@ -14,6 +14,7 @@ from ulauncher.modes.launcher.apps import (
     is_new_window_action,
     match_apps,
     new_window_title,
+    take_app_actions,
     unique_by_base_name,
 )
 from ulauncher.modes.launcher.windows import WindowInfo
@@ -109,9 +110,12 @@ def test_app_match_tier_splits_generic_name_and_comment() -> None:
 def test_new_window_and_desktop_action_titles() -> None:
     assert is_new_window_action("new-window") is True
     assert is_new_window_action("new_window") is True
+    assert is_new_window_action("new-private-window") is False
     assert is_new_window_action("open") is False
     assert new_window_title("Firefox") == "New window — Firefox"
     assert desktop_action_title("Private Window", "Firefox") == "Private Window — Firefox"
+    assert take_app_actions(["a", "b", "c"], 2) == ["a", "b"]
+    assert take_app_actions(["a"], 0) == []
 
 
 def test_app_action_rows_hide_new_window_when_not_running() -> None:
@@ -185,3 +189,31 @@ def test_focus_open_windows_activates_matching_class(monkeypatch: pytest.MonkeyP
     assert focus_open_windows(app, windows) is True
     assert activated[0]["wid"] == "0x1"
     assert focus_open_windows(app, []) is False
+
+
+def test_match_apps_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    class _Bad:
+        app_id = "broken.desktop"
+
+        @property
+        def name(self) -> str:
+            message = "invalid desktop encoding"
+            raise RuntimeError(message)
+
+    good = SimpleNamespace(
+        name="Notes",
+        generic_name="",
+        description="",
+        app_id="notes.desktop",
+        keywords=[],
+    )
+
+    class _Rankings:
+        def get_app_ids(self) -> list[str]:
+            return []
+
+    monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), good])
+    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    assert [app.name for app in match_apps("notes")] == ["Notes"]

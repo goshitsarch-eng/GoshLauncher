@@ -44,3 +44,20 @@ def test_app_is_allowed_uses_singleton() -> None:
         assert app_is_allowed(SimpleNamespace(app_id="games.desktop")) is False
     finally:
         reset_parental_controls(None)
+
+
+def test_parental_give_up_flags() -> None:
+    from ulauncher.modes.launcher.parental import (
+        has_parental_give_up,
+        mark_parental_give_up,
+        reset_parental_give_up,
+    )
+
+    reset_parental_give_up()
+    try:
+        assert has_parental_give_up() is False
+        mark_parental_give_up()
+        assert has_parental_give_up() is True
+    finally:
+        reset_parental_give_up()
+        assert has_parental_give_up() is False

@@ -113,3 +113,13 @@ def test_search_bookmarks_empty_until_flush(tmp_path: Path, monkeypatch: pytest.
     rows = search_bookmarks("UniqueBookmarkLabelXYZ")
     assert rows
     assert rows[0]["title"] == "UniqueBookmarkLabelXYZ"
+
+
+def test_expand_home_argv_and_spawn_path() -> None:
+    from ulauncher.modes.launcher.paths import expand_home_argv, resolve_command_argv, resolve_spawn_path
+
+    assert expand_home_argv(["./tool", "~/out"], "/home/u") == ["/home/u/tool", "/home/u/out"]
+    assert resolve_spawn_path("scripts/deploy", "/home/u") == "/home/u/scripts/deploy"
+    assert resolve_spawn_path("ls", "/home/u") == "ls"
+    assert resolve_spawn_path("./tool", "/home/u") == "/home/u/tool"
+    assert resolve_command_argv(["scripts/deploy", "notes.txt"], "/home/u") == ["/home/u/scripts/deploy", "notes.txt"]

@@ -81,27 +81,47 @@ def command_file_is_ready(is_directory: bool, is_executable: bool) -> bool:
     return (not is_directory) and bool(is_executable)
 
 
+def command_is_ready(
+    exe: str,
+    find_in_path: Callable[[str], str | None],
+    path_exists: Callable[[str], bool],
+) -> bool:
+    if not exe:
+        return False
+    if command_uses_path_lookup(exe):
+        return bool(find_in_path(exe))
+    return bool(path_exists(exe))
+
+
 def command_row_meta(query: str, ready: bool, checking: bool = False) -> dict:
     if checking:
         return {
+            "type": "command",
             "title": query,
             "description": "Checking command",
             "icon": "utilities-terminal-symbolic",
+            "id": f"command:{query}",
+            "activatable": False,
             "ready": False,
             "checking": True,
         }
     if not ready:
         return {
+            "type": "command",
             "title": query,
             "description": "Command not found",
             "icon": "dialog-warning-symbolic",
+            "id": f"command:{query}",
+            "activatable": False,
             "ready": False,
             "checking": False,
         }
     return {
+        "type": "command",
         "title": query,
         "description": "Run command",
         "icon": "utilities-terminal-symbolic",
+        "id": f"command:{query}",
         "ready": True,
         "checking": False,
     }
@@ -117,18 +137,9 @@ def parse_command_argv(query: str) -> list[str] | None:
         return None
     if not argv:
         return None
-    home = Path.home()
-    expanded: list[str] = []
-    for index, arg in enumerate(argv):
-        if arg.startswith("~"):
-            expanded.append(str(Path(arg).expanduser()))
-        elif arg in {".", ".."} or arg.startswith("./") or arg.startswith("../"):
-            expanded.append(str((home / arg).resolve()) if arg != "." else str(home))
-        elif index == 0 and "/" in arg and not arg.startswith("/"):
-            expanded.append(str(home / arg))
-        else:
-            expanded.append(arg)
-    return expanded
+    from ulauncher.modes.launcher.paths import resolve_command_argv
+
+    return resolve_command_argv(argv)
 
 
 def resolve_command_row(query: str) -> dict | None:
@@ -136,13 +147,17 @@ def resolve_command_row(query: str) -> dict | None:
     if not argv:
         return None
     exe = first_command_arg(argv)
-    ready = False
+    path_env = extra_path()
+
+    def find_in_path(name: str) -> str | None:
+        return which(name, path=path_env)
+
+    ready = command_is_ready(exe, find_in_path, os.path.exists)
     if command_uses_path_lookup(exe):
-        found = which(exe, path=extra_path())
+        found = find_in_path(exe)
         if found:
             argv[0] = found
-            ready = True
-    else:
+    elif ready:
         path = Path(exe)
         ready = command_file_is_ready(path.is_dir(), path.is_file() and os.access(exe, os.X_OK))
     meta = command_row_meta(query.strip(), ready)

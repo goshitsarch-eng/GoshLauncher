@@ -226,7 +226,7 @@ class LauncherMode(Mode):
             return
         if kind in {"path", "place", "file", "bookmark"}:
             from ulauncher.modes.launcher.paths import terminal_command
-            from ulauncher.utils.launch_detached import launch_detached, open_detached
+            from ulauncher.utils.launch_detached import open_detached
 
             if not payload.get("exists", True) and not payload.get("in_terminal"):
                 callback(effects.do_nothing())
@@ -235,7 +235,9 @@ class LauncherMode(Mode):
             if payload.get("in_terminal"):
                 cmd = terminal_command(path)
                 if cmd:
-                    launch_detached(list(cmd["argv"]), working_dir=cmd.get("cwd"))
+                    from ulauncher.modes.launcher.gio_launch import spawn_argv
+
+                    spawn_argv(list(cmd["argv"]), cwd=cmd.get("cwd"))
                     callback(effects.close_window())
                     return
                 callback(effects.do_nothing())
@@ -266,14 +268,14 @@ class LauncherMode(Mode):
             callback(effects.open(str(payload["url"])))
             return
         if kind == "command":
-            from ulauncher.utils.launch_detached import launch_detached
+            from pathlib import Path
+
+            from ulauncher.modes.launcher.gio_launch import spawn_argv
 
             if not payload.get("ready") or not payload.get("argv"):
                 callback(effects.do_nothing())
                 return
-            from pathlib import Path
-
-            launch_detached(list(payload["argv"]), working_dir=str(payload.get("cwd") or Path.home()))
+            spawn_argv(list(payload["argv"]), cwd=str(payload.get("cwd") or Path.home()))
             callback(effects.close_window())
             return
         if kind == "system":
@@ -626,10 +628,13 @@ class LauncherMode(Mode):
                 payload["kind"] = row.get("window_kind") or "focus"
             icon = "" if not show_icons else str(row.get("icon") or _default_icon(kind))
             actions = row.get("actions") or {"activate": {"name": "Activate"}}
+            activatable = row.get("activatable", True) is not False
             if kind == "command" and not row.get("ready"):
                 actions = {}
+                activatable = False
             if kind in {"path", "place", "file", "bookmark"} and not row.get("exists", True):
                 actions = {}
+                activatable = False
             yield LauncherResult(
                 name=str(row["title"]),
                 description="" if not show_descriptions else str(row.get("description") or ""),
@@ -638,6 +643,7 @@ class LauncherMode(Mode):
                 kind=kind,
                 payload=payload,
                 highlightable=True,
+                activatable=activatable,
                 actions=actions,
             )
 

@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from ulauncher.modes.launcher.windows import (
     WindowInfo,
+    parse_window_close_query,
     parse_window_intent,
     parse_workspace_query,
+    parse_workspace_switch_query,
+    should_force_quit_window,
     sort_windows_most_recent,
     take_window_results,
     window_close_title,
     window_matches,
     window_recency_value,
     window_result_id,
+    workspace_index_in_range,
     workspace_label_matches,
     workspace_result_id,
     workspace_switch_title,
@@ -21,6 +25,19 @@ def test_workspace_query_needs_the_word() -> None:
     assert parse_workspace_query("workspace 2") == 1
     assert parse_workspace_query("go to workspace 3") == 2
     assert parse_workspace_query("switch to workspace two") == 1
+    parsed = parse_workspace_switch_query("workspace twenty")
+    assert parsed is not None
+    assert parsed["number"] == 20
+    twenty_one = parse_workspace_switch_query("switch to workspace twenty-one")
+    assert twenty_one is not None
+    assert twenty_one["number"] == 21
+    hundred = parse_workspace_switch_query("workspace one hundred twenty")
+    assert hundred is not None
+    assert hundred["number"] == 120
+    assert parse_workspace_switch_query("ws 1") == {"index": 0, "number": 1}
+    assert parse_workspace_switch_query("workspace") is None
+    assert workspace_index_in_range(1, 3) is True
+    assert workspace_index_in_range(3, 3) is False
 
 
 def test_close_and_kill_intents() -> None:
@@ -30,6 +47,20 @@ def test_close_and_kill_intents() -> None:
     assert parse_window_intent("force quit firefox") == ("kill", "firefox")
     assert parse_window_intent("quit firefox") == ("quit", "firefox")
     assert parse_window_intent("firefox") == ("focus", "firefox")
+    close = parse_window_close_query("close the firefox")
+    assert close is not None
+    assert close["title"] == "firefox"
+    assert parse_window_close_query("close my terminal")["title"] == "terminal"
+    assert parse_window_close_query("close the firefox application")["title"] == "firefox"
+    assert parse_window_close_query("kill firefox windows")["title"] == "firefox"
+    assert parse_window_close_query("KILL Chrome")["intent"] == "kill"
+    assert parse_window_close_query("force-quit firefox")["intent"] == "kill"
+    assert parse_window_close_query("force close firefox")["intent"] == "kill"
+    assert parse_window_close_query("close") is None
+    assert parse_window_close_query("firefox") is None
+    assert should_force_quit_window("kill") is True
+    assert should_force_quit_window("close") is False
+    assert should_force_quit_window("quit") is False
 
 
 def test_workspace_switch_title_matches_goshos() -> None:

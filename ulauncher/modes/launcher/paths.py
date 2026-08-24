@@ -68,6 +68,29 @@ def expand_path(query: str, home: str | None = None) -> str:
     return normalize_absolute(raw)
 
 
+def expand_home_argv(argv: list[str], home: str | None = None) -> list[str]:
+    return [expand_path(arg, home) for arg in argv]
+
+
+def resolve_spawn_path(path: str, home: str | None = None) -> str:
+    if not path:
+        return ""
+    if "/" not in path:
+        return path
+    home_dir = home if home is not None else str(Path.home())
+    expanded = expand_path(path, home_dir)
+    if expanded.startswith("/"):
+        return normalize_absolute(expanded)
+    return normalize_absolute(f"{home_dir}/{path}")
+
+
+def resolve_command_argv(argv: list[str], home: str | None = None) -> list[str]:
+    expanded = expand_home_argv(argv, home)
+    if not expanded:
+        return expanded
+    return [resolve_spawn_path(expanded[0], home), *expanded[1:]]
+
+
 def collapse_home(path: str, home: str | None = None) -> str:
     home_dir = home if home is not None else str(Path.home())
     if path == home_dir:
@@ -212,7 +235,9 @@ def match_path(query: str, kind: str | None = None) -> dict | None:
 
 def terminal_spec(find_in_path: Any | None = None) -> dict | None:
     if find_in_path is None:
-        find_in_path = which
+        from ulauncher.modes.launcher.gio_launch import find_in_user_path
+
+        find_in_path = find_in_user_path
     if find_in_path("xdg-terminal-exec"):
         return {"argv": ["xdg-terminal-exec"], "use_directory_cwd": True}
     if find_in_path("ptyxis"):

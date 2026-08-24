@@ -190,6 +190,17 @@ class UlauncherApp(Adw.Application):
 
     @events.on
     def show_launcher(self) -> None:
+        from ulauncher.modes.launcher.popup_gate import can_open_popup, should_close_on_session
+        from ulauncher.modes.launcher.session_state import session_popup_blockers
+
+        locked, greeter, limits = session_popup_blockers()
+        if should_close_on_session(locked, greeter, limits):
+            if self.windows.get("main"):
+                self.close_launcher()
+            return
+        if not can_open_popup(False, False, locked, greeter, limits):
+            return
+
         if (main_window := self.windows.get("main")) and not main_window.get_mapped():
             logger.warning("Ignoring stale main window reference")
             del self.windows["main"]
@@ -289,7 +300,10 @@ class UlauncherApp(Adw.Application):
         if action == "close":
             self.close_launcher()
             return
-        if not can_open_popup(False, False, False, False, False):
+        from ulauncher.modes.launcher.session_state import session_popup_blockers
+
+        locked, greeter, limits = session_popup_blockers()
+        if not can_open_popup(False, False, locked, greeter, limits):
             return
         self.show_launcher()
 

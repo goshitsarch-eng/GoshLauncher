@@ -142,39 +142,61 @@ class PreferencesView(BaseView):
 
         parent.pack_start(row_box, False, False, 0)
 
-    def _add_general_section(self, parent: Gtk.Box) -> None:
-        """Add general settings section"""
-        general_box = self._create_section_container(parent, "General")
-        run_in_bg_footer = "\n<b>Recommended:</b> Enabling this will make Ulauncher open noticeably faster."
+    def _select_combo_id(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
+        from ulauncher.modes.launcher.prefs_combo import combo_selected_index
 
-        # Run in background (via systemd autostart, or keep-alive fallback)
+        index = combo_selected_index(items, current_id)
+        if index >= 0:
+            combo.set_active(index)
+
+    def _add_look_combo(self, general_box: Gtk.Box) -> None:
+        from ulauncher.modes.launcher.looks import LOOKS
+
+        look_combo = Gtk.ComboBoxText()
+        for look in LOOKS:
+            look_combo.append(look["id"], look["title"])
+        self._select_combo_id(look_combo, LOOKS, getattr(self.settings, "look_id", "spotlight"))
+        look_combo.connect("changed", self._on_look_changed)
+        look_desc = (
+            "Launcher chrome (position, density, headers, number hints, icons). "
+            "Width is separate. Matches Spotlight-goshos looks."
+        )
+        self._add_setting_row(general_box, "Launcher look", look_combo, look_desc)
+
+    def _add_background_row(self, general_box: Gtk.Box, run_in_bg_footer: str) -> None:
         autostart_status = self.autostart_pref.status()
         if autostart_status.can_start:
             autostart_switch = Gtk.Switch(active=autostart_status.is_enabled)
             autostart_switch.connect("notify::active", self._on_autostart_toggled)
             desc = "Start Ulauncher automatically with your desktop session so it's ready when you need it."
             self._add_setting_row(general_box, "Run in background", autostart_switch, f"{desc}{run_in_bg_footer}")
-        else:
-            keep_alive_switch = Gtk.Switch(active=self.settings.keep_alive)
-            keep_alive_switch.connect("notify::active", self._on_keep_alive_toggled)
-            desc = "Keep Ulauncher running in the background after first use so it stays ready"
-            self._add_setting_row(general_box, "Run in background", keep_alive_switch, f"{desc}{run_in_bg_footer}")
+            return
+        keep_alive_switch = Gtk.Switch(active=self.settings.keep_alive)
+        keep_alive_switch.connect("notify::active", self._on_keep_alive_toggled)
+        desc = "Keep Ulauncher running in the background after first use so it stays ready"
+        self._add_setting_row(general_box, "Run in background", keep_alive_switch, f"{desc}{run_in_bg_footer}")
 
-        self._add_tray_icon_row(general_box)
-
-        # Hotkey
+    def _add_hotkey_row(self, general_box: Gtk.Box) -> None:
         if HotkeyController.is_supported():
             hotkey_button = Gtk.Button.new_with_label("Set hotkey")
             hotkey_button.connect("clicked", self._on_hotkey_clicked)
             hotkey_desc = "Choose the global keyboard shortcut that opens Ulauncher."
             self._add_setting_row(general_box, "Hotkey", hotkey_button, hotkey_desc)
-        else:
-            warning_text = (
-                "Ulauncher doesn't support setting global shortcuts for your desktop environment. "
-                "Bind this command in your DE settings: gapplication launch io.ulauncher.Ulauncher"
-            )
-            unavailable_label = Gtk.Label(label="Not available", sensitive=False)
-            self._add_setting_row(general_box, "Hotkey", unavailable_label, warning_text, is_warning=True)
+            return
+        warning_text = (
+            "Ulauncher doesn't support setting global shortcuts for your desktop environment. "
+            "Bind this command in your DE settings: gapplication launch io.ulauncher.Ulauncher"
+        )
+        unavailable_label = Gtk.Label(label="Not available", sensitive=False)
+        self._add_setting_row(general_box, "Hotkey", unavailable_label, warning_text, is_warning=True)
+
+    def _add_general_section(self, parent: Gtk.Box) -> None:
+        """Add general settings section"""
+        general_box = self._create_section_container(parent, "General")
+        run_in_bg_footer = "\n<b>Recommended:</b> Enabling this will make Ulauncher open noticeably faster."
+        self._add_background_row(general_box, run_in_bg_footer)
+        self._add_tray_icon_row(general_box)
+        self._add_hotkey_row(general_box)
 
         # Color theme
         theme_combo = Gtk.ComboBoxText()
@@ -186,18 +208,7 @@ class PreferencesView(BaseView):
         theme_desc = "Switch between installed themes. Changes apply immediately when you relaunch the UI."
         self._add_setting_row(general_box, "Color theme", theme_combo, theme_desc)
 
-        look_combo = Gtk.ComboBoxText()
-        from ulauncher.modes.launcher.looks import LOOKS
-
-        for look in LOOKS:
-            look_combo.append(look["id"], look["title"])
-        look_combo.set_active_id(getattr(self.settings, "look_id", "spotlight"))
-        look_combo.connect("changed", self._on_look_changed)
-        look_desc = (
-            "Launcher chrome (position, density, headers, number hints, icons). "
-            "Width is separate. Matches Spotlight-goshos looks."
-        )
-        self._add_setting_row(general_box, "Launcher look", look_combo, look_desc)
+        self._add_look_combo(general_box)
 
         # Screen to show on
         screen_combo = Gtk.ComboBoxText()
@@ -449,7 +460,7 @@ class PreferencesView(BaseView):
 
         for engine in SEARCH_ENGINES:
             engine_combo.append(engine["id"], engine["label"])
-        engine_combo.set_active_id(self.settings.web_search_engine)
+        self._select_combo_id(engine_combo, SEARCH_ENGINES, self.settings.web_search_engine)
         engine_combo.connect("changed", self._on_web_engine_changed)
         self._add_setting_row(
             launcher_box,
