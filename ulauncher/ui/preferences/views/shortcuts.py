@@ -22,6 +22,7 @@ class ShortcutsView(views.BaseView):
     active_shortcut_id: str | None = None
     shortcuts: Shortcuts
     save_button: Gtk.Button | None = None
+    _icon_chooser: Gtk.FileChooserNative | None = None
     """Shortcuts management page"""
 
     def __init__(self) -> None:
@@ -378,22 +379,30 @@ class ShortcutsView(views.BaseView):
         self.icon_button.set_image(icon)
 
     def _on_select_icon(self, _button: Gtk.Button) -> None:
-        """Handle icon selection"""
-        dialog = Gtk.FileChooserDialog(
-            title="Select Icon", transient_for=get_window_for_widget(self), action=Gtk.FileChooserAction.OPEN
-        )
-        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
+        """Handle icon selection via GTK4 FileChooserNative (Ubuntu 22.04 / GTK 4.6)."""
+        from ulauncher.modes.launcher.file_chooser import chooser_selected_path, should_take_chooser_path
 
-        # Add image filter
+        dialog = Gtk.FileChooserNative(
+            title="Select Icon",
+            transient_for=get_window_for_widget(self),
+            action=Gtk.FileChooserAction.OPEN,
+        )
         filter_images = Gtk.FileFilter()
         filter_images.set_name("Image files")
         filter_images.add_pixbuf_formats()
         dialog.add_filter(filter_images)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            self.selected_icon_path = dialog.get_filename() or ""
-            self._update_icon_button()
-            self._on_form_field_changed(self.icon_button)
+        def on_response(native: Gtk.FileChooserNative, response: int) -> None:
+            if should_take_chooser_path(response, int(Gtk.ResponseType.ACCEPT)):
+                path = chooser_selected_path(native)
+                if path:
+                    self.selected_icon_path = path
+                    self._update_icon_button()
+                    self._on_form_field_changed(self.icon_button)
+            native.destroy()
+            self._icon_chooser = None
 
-        dialog.destroy()
+        # NativeDialog is not a Gtk.Dialog; keep a ref until the response arrives.
+        self._icon_chooser = dialog
+        dialog.connect("response", on_response)
+        dialog.show()
