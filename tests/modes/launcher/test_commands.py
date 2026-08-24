@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ulauncher.modes.launcher.commands import (
+    EXTRA_PATH_DIRS,
     command_needs_async,
     command_row_meta,
     ensure_command,
@@ -16,15 +17,27 @@ from ulauncher.modes.launcher.commands import (
 )
 
 
+def test_extra_path_dirs_follow_goshos_order() -> None:
+    suffixes = [path.as_posix() for path in EXTRA_PATH_DIRS]
+    assert suffixes[-1] == "/var/lib/flatpak/exports/bin"
+    assert suffixes[0].endswith("/.local/bin")
+    assert suffixes[1].endswith("/.local/share/flatpak/exports/bin")
+    assert suffixes[2].endswith("/.cargo/bin")
+    assert suffixes[3].endswith("/go/bin")
+    assert suffixes[4].endswith("/bin")
+
+
 def test_command_row_meta_states() -> None:
     checking = command_row_meta("ls", ready=False, checking=True)
     assert checking["description"] == "Checking command"
     assert checking["ready"] is False
     missing = command_row_meta("nope", ready=False)
     assert missing["description"] == "Command not found"
-    assert missing["icon"] == "dialog-warning"
+    assert missing["icon"] == "dialog-warning-symbolic"
+    assert checking["icon"] == "utilities-terminal-symbolic"
     ready = command_row_meta("ls", ready=True)
     assert ready["description"] == "Run command"
+    assert ready["icon"] == "utilities-terminal-symbolic"
     assert ready["ready"] is True
 
 

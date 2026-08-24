@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.system_actions import action_is_available, match_system_actions
+from ulauncher.modes.launcher.system_actions import SYSTEM_ACTIONS, action_is_available, match_system_actions
 
 
 def test_spoken_lock_sign_out_and_power_off() -> None:
@@ -31,3 +31,9 @@ def test_logind_no_hides_power_actions_screenshot_stays() -> None:
     allowed = {"CanPowerOff": "challenge"}
     assert action_is_available("shutdown", allowed) is True
     assert match_system_actions("power off", can_map=allowed)
+
+
+def test_screenshot_icon_matches_goshos() -> None:
+    shot = next(action for action in SYSTEM_ACTIONS if action["id"] == "screenshot")
+    assert shot["title"] == "Take a Screenshot"
+    assert shot["icon"] == "record-screen-symbolic"

@@ -17,7 +17,7 @@ SYSTEM_ACTIONS = [
     {
         "id": "lock",
         "title": "Lock Screen",
-        "icon": "system-lock-screen",
+        "icon": "system-lock-screen-symbolic",
         "keywords": ["lock", "lockscreen", "lock screen", "lock the screen", "lock now"],
         "commands": [
             ["loginctl", "lock-session"],
@@ -28,7 +28,7 @@ SYSTEM_ACTIONS = [
     {
         "id": "logout",
         "title": "Log Out",
-        "icon": "system-log-out",
+        "icon": "system-log-out-symbolic",
         "keywords": ["logout", "signout", "log out", "sign out", "log off", "sign off"],
         "commands": [
             ["gnome-session-quit", "--logout", "--no-prompt"],
@@ -38,35 +38,35 @@ SYSTEM_ACTIONS = [
     {
         "id": "suspend",
         "title": "Suspend",
-        "icon": "media-playback-pause",
+        "icon": "media-playback-pause-symbolic",
         "keywords": ["suspend", "sleep"],
         "commands": [["systemctl", "suspend"], ["loginctl", "suspend"]],
     },
     {
         "id": "restart",
         "title": "Restart",
-        "icon": "system-reboot",
+        "icon": "system-reboot-symbolic",
         "keywords": ["restart", "reboot"],
         "commands": [["systemctl", "reboot"], ["gnome-session-quit", "--reboot", "--no-prompt"]],
     },
     {
         "id": "shutdown",
         "title": "Power Off",
-        "icon": "system-shutdown",
+        "icon": "system-shutdown-symbolic",
         "keywords": ["shutdown", "shut down", "poweroff", "power off", "turn off", "halt", "shut down the computer"],
         "commands": [["systemctl", "poweroff"], ["gnome-session-quit", "--power-off", "--no-prompt"]],
     },
     {
         "id": "switch-user",
         "title": "Switch User",
-        "icon": "system-switch-user",
+        "icon": "system-switch-user-symbolic",
         "keywords": ["switch user", "switchuser"],
         "commands": [["gdmflexiserver"], ["dm-tool", "switch-to-greeter"]],
     },
     {
         "id": "lock-orientation",
         "title": "Lock Screen Rotation",
-        "icon": "rotation-locked",
+        "icon": "rotation-locked-symbolic",
         "keywords": [
             "rotation",
             "orientation",
@@ -83,7 +83,7 @@ SYSTEM_ACTIONS = [
     {
         "id": "screenshot",
         "title": "Take a Screenshot",
-        "icon": "applets-screenshooter",
+        "icon": "record-screen-symbolic",
         "keywords": ["screenshot", "snip", "capture", "screencast", "record"],
         "commands": [["gnome-screenshot"], ["grim"]],
     },

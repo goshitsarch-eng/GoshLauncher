@@ -130,11 +130,11 @@ class LauncherMode(Mode):
         order = flags.get("result_order") or chrome.get("result_order") or "default"
         if order == "default":
             order = chrome.get("result_order") or "default"
-        app_limit = min(limit, max(1, int(getattr(settings, "max_recent_apps", 6) or 6)))
+        recent_cap = int(getattr(settings, "max_recent_apps", 6) or 0)
         open_windows = list_windows() if flags.get("windows") or flags.get("apps") else []
         app_rows: list[dict[str, Any]] = []
-        if flags.get("apps"):
-            for app in home_apps(app_limit):
+        if flags.get("apps") and recent_cap > 0:
+            for app in home_apps(min(limit, recent_cap)):
                 app_rows.append(
                     {
                         "kind": "app",
@@ -414,6 +414,7 @@ class LauncherMode(Mode):
                         "score": 95,
                         "title": formatted,
                         "description": calculator_description(value),
+                        "icon": "accessories-calculator-symbolic",
                         "copy_text": formatted,
                     },
                 )
@@ -429,24 +430,25 @@ class LauncherMode(Mode):
                         "kind": "units",
                         "score": 90,
                         "title": hit["title"],
-                        "description": hit["description"],
+                        "description": f"{hit['description']} · press Enter to copy",
+                        "icon": "accessories-calculator-symbolic",
                         "copy_text": hit["copy_text"],
                     },
                 )
 
         if "color" in providers:
-            from ulauncher.modes.launcher.color import parse_color, rgb_to_hsl
+            from ulauncher.modes.launcher.color import parse_color
 
             hit = parse_color(q)
             if hit:
-                hue, sat, light = rgb_to_hsl(int(hit["r"]), int(hit["g"]), int(hit["b"]))
                 add(
                     "color",
                     {
                         "kind": "color",
                         "score": 85,
                         "title": hit["hex"],
-                        "description": f"rgb({hit['r']}, {hit['g']}, {hit['b']}) · hsl({hue}, {sat}%, {light}%)",
+                        "description": "Press Enter to copy color",
+                        "icon": "color-select-symbolic",
                         "copy_text": hit["hex"],
                     },
                 )
@@ -456,13 +458,17 @@ class LauncherMode(Mode):
 
             hit = match_clock(q)
             if hit:
+                clock_icon = (
+                    "preferences-system-time-symbolic" if hit.get("kind") == "time" else "x-office-calendar-symbolic"
+                )
                 add(
                     "time",
                     {
                         "kind": "clock",
                         "score": 60,
                         "title": hit["title"],
-                        "description": hit["description"],
+                        "description": f"{hit['description']} · press Enter to copy",
+                        "icon": clock_icon,
                         "copy_text": hit["copy_text"],
                     },
                 )
@@ -505,7 +511,7 @@ class LauncherMode(Mode):
                         "score": 50,
                         "title": hit["title"],
                         "description": "System",
-                        "icon": hit.get("icon") or "system-shutdown",
+                        "icon": hit.get("icon") or "system-shutdown-symbolic",
                         "action_id": hit["id"],
                     },
                 )
@@ -520,8 +526,8 @@ class LauncherMode(Mode):
                         "kind": "settings",
                         "score": 55,
                         "title": hit["title"],
-                        "description": "Settings",
-                        "icon": hit.get("icon") or "preferences-system",
+                        "description": "GNOME Settings",
+                        "icon": hit.get("icon") or "preferences-system-symbolic",
                         "panel_id": hit["id"],
                     },
                 )
@@ -545,7 +551,7 @@ class LauncherMode(Mode):
                         "score": 40,
                         "title": hit["title"],
                         "description": hit["description"],
-                        "icon": hit.get("icon") or "utilities-terminal",
+                        "icon": hit.get("icon") or "utilities-terminal-symbolic",
                         "argv": hit.get("argv") or [],
                         "ready": bool(hit.get("ready")),
                         "checking": bool(hit.get("checking")),

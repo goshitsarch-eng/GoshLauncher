@@ -21,3 +21,10 @@ def test_wellbeing_hidden_when_desktop_missing() -> None:
     shown = match_settings_panels("wellbeing", is_available=lambda _panel_id: True)
     assert shown
     assert shown[0]["id"] == "wellbeing"
+
+
+def test_settings_icons_are_symbolic() -> None:
+    from ulauncher.modes.launcher.settings_panels import SETTINGS_PANELS
+
+    assert SETTINGS_PANELS[0]["icon"] == "network-wireless-symbolic"
+    assert all(str(panel["icon"]).endswith("-symbolic") for panel in SETTINGS_PANELS)

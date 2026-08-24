@@ -8,13 +8,14 @@ from pathlib import Path
 from shutil import which
 from typing import Any, Callable
 
+# goshos userPath.js: user dirs first, then the system Flatpak export dir
 EXTRA_PATH_DIRS = (
     Path.home() / ".local" / "bin",
     Path.home() / ".local" / "share" / "flatpak" / "exports" / "bin",
-    Path("/var/lib/flatpak/exports/bin"),
     Path.home() / ".cargo" / "bin",
     Path.home() / "go" / "bin",
     Path.home() / "bin",
+    Path("/var/lib/flatpak/exports/bin"),
 )
 
 
@@ -44,7 +45,7 @@ def command_row_meta(query: str, ready: bool, checking: bool = False) -> dict:
         return {
             "title": query,
             "description": "Checking command",
-            "icon": "utilities-terminal",
+            "icon": "utilities-terminal-symbolic",
             "ready": False,
             "checking": True,
         }
@@ -52,14 +53,14 @@ def command_row_meta(query: str, ready: bool, checking: bool = False) -> dict:
         return {
             "title": query,
             "description": "Command not found",
-            "icon": "dialog-warning",
+            "icon": "dialog-warning-symbolic",
             "ready": False,
             "checking": False,
         }
     return {
         "title": query,
         "description": "Run command",
-        "icon": "utilities-terminal",
+        "icon": "utilities-terminal-symbolic",
         "ready": True,
         "checking": False,
     }

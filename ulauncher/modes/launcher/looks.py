@@ -203,6 +203,22 @@ DEFAULT_LOOK_ID = LOOKS[0]["id"]
 LIGHT_LOOKS = frozenset({"light", "fuzzel"})
 
 
+def look_apply_action(theme_id: str, applied_id: str) -> str:
+    # goshos lookApplyAction: an empty applied-look stamps the default without
+    # rewriting chrome so a custom icon size survives first enable
+    if not theme_id:
+        return "keep"
+    if not applied_id:
+        return "stamp" if theme_id == LOOKS[0]["id"] else "apply"
+    if theme_id != applied_id:
+        return "apply"
+    return "keep"
+
+
+def should_apply_look(previous_id: str, next_id: str) -> bool:
+    return bool(next_id) and next_id != previous_id
+
+
 def get_look(look_id: str) -> Look:
     for look in LOOKS:
         if look["id"] == look_id:
@@ -259,8 +275,16 @@ def apply_look_chrome(settings: Any, look_id: str | None = None) -> dict[str, An
 
 def ensure_look_chrome(settings: Any) -> None:
     look = get_look(getattr(settings, "look_id", "spotlight"))
-    if getattr(settings, "applied_look", "") != look["id"]:
+    action = look_apply_action(look["id"], str(getattr(settings, "applied_look", "") or ""))
+    if action == "apply":
         apply_look_chrome(settings, look["id"])
+        return
+    if action == "stamp":
+        save = getattr(settings, "save", None)
+        if callable(save):
+            save({"applied_look": look["id"]})
+        else:
+            settings.applied_look = look["id"]
 
 
 def chrome_from_settings(settings: Any) -> LookChrome:

@@ -251,9 +251,7 @@ class PreferencesView(BaseView):
         self._density_combo = density_combo
         self._add_setting_row(chrome_box, "Row density", density_combo, "Compact still shrinks the look's icon size.")
 
-        height_adjust = Gtk.Adjustment(
-            value=self.settings.results_max_height, lower=160, upper=800, step_increment=20
-        )
+        height_adjust = Gtk.Adjustment(value=self.settings.results_max_height, lower=160, upper=800, step_increment=20)
         height_spin = Gtk.SpinButton(adjustment=height_adjust)
         height_spin.connect("value-changed", self._on_int_setting("results_max_height"))
         self._height_spin = height_spin
@@ -577,11 +575,13 @@ class PreferencesView(BaseView):
 
     def _on_look_changed(self, combo: Gtk.ComboBoxText) -> None:
         look_id = combo.get_active_id()
-        if look_id:
-            from ulauncher.modes.launcher.looks import apply_look_chrome
+        from ulauncher.modes.launcher.looks import apply_look_chrome, should_apply_look
 
-            apply_look_chrome(self.settings, look_id)
-            self._sync_chrome_widgets()
+        # picking the same look must not rewrite chrome; Reset look does that
+        if not should_apply_look(self.settings.look_id, look_id or ""):
+            return
+        apply_look_chrome(self.settings, look_id)
+        self._sync_chrome_widgets()
 
     def _on_screen_changed(self, combo: Gtk.ComboBoxText) -> None:
         screen = combo.get_active_id()

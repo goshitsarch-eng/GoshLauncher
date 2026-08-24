@@ -11,6 +11,13 @@ def test_single_letter_is_prefix_only() -> None:
     assert not any(place["id"] == "home" for place in match_places("o"))
 
 
+def test_place_icons_are_symbolic() -> None:
+    from ulauncher.modes.launcher.places import PLACE_CATALOG
+
+    assert PLACE_CATALOG[0]["icon"] == "user-home-symbolic"
+    assert all(str(place["icon"]).endswith("-symbolic") for place in PLACE_CATALOG)
+
+
 def test_spoken_open_documents() -> None:
     query = strip_leading_verb("open my documents")
     assert query == "documents"

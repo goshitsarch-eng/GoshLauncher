@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ulauncher.modes.launcher.looks import LOOKS, apply_look_chrome, chrome_from_settings, get_look, look_ids
+from ulauncher.modes.launcher.looks import (
+    LOOKS,
+    apply_look_chrome,
+    chrome_from_settings,
+    ensure_look_chrome,
+    get_look,
+    look_apply_action,
+    look_ids,
+    should_apply_look,
+)
 
 
 def test_seventeen_looks() -> None:
@@ -28,6 +37,23 @@ def test_apply_look_chrome_stamps_popos() -> None:
     assert chrome["position"] == "top"
     assert chrome["show_numbers"] is True
     assert chrome["result_order"] == "windows-first"
+
+
+def test_look_apply_action_stamps_default_without_rewriting_chrome() -> None:
+    assert look_apply_action("spotlight", "") == "stamp"
+    assert look_apply_action("popos", "") == "apply"
+    assert look_apply_action("spotlight", "spotlight") == "keep"
+    assert look_apply_action("popos", "spotlight") == "apply"
+    assert should_apply_look("spotlight", "spotlight") is False
+    assert should_apply_look("spotlight", "popos") is True
+    stamped = SimpleNamespace(look_id="spotlight", applied_look="", icon_size=48)
+    ensure_look_chrome(stamped)
+    assert stamped.applied_look == "spotlight"
+    assert stamped.icon_size == 48
+    applied = SimpleNamespace(look_id="popos", applied_look="")
+    ensure_look_chrome(applied)
+    assert applied.applied_look == "popos"
+    assert applied.popup_position == "top"
 
 
 def test_every_look_has_theme_css() -> None:

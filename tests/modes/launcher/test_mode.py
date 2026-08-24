@@ -85,6 +85,7 @@ def test_modern_css_color_query() -> None:
     assert "color" in kinds
     color = next(row for row in results if getattr(row, "kind", "") == "color")
     assert color.name == "#ff0000"
+    assert color.description == "Press Enter to copy color"
     kinds = _kinds(_handle("rgb(255 0 0)"))
     assert "color" in kinds
     kinds = _kinds(_handle("hwb(0 0% 0%)"))
@@ -170,7 +171,51 @@ def test_empty_state_puts_windows_first_for_popos(monkeypatch: pytest.MonkeyPatc
     assert app.description == "Switch to application"
 
 
-def test_spoken_system_and_unit_queries() -> None:
+def test_empty_state_hides_apps_when_recent_cap_is_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    settings.max_recent_apps = 0
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.apps.home_apps",
+        lambda limit: [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")][:limit],
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.list_windows",
+        lambda: [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
+    )
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["window"]
+
+
+def test_empty_suggestions_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_empty_suggestions = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    assert list(LauncherMode().get_home_results(6)) == []
+
+
+def test_settings_row_copy_matches_goshos() -> None:
+    results = _handle("# wifi")
+    settings_row = next(row for row in results if getattr(row, "kind", "") == "settings")
+    assert settings_row.description == "GNOME Settings"
+
+
+def test_clock_and_units_copy_prompt_enter() -> None:
+    clock = next(row for row in _handle("time") if getattr(row, "kind", "") == "clock")
+    assert clock.description.endswith(" · press Enter to copy")
+    units = next(row for row in _handle("10 km to mi") if getattr(row, "kind", "") == "units")
+    assert units.description.endswith(" · press Enter to copy")
     assert "system" in _kinds(_handle("lock the screen"))
     assert "units" in _kinds(_handle("convert 10 km to mi"))
     assert "calculator" in _kinds(_handle("half of 80"))
