@@ -4,6 +4,8 @@ from types import SimpleNamespace
 
 from ulauncher.modes.launcher.popup_position import (
     MIN_RESULTS_HEIGHT,
+    empty_popup_height,
+    gtk_window_owns_popup_width,
     keyboard_overlap_from_box,
     lift_origin_for_results,
     place_popup,
@@ -14,6 +16,8 @@ from ulauncher.modes.launcher.popup_position import (
 )
 from ulauncher.modes.launcher.ui_scale import (
     css_px,
+    gtk_layout_scale,
+    layout_scale_for_toolkit,
     next_scale_listen_action,
     stage_px,
     theme_scale,
@@ -102,3 +106,25 @@ def test_work_area_avoids_keyboard_on_same_monitor() -> None:
         "workMonitorIndex": 0,
     }
     assert work_area_avoiding_keyboard(work, hidden) == work
+
+
+def test_gtk_layout_scale_does_not_double_hidpi() -> None:
+    assert gtk_layout_scale() == 1
+    assert gtk_layout_scale(2) == 1
+    assert layout_scale_for_toolkit("st", 2) == 2
+    assert layout_scale_for_toolkit("gtk", 2) == 1
+    assert popup_width_for_work_area(600, 1920, 2) == 1200
+    assert popup_width_for_work_area(600, 1920, gtk_layout_scale(2)) == 600
+    work = {"x": 0, "y": 0, "width": 1920, "height": 1080}
+    placed_gtk = place_popup(work, 600, 80, "center", 400, None, gtk_layout_scale(2))
+    assert placed_gtk["x"] == popup_origin(work, 600, 80, "center")["x"]
+    assert placed_gtk["results_max"] == 400
+
+
+def test_empty_popup_height_uses_measured_entry() -> None:
+    assert empty_popup_height(0) == 80
+    assert empty_popup_height(-4) == 80
+    assert empty_popup_height(112) == 112
+    assert gtk_window_owns_popup_width("GNOME", False) is False
+    assert gtk_window_owns_popup_width("GNOME", True) is True
+    assert gtk_window_owns_popup_width("KDE", False) is True

@@ -262,19 +262,77 @@ class PreferencesView(BaseView):
         self._density_combo = density_combo
         self._add_setting_row(chrome_box, "Row density", density_combo, "Compact still shrinks the look's icon size.")
 
-        height_adjust = Gtk.Adjustment(value=self.settings.results_max_height, lower=160, upper=800, step_increment=20)
+        from ulauncher.modes.launcher.chrome_size import (
+            ICON_SIZE_MAX,
+            ICON_SIZE_MIN,
+            ICON_SIZE_PAGE,
+            ICON_SIZE_STEP,
+            MAX_RESULTS_MAX,
+            MAX_RESULTS_MIN,
+            MAX_RESULTS_PAGE,
+            MAX_RESULTS_STEP,
+            POPUP_WIDTH_MAX,
+            POPUP_WIDTH_MIN,
+            POPUP_WIDTH_PAGE,
+            POPUP_WIDTH_STEP,
+            RESULTS_HEIGHT_MAX,
+            RESULTS_HEIGHT_MIN,
+            RESULTS_HEIGHT_PAGE,
+            RESULTS_HEIGHT_STEP,
+            clamp_icon_size,
+            clamp_max_results,
+            clamp_popup_width,
+            clamp_results_max_height,
+        )
+
+        width_adjust = Gtk.Adjustment(
+            value=clamp_popup_width(self.settings.base_width),
+            lower=POPUP_WIDTH_MIN,
+            upper=POPUP_WIDTH_MAX,
+            step_increment=POPUP_WIDTH_STEP,
+            page_increment=POPUP_WIDTH_PAGE,
+        )
+        width_spin = Gtk.SpinButton(adjustment=width_adjust)
+        width_spin.connect("value-changed", self._on_width_changed)
+        self._width_spin = width_spin
+        self._add_setting_row(
+            chrome_box,
+            "Popup width",
+            width_spin,
+            "Width in pixels. Not part of a look. 400-1200, default 600.",
+        )
+
+        height_adjust = Gtk.Adjustment(
+            value=clamp_results_max_height(self.settings.results_max_height),
+            lower=RESULTS_HEIGHT_MIN,
+            upper=RESULTS_HEIGHT_MAX,
+            step_increment=RESULTS_HEIGHT_STEP,
+            page_increment=RESULTS_HEIGHT_PAGE,
+        )
         height_spin = Gtk.SpinButton(adjustment=height_adjust)
         height_spin.connect("value-changed", self._on_int_setting("results_max_height"))
         self._height_spin = height_spin
         self._add_setting_row(chrome_box, "Results max height", height_spin, "Scroll after this height.")
 
-        max_adjust = Gtk.Adjustment(value=self.settings.max_per_category, lower=1, upper=20, step_increment=1)
+        max_adjust = Gtk.Adjustment(
+            value=clamp_max_results(self.settings.max_per_category),
+            lower=MAX_RESULTS_MIN,
+            upper=MAX_RESULTS_MAX,
+            step_increment=MAX_RESULTS_STEP,
+            page_increment=MAX_RESULTS_PAGE,
+        )
         max_spin = Gtk.SpinButton(adjustment=max_adjust)
         max_spin.connect("value-changed", self._on_int_setting("max_per_category"))
         self._max_spin = max_spin
         self._add_setting_row(chrome_box, "Max results per category", max_spin, "Cap for each provider group.")
 
-        icon_adjust = Gtk.Adjustment(value=self.settings.icon_size, lower=16, upper=64, step_increment=2)
+        icon_adjust = Gtk.Adjustment(
+            value=clamp_icon_size(self.settings.icon_size),
+            lower=ICON_SIZE_MIN,
+            upper=ICON_SIZE_MAX,
+            step_increment=ICON_SIZE_STEP,
+            page_increment=ICON_SIZE_PAGE,
+        )
         icon_spin = Gtk.SpinButton(adjustment=icon_adjust)
         icon_spin.connect("value-changed", self._on_int_setting("icon_size"))
         self._icon_spin = icon_spin
@@ -341,6 +399,13 @@ class PreferencesView(BaseView):
                 self._max_spin.set_value(self.settings.max_per_category)
             if hasattr(self, "_icon_spin"):
                 self._icon_spin.set_value(self.settings.icon_size)
+            from ulauncher.modes.launcher.chrome_size import clamp_popup_width
+
+            width = clamp_popup_width(self.settings.base_width)
+            if hasattr(self, "_width_spin"):
+                self._width_spin.set_value(width)
+            if hasattr(self, "_app_width_spin"):
+                self._app_width_spin.set_value(width)
             for attr, switch in getattr(self, "_chrome_switches", {}).items():
                 switch.set_active(bool(getattr(self.settings, attr)))
         finally:
@@ -406,6 +471,7 @@ class PreferencesView(BaseView):
         for attr, switch in getattr(self, "_chrome_switches", {}).items():
             bind_settings_changed(self._prefs_signals, attr, switch, self._sync_chrome_widgets)
         for attr, spin in (
+            ("base_width", getattr(self, "_width_spin", None) or getattr(self, "_app_width_spin", None)),
             ("results_max_height", getattr(self, "_height_spin", None)),
             ("max_per_category", getattr(self, "_max_spin", None)),
             ("icon_size", getattr(self, "_icon_spin", None)),
@@ -471,11 +537,26 @@ class PreferencesView(BaseView):
 
         self._add_setting_row(applications_box, "Switch to application if already running", raise_switch, desc)
 
-        # Window width
-        width_adjustment = Gtk.Adjustment(value=self.settings.base_width, lower=540, upper=2000, step_increment=10)
+        # Window width (same popup-width range as goshos appearance Size)
+        from ulauncher.modes.launcher.chrome_size import (
+            POPUP_WIDTH_MAX,
+            POPUP_WIDTH_MIN,
+            POPUP_WIDTH_PAGE,
+            POPUP_WIDTH_STEP,
+            clamp_popup_width,
+        )
+
+        width_adjustment = Gtk.Adjustment(
+            value=clamp_popup_width(self.settings.base_width),
+            lower=POPUP_WIDTH_MIN,
+            upper=POPUP_WIDTH_MAX,
+            step_increment=POPUP_WIDTH_STEP,
+            page_increment=POPUP_WIDTH_PAGE,
+        )
         width_spin = Gtk.SpinButton(adjustment=width_adjustment)
         width_spin.connect("value-changed", self._on_width_changed)
-        desc = "Set the launcher width between 540 and 2000 pixels to match your workspace."
+        self._app_width_spin = width_spin
+        desc = "Set the launcher width between 400 and 1200 pixels. Width is not part of a look."
         self._add_setting_row(applications_box, "Window width", width_spin, desc)
 
         # Top apps
@@ -743,10 +824,12 @@ class PreferencesView(BaseView):
         self.settings.save({"raise_if_started": switch.get_active()})
 
     def _on_width_changed(self, spin: Gtk.SpinButton) -> None:
-        min_width = 540
-        max_width = 2000
+        if self._updating_chrome:
+            return
+        from ulauncher.modes.launcher.chrome_size import POPUP_WIDTH_MAX, POPUP_WIDTH_MIN
+
         width = spin.get_value_as_int()
-        if min_width <= width <= max_width:
+        if POPUP_WIDTH_MIN <= width <= POPUP_WIDTH_MAX:
             self.settings.save({"base_width": width})
 
     def _on_recent_apps_changed(self, spin: Gtk.SpinButton) -> None:

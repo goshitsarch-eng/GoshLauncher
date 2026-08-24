@@ -39,3 +39,20 @@ def stage_px(logical: float, scale: Any = None) -> int:
 
 def css_px(stage: float, scale: Any = None) -> int:
     return _js_round(stage / theme_scale(scale))
+
+
+def gtk_layout_scale(_widget_scale: Any = None) -> int:
+    """GTK size requests and Gdk.Monitor geometry are already CSS/application pixels.
+
+    St ThemeContext.scale_factor multiplies set_width because Clutter allocations
+    are stage pixels. GTK scales the buffer itself, so passing get_scale_factor()
+    into popup_width_for_work_area would double the popup on a 200% session.
+    Keep stage_px() for the St port and tests; the window uses this instead.
+    """
+    return 1
+
+
+def layout_scale_for_toolkit(toolkit: str, widget_scale: Any = None) -> float:
+    if toolkit == "st":
+        return theme_scale(widget_scale)
+    return gtk_layout_scale(widget_scale)

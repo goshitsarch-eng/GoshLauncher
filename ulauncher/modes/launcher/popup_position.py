@@ -24,6 +24,18 @@ def popup_width_for_work_area(requested: float, work_width: float, scale: Any = 
     return width
 
 
+def empty_popup_height(measured: float, fallback: int = 80) -> int:
+    """goshos _emptyPopupHeight: entry preferred height, never the taller results list."""
+    if measured > 0:
+        return int(measured)
+    return fallback
+
+
+def gtk_window_owns_popup_width(desktop_id: str, is_x11_compatible: bool) -> bool:
+    """GNOME Wayland is a fullscreen overlay; the card width is margin insets."""
+    return desktop_id != "GNOME" or is_x11_compatible
+
+
 def results_max_height_for_work_area(requested: float, space_below: float) -> float:
     if space_below <= 0:
         return 0

@@ -660,12 +660,16 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return None
 
     def position_window(self) -> None:
+        from ulauncher.modes.launcher.chrome_size import clamp_popup_width, clamp_results_max_height
         from ulauncher.modes.launcher.osk import osk_keyboard_for_work_area
         from ulauncher.modes.launcher.popup_position import (
+            empty_popup_height,
+            gtk_window_owns_popup_width,
             place_popup,
             popup_width_for_work_area,
             work_area_avoiding_keyboard,
         )
+        from ulauncher.modes.launcher.ui_scale import gtk_layout_scale
 
         if layout_size := self.get_layout_size():
             work = {
@@ -674,19 +678,24 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 "width": int(layout_size.width),
                 "height": int(layout_size.height),
             }
-            scale = self.get_scale_factor()
+            # GTK geometry is already CSS px; St scale_factor would double the card
+            scale = gtk_layout_scale(self.get_scale_factor())
             work = work_area_avoiding_keyboard(
                 work,
                 osk_keyboard_for_work_area(work, bool(getattr(self, "_osk_visible", False))),
             )
-            popup_width = popup_width_for_work_area(self.settings.base_width, work["width"], scale)
-            empty_height = self.prompt.get_allocated_height() or 80
+            requested_width = clamp_popup_width(int(self.settings.base_width))
+            popup_width = popup_width_for_work_area(requested_width, work["width"], scale)
+            measured = self.prompt.measure(Gtk.Orientation.VERTICAL, popup_width)
+            empty_height = empty_popup_height(int(measured[1]))
             position = str(self._chrome.get("position") or "center")
-            requested = int(getattr(self.settings, "results_max_height", 400) or 400)
+            requested = clamp_results_max_height(int(getattr(self.settings, "results_max_height", 400) or 400))
             placed = place_popup(work, popup_width, empty_height, position, requested, None, scale)
             pos_x = int(placed["x"] - work["x"])
             pos_y = int(placed["y"] - work["y"])
             self.results_view.set_max_height(int(placed["results_max"]))
+            if gtk_window_owns_popup_width(DESKTOP_ID, IS_X11_COMPATIBLE):
+                self.set_default_size(popup_width, -1)
 
             if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:
                 self.frame.set_margin_top(pos_y)
