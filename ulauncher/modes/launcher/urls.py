@@ -261,12 +261,12 @@ def url_row_description(url: str) -> str:
 
 def url_row_icon(url: str) -> str:
     if url.startswith("mailto:"):
-        return "mail-message-new"
+        return "mail-message-new-symbolic"
     if re.match(r"^(sftp|ftp|smb|davs?):", url, re.IGNORECASE):
-        return "network-server"
+        return "network-server-symbolic"
     if url.lower().startswith("file:"):
-        return "folder" if path_from_file_uri(url) else "network-server"
-    return "web-browser"
+        return "folder-symbolic" if path_from_file_uri(url) else "network-server-symbolic"
+    return "web-browser-symbolic"
 
 
 def match_url(query: str) -> Optional[dict]:

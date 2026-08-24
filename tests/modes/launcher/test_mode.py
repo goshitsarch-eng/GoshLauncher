@@ -168,6 +168,7 @@ def test_empty_state_puts_windows_first_for_popos(monkeypatch: pytest.MonkeyPatc
     window = next(row for row in results if row.kind == "window")
     app = next(row for row in results if row.kind == "app")
     assert window.description == "Workspace 1"
+    assert window.icon == "focus-windows-symbolic"
     assert app.description == "Switch to application"
 
 
@@ -284,7 +285,7 @@ def test_search_order_windows_first_puts_windows_before_apps(monkeypatch: pytest
             {
                 "title": "Mozilla Firefox",
                 "description": "Workspace 1",
-                "icon": "focus-windows",
+                "icon": "focus-windows-symbolic",
                 "wid": "0x1",
                 "pid": 11,
                 "wm_class": "firefox",

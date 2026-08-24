@@ -55,6 +55,18 @@ def test_workspace_label_matches_number_and_sticky() -> None:
         WindowInfo(wid="0x3", title="Mozilla Firefox", wm_class="Navigator.firefox", desktop=0),
         "mozilla terminal",
     )
+    editor = WindowInfo(wid="0x4", title="Notes", wm_class="org.gnome.TextEditor", desktop=0)
+    assert window_matches(editor, "texted")
+    assert not window_matches(editor, "org")
+    assert not window_matches(editor, "ome")
+    firefox = WindowInfo(wid="0x5", title="Firefox", wm_class="Navigator", desktop=1)
+    assert window_matches(firefox, "2")
+    assert not window_matches(firefox, "workspace")
+    assert not window_matches(firefox, "spa")
+    assert not window_matches(firefox, "work")
+    assert not window_matches(firefox, "o")
+    assert window_matches(firefox, "firefox navigator")
+    assert not window_matches(firefox, "firefox chrome")
 
 
 def test_take_window_results_workspace_consumes_a_slot() -> None:

@@ -19,6 +19,7 @@ def test_real_domains_match() -> None:
     hit = match_url("example.com")
     assert hit is not None
     assert hit["url"].startswith("https://")
+    assert hit["icon"] == "web-browser-symbolic"
     assert match_url("https://ulauncher.io") is not None
 
 
@@ -49,6 +50,7 @@ def test_davs_and_spaced_file_share() -> None:
     assert davs is not None
     assert davs["url"] == "davs://nas/share"
     assert davs["description"] == "Open location"
+    assert davs["icon"] == "network-server-symbolic"
     share = match_url("file://nas/Public Share")
     assert share is not None
     assert " " not in share["url"]

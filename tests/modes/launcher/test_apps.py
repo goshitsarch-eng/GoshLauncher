@@ -46,7 +46,56 @@ def test_app_match_tier_splits_generic_name_and_comment() -> None:
     # "browse" is a prefix of GenericName "Browser", so it is a generic-name hit.
     assert app_match_tier(firefox, "browse") == 3
     assert app_match_tier(firefox, "ows") == -1
+    assert app_match_tier(firefox, "org") == -1
+    assert app_match_tier(firefox, "zil") == -1
+    assert app_match_tier(firefox, "f") == 0
+    assert app_match_tier(firefox, "") == -1
     assert app_match_tier(firefox, "zzz") == -1
+    files = SimpleNamespace(
+        name="Files",
+        generic_name="",
+        description="",
+        app_id="org.gnome.Nautilus.desktop",
+        keywords=[],
+    )
+    assert app_match_tier(files, "nautilus") == 4
+    assert app_match_tier(files, "o") == -1
+    chrome = SimpleNamespace(
+        name="Google Chrome",
+        generic_name="Web Browser",
+        description="",
+        app_id="google-chrome.desktop",
+        keywords=["browser"],
+    )
+    assert app_match_tier(chrome, "chro") == 1
+    assert app_match_tier(chrome, "chrome browser") >= 0
+    assert app_match_tier(firefox, "firefox browser") >= 0
+    notes = SimpleNamespace(
+        name="Notes",
+        generic_name="",
+        description="",
+        app_id="notes.desktop",
+        keywords=[],
+    )
+    assert app_match_tier(notes, "chrome browser") == -1
+    keyed = SimpleNamespace(
+        name="Firefox",
+        generic_name="",
+        description="",
+        app_id="firefox.desktop",
+        keywords=["Internet", "Browser"],
+    )
+    assert app_match_tier(keyed, "browser") == 5
+    assert app_match_tier(keyed, "row") == -1
+    comment = SimpleNamespace(
+        name="Notes",
+        generic_name="",
+        description="Write notes and lists",
+        app_id="notes.desktop",
+        keywords=[],
+    )
+    assert app_match_tier(comment, "write") == 6
+    assert app_match_tier(comment, "ite") == -1
     comment_only = SimpleNamespace(
         name="Firefox",
         generic_name="Web Browser",

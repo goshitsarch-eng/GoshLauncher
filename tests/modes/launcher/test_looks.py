@@ -14,6 +14,12 @@ from ulauncher.modes.launcher.looks import (
 )
 
 
+def test_applied_look_defaults_empty_so_first_enable_stamps() -> None:
+    from ulauncher.utils.settings import Settings
+
+    assert Settings.applied_look == ""
+
+
 def test_seventeen_looks() -> None:
     ids = look_ids()
     assert len(ids) == 17

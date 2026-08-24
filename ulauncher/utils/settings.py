@@ -30,7 +30,7 @@ class Settings(JsonConf):
     window_shadow: int = 5
     # Spotlight-goshos launcher providers and chrome
     look_id: str = "spotlight"
-    applied_look: str = "spotlight"
+    applied_look: str = ""
     popup_position: str = "center"
     row_density: str = "comfortable"
     show_result_numbers: bool = False

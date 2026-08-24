@@ -10,11 +10,14 @@ _WORD_SPLIT = re.compile(r"\s+")
 
 def word_prefix_match(name_lower: str, query_lower: str) -> bool:
     length = len(query_lower)
-    if length == 0 or length > len(name_lower):
+    if length == 0:
         return False
-    # goshos wordMatch.js: match at 0 or after a delimiter, inclusive end index
-    for i in range(len(name_lower) - length + 1):
-        if name_lower[i : i + length] == query_lower and (i == 0 or name_lower[i - 1] in " -_./"):
+    # goshos wordMatch.js: only after a delimiter, never at index 0.
+    # Callers use startswith for the first token. The JS loop is
+    # `i < name.length - query.length`, so a delimiter can start a match
+    # of `query` immediately after it.
+    for i in range(len(name_lower) - length):
+        if name_lower[i] in " -_./" and name_lower[i + 1 : i + 1 + length] == query_lower:
             return True
     return False
 

@@ -49,6 +49,9 @@ def test_at_prefix_plans_web_only() -> None:
     assert planned["web_fallback"] is False
     hit = web_result("ulauncher", "google")
     assert "ulauncher" in hit["url"]
+    assert hit["title"] == 'Search Google for "ulauncher"'
+    assert hit["description"] == "Open Google in your browser"
+    assert hit["icon"] == "web-browser-symbolic"
 
 
 def test_color_hex_parses() -> None:

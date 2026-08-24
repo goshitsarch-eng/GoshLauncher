@@ -32,8 +32,8 @@ def search_url(query: str, engine_id: str) -> str:
 def web_result(query: str, engine_id: str) -> dict:
     engine = get_engine(engine_id)
     return {
-        "title": f"Search {engine['label']} for '{query}'",
-        "description": engine["label"],
+        "title": f'Search {engine["label"]} for "{query}"',
+        "description": f"Open {engine['label']} in your browser",
         "url": search_url(query, engine_id),
-        "icon": "system-search",
+        "icon": "web-browser-symbolic",
     }

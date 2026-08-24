@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import math
 
-from ulauncher.modes.launcher.calculator import evaluate_arithmetic, format_number
+import pytest
+
+from ulauncher.modes.launcher.calculator import (
+    calculator_description,
+    evaluate_arithmetic,
+    format_hex,
+    format_number,
+)
 
 
 def test_bare_integer_is_not_math() -> None:
@@ -90,6 +97,38 @@ def test_spoken_readme_phrases() -> None:
     assert evaluate_arithmetic("five hundred million + 1") == 500000001
     assert evaluate_arithmetic("two million three hundred + 1") == 2000301
     assert evaluate_arithmetic("twenty thousand + 1") == 20001
+
+
+def test_goshos_implicit_percent_factorial_and_hex() -> None:
+    assert evaluate_arithmetic("2pi^2") == pytest.approx(2 * math.pi * math.pi)
+    assert evaluate_arithmetic("2^3pi") == pytest.approx(8 * math.pi)
+    assert evaluate_arithmetic("2(3)^2") == 18
+    assert evaluate_arithmetic("2**8") == 256
+    assert evaluate_arithmetic("2 x 3") == 6
+    assert evaluate_arithmetic("2x3") == 6
+    assert evaluate_arithmetic("2\u00d73") == 6
+    assert evaluate_arithmetic("8\u00f72") == 4
+    assert evaluate_arithmetic("1,000+2") == 1002
+    assert evaluate_arithmetic("-(2+3)") == -5
+    assert evaluate_arithmetic("5!") == 120
+    assert evaluate_arithmetic("3!+1") == 7
+    assert evaluate_arithmetic("50% of 80") == 40
+    assert evaluate_arithmetic("25 percent of 200") == 50
+    assert evaluate_arithmetic("50%") == 0.5
+    assert evaluate_arithmetic("50% * 80") == 40
+    assert evaluate_arithmetic("10%3") == 1
+    assert evaluate_arithmetic("\u221a16") == 4
+    assert evaluate_arithmetic("0x10") is None
+    assert evaluate_arithmetic("0x10", True) == 16
+    assert evaluate_arithmetic("0x10+1") == 17
+    assert evaluate_arithmetic("0b1010", True) == 10
+    assert evaluate_arithmetic("e") is None
+    assert evaluate_arithmetic("e", True) == pytest.approx(math.e)
+    assert evaluate_arithmetic("pi") == pytest.approx(math.pi)
+    assert format_hex(255) == "0xff"
+    assert format_hex(-1) == ""
+    assert calculator_description(255) == "0xff · press Enter to copy"
+    assert calculator_description(0.5) == "Press Enter to copy to clipboard"
 
 
 def test_format_number_is_stable() -> None:

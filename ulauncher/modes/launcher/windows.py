@@ -254,23 +254,21 @@ def _window_fields_match_all_words(title: str, wm_class: str, query: str) -> boo
     words = [word for word in query.lower().split() if word]
     if len(words) < 2:
         return False
-    return all(
-        text_matches_query(title, word)
-        or id_matches_query(wm_class.replace(".", " "), word)
-        or id_matches_query(wm_class, word)
-        for word in words
-    )
+    # goshos windowMatch.js: title via textMatchesQuery, class via idMatchesQuery
+    # on the raw wmClass. Replacing dots with spaces would make "org" match
+    # every org.* window because the last token of "org" is "org".
+    return all(text_matches_query(title, word) or id_matches_query(wm_class, word) for word in words)
 
 
 def window_matches(win: WindowInfo, query: str) -> bool:
     if not query:
         return True
     q = query.lower()
-    if q in {"workspace", "spa"}:
+    if q in {"workspace", "spa", "work"}:
         return False
     if text_matches_query(win.title, query) or label_matches_query(win.title, query):
         return True
-    if id_matches_query(win.wm_class.replace(".", " "), query) or id_matches_query(win.wm_class, query):
+    if id_matches_query(win.wm_class, query):
         return True
     if _window_fields_match_all_words(win.title, win.wm_class, query):
         return True
@@ -303,7 +301,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
             "kind": "workspace",
             "title": workspace_switch_title(workspace + 1),
             "description": "Workspace",
-            "icon": "workspace-switcher",
+            "icon": "workspace-switcher-symbolic",
             "payload": str(workspace),
             "wid": "",
         }
@@ -319,7 +317,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
                 "kind": intent,
                 "title": title,
                 "description": _workspace_label(win),
-                "icon": "focus-windows",
+                "icon": "focus-windows-symbolic",
                 "payload": win.wid,
                 "wid": win.wid,
                 "pid": win.pid,
