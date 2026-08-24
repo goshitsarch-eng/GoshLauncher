@@ -7,6 +7,12 @@ def test_file_extensions_are_not_urls() -> None:
     assert match_url("node.js") is None
     assert match_url("readme.md") is None
     assert match_url("main.py") is None
+    assert match_url("package.json") is None
+    assert match_url("photo.png") is None
+    assert match_url("app.mjs") is None
+    assert match_url("data.csv") is None
+    assert match_url("style.scss") is None
+    assert match_url("readme.md.") is None
 
 
 def test_real_domains_match() -> None:

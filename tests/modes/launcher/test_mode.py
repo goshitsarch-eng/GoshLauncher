@@ -82,6 +82,8 @@ def test_hex_color_without_space() -> None:
 def test_spoken_math_and_units() -> None:
     kinds = _kinds(_handle("two plus two"))
     assert "calculator" in kinds
+    kinds = _kinds(_handle("what is 2+2"))
+    assert "calculator" in kinds
     kinds = _kinds(_handle("10 km to mi"))
     assert "units" in kinds
 
