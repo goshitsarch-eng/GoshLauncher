@@ -151,31 +151,63 @@ def canonicalize_launch_uri(uri: str) -> str:
     return uri
 
 
-def match_path(query: str) -> dict | None:
-    if not is_path_query(query):
-        return None
-    resolved = expand_path(query)
-    path = Path(resolved)
-    if not path.exists():
+def path_row_meta(trimmed: str, resolved: str, kind: str, home: str | None = None) -> dict:
+    if kind == "missing":
         return {
             "path": resolved,
             "kind": "missing",
-            "title": query.strip(),
+            "title": trimmed,
             "description": "Path not found",
             "icon": "dialog-warning",
             "exists": False,
             "is_dir": False,
+            "checking": False,
+            "in_terminal": False,
         }
-    is_dir = path.is_dir()
+    if kind == "pending":
+        return {
+            "path": resolved,
+            "kind": "pending",
+            "title": collapse_home(resolved, home),
+            "description": "Checking path",
+            "icon": "folder",
+            "exists": False,
+            "is_dir": False,
+            "checking": True,
+            "in_terminal": False,
+        }
+    is_dir = kind == "directory"
     return {
-        "path": str(path),
+        "path": resolved,
         "kind": "directory" if is_dir else "file",
-        "title": collapse_home(str(path)),
+        "title": collapse_home(resolved, home),
         "description": "Open path",
         "icon": "folder" if is_dir else "text-x-generic",
         "exists": True,
         "is_dir": is_dir,
+        "checking": False,
+        "in_terminal": False,
     }
+
+
+def path_rows(trimmed: str, resolved: str, kind: str, home: str | None = None) -> list[dict]:
+    rows = [path_row_meta(trimmed, resolved, kind, home)]
+    if kind == "directory":
+        term = terminal_row_meta(resolved, home)
+        term["exists"] = True
+        term["checking"] = False
+        term["is_dir"] = True
+        rows.append(term)
+    return rows
+
+
+def match_path(query: str, kind: str | None = None) -> dict | None:
+    if not is_path_query(query):
+        return None
+    resolved = expand_path(query)
+    if kind is None:
+        kind = _stat_path_kind(resolved)
+    return path_row_meta(query.strip(), resolved, kind)
 
 
 def terminal_spec(find_in_path: Any | None = None) -> dict | None:
@@ -236,3 +268,122 @@ def first_terminal() -> str | None:
         if found:
             return found
     return None
+
+
+class _PathLookup:
+    query = ""
+    rows: list[dict] | None = None
+    resolved = False
+    on_ready: Callable[[], None] | None = None
+    load_id = 0
+    pending_finish: Callable[[], None] | None = None
+
+
+_path_lookup = _PathLookup()
+
+
+def _stat_path_kind(resolved: str) -> str:
+    path = Path(resolved)
+    if not path.exists():
+        return "missing"
+    if path.is_dir():
+        return "directory"
+    return "file"
+
+
+def _apply_path_kind(trimmed: str, resolved: str, kind: str, load_id: int) -> None:
+    if load_id != _path_lookup.load_id:
+        return
+    if _path_lookup.resolved and _path_lookup.query == trimmed:
+        return
+    home = str(Path.home())
+    _path_lookup.rows = path_rows(trimmed, resolved, kind, home)
+    _path_lookup.resolved = True
+    _path_lookup.pending_finish = None
+    callback = _path_lookup.on_ready
+    _path_lookup.on_ready = None
+    if callback:
+        callback()
+
+
+def _start_path_stat(resolved: str, on_kind: Callable[[str], None]) -> None:
+    try:
+        from ulauncher.gi import Gio, GLib
+    except Exception:
+        on_kind(_stat_path_kind(resolved))
+        return
+
+    def _done(source: Any, result: Any) -> None:
+        kind = "missing"
+        try:
+            info = source.query_info_finish(result)
+            kind = "directory" if info.get_file_type() == Gio.FileType.DIRECTORY else "file"
+        except Exception:
+            kind = "missing"
+        on_kind(kind)
+
+    try:
+        Gio.File.new_for_path(resolved).query_info_async(
+            "standard::type",
+            Gio.FileQueryInfoFlags.NONE,
+            GLib.PRIORITY_DEFAULT,
+            None,
+            _done,
+        )
+    except Exception:
+        on_kind(_stat_path_kind(resolved))
+
+
+def invalidate_path_lookup() -> None:
+    _path_lookup.query = ""
+    _path_lookup.rows = None
+    _path_lookup.resolved = False
+    _path_lookup.on_ready = None
+    _path_lookup.pending_finish = None
+    _path_lookup.load_id += 1
+
+
+def path_is_resolved(query: str) -> bool:
+    trimmed = query.strip()
+    return _path_lookup.query == trimmed and _path_lookup.resolved
+
+
+def search_path(query: str) -> list[dict]:
+    trimmed = query.strip()
+    if not is_path_query(trimmed):
+        return []
+    resolved = expand_path(trimmed)
+    if not resolved:
+        return []
+    if path_is_resolved(trimmed) and _path_lookup.rows is not None:
+        return list(_path_lookup.rows)
+    return path_rows(trimmed, resolved, "pending")
+
+
+def ensure_path(query: str, on_ready: Callable[[], None]) -> None:
+    trimmed = query.strip()
+    if not is_path_query(trimmed):
+        return
+    if _path_lookup.query == trimmed and _path_lookup.resolved:
+        return
+    _path_lookup.on_ready = on_ready
+    if _path_lookup.query == trimmed and not _path_lookup.resolved:
+        return
+    _path_lookup.load_id += 1
+    load_id = _path_lookup.load_id
+    _path_lookup.query = trimmed
+    _path_lookup.resolved = False
+    resolved = expand_path(trimmed)
+
+    def finish_sync() -> None:
+        _apply_path_kind(trimmed, resolved, _stat_path_kind(resolved), load_id)
+
+    _path_lookup.pending_finish = finish_sync
+    _start_path_stat(resolved, lambda kind: _apply_path_kind(trimmed, resolved, kind, load_id))
+
+
+def flush_path_lookup() -> None:
+    finish = _path_lookup.pending_finish
+    _path_lookup.pending_finish = None
+    if finish:
+        finish()

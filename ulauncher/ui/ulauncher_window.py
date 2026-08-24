@@ -29,6 +29,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _read_entry_preedit(entry: Any) -> str:
+    getter = getattr(entry, "get_preedit_string", None)
+    if callable(getter):
+        value = getter()
+        if isinstance(value, tuple):
+            return str(value[0] or "")
+        return str(value or "")
+    delegate_fn = getattr(entry, "get_delegate", None)
+    delegate = delegate_fn() if callable(delegate_fn) else None
+    if delegate is not None and delegate is not entry:
+        return _read_entry_preedit(delegate)
+    return ""
+
+
 class UlauncherWindow(Gtk.ApplicationWindow):
     _css_provider: Gtk.CssProvider | None = None
     is_dragging = False
@@ -207,6 +221,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.prompt_input.select_region(0, -1)
         self.apply_styling()
         self.get_app().window_ready()
+        self._ensure_monitor_watch()
+        self._start_live_search()
 
     def on_initial_draw(self, *_: Any) -> None:
         if t0 := os.environ.get("ULAUNCHER_PERF_START_BOOTTIME"):
@@ -265,6 +281,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             resolve_ctrl_nav,
             resolve_home_end_action,
             resolve_key_action,
+            should_defer_activate_for_preedit,
         )
 
         keyname = Gdk.keyval_name(keyval) or ""
@@ -323,6 +340,10 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if action["type"] == "move" and self.results_view.has_results:
             self._apply_move(int(action["delta"]))
             return True
+        if action["type"] in {"activate", "activate-index"} and should_defer_activate_for_preedit(
+            _read_entry_preedit(entry)
+        ):
+            return False
         if action["type"] == "activate" and self.results_view.has_results:
             self.activate_result(alt)
             return True
@@ -456,8 +477,53 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             elif hasattr(self, "move"):
                 self.move(int(pos_x + getattr(layout_size, "x", 0)), int(pos_y + getattr(layout_size, "y", 0)))
 
+    def _ensure_monitor_watch(self) -> None:
+        if getattr(self, "_monitors_watched", False):
+            return
+        display = self.get_display()
+        if display is None:
+            return
+        monitors = display.get_monitors()
+        monitors.connect("items-changed", lambda *_args: self.position_window())
+        self._monitors_model = monitors
+        self._monitors_watched = True
+
+    def _start_live_search(self) -> None:
+        from ulauncher.modes.launcher.live_search import LiveSearchWatcher
+        from ulauncher.modes.launcher.search_live import next_live_search_action
+
+        if getattr(self, "_live_search", None) is None:
+            self._live_search = LiveSearchWatcher(self._on_live_search_change)
+            self._live_idle = None
+        if next_live_search_action(self._live_search.listening, True) == "start":
+            self._live_search.start()
+
+    def _stop_live_search(self) -> None:
+        from ulauncher.modes.launcher.search_live import next_live_search_action
+
+        watcher = getattr(self, "_live_search", None)
+        if watcher is None:
+            return
+        if next_live_search_action(watcher.listening, False) == "stop":
+            watcher.stop()
+        idle = getattr(self, "_live_idle", None)
+        if idle:
+            idle.cancel()
+            self._live_idle = None
+
+    def _on_live_search_change(self) -> None:
+        if getattr(self, "_live_idle", None):
+            return
+        self._live_idle = scheduling.run_when_idle(self._run_live_repaint)
+
+    def _run_live_repaint(self) -> None:
+        self._live_idle = None
+        if self.get_mapped():
+            self.get_app().query_changed(self.prompt_input.get_text())
+
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
         logger.info("Closing Ulauncher window")
+        self._stop_live_search()
         if not save_query or not self.settings.auto_resume:
             self.get_app().set_query("", update_input=False)
         if self.settings.grab_mouse_pointer:

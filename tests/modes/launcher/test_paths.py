@@ -3,9 +3,14 @@ from __future__ import annotations
 from ulauncher.modes.launcher.bookmarks import normalize_bookmark_uri, parse_gtk_bookmarks
 from ulauncher.modes.launcher.paths import (
     canonicalize_launch_uri,
+    ensure_path,
     file_uri_from_absolute,
+    flush_path_lookup,
+    invalidate_path_lookup,
     match_path,
     path_from_file_uri,
+    path_row_meta,
+    search_path,
     terminal_command,
     terminal_row_meta,
 )
@@ -30,6 +35,30 @@ def test_match_path_missing_keeps_row() -> None:
     assert hit is not None
     assert hit["exists"] is False
     assert hit["description"] == "Path not found"
+
+
+def test_path_row_meta_pending_and_ready() -> None:
+    pending = path_row_meta("~/code", "/home/me/code", "pending", home="/home/me")
+    assert pending["description"] == "Checking path"
+    assert pending["checking"] is True
+    assert pending["exists"] is False
+    missing = path_row_meta("/missing", "/missing", "missing")
+    assert missing["description"] == "Path not found"
+    ready = path_row_meta("/tmp", "/tmp", "directory")
+    assert ready["description"] == "Open path"
+    assert ready["exists"] is True
+
+
+def test_search_path_pending_then_flush_resolves() -> None:
+    invalidate_path_lookup()
+    rows = search_path("/tmp")
+    assert rows
+    assert rows[0]["description"] == "Checking path"
+    ensure_path("/tmp", lambda: None)
+    flush_path_lookup()
+    resolved = search_path("/tmp")
+    assert resolved[0]["description"] == "Open path"
+    assert resolved[0]["exists"] is True
 
 
 def test_terminal_command_xdg_uses_cwd() -> None:

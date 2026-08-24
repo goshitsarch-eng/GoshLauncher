@@ -30,9 +30,11 @@ def test_launcher_result_has_activate_action() -> None:
 
 def _handle(query: str) -> list:
     captured: list = []
-    LauncherMode().handle_query(Query(None, query), captured.append)
+    mode = LauncherMode()
+    mode.handle_query(Query(None, query), captured.append)
+    mode.flush_lookups()
     assert captured
-    message = captured[0]
+    message = captured[-1]
     assert message["type"] == EffectType.RENDER_RESULTS
     return list(message["results"])
 
@@ -163,6 +165,20 @@ def test_spoken_system_and_unit_queries() -> None:
 def test_path_query_returns_path_results() -> None:
     kinds = _kinds(_handle("/tmp"))
     assert "path" in kinds
+
+
+def test_path_first_paint_is_checking_until_flush() -> None:
+    captured: list = []
+    mode = LauncherMode()
+    mode.handle_query(Query(None, "/tmp"), captured.append)
+    assert captured
+    first = captured[0]["results"]
+    path = next(row for row in first if getattr(row, "kind", "") == "path")
+    assert path.description == "Checking path"
+    mode.flush_lookups()
+    last = captured[-1]["results"]
+    path = next(row for row in last if getattr(row, "kind", "") == "path" and not row.payload.get("in_terminal"))
+    assert path.description == "Open path"
 
 
 def test_search_order_windows_first_puts_windows_before_apps(monkeypatch: pytest.MonkeyPatch) -> None:

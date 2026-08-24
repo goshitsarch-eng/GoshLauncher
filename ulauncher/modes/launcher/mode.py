@@ -7,9 +7,16 @@ from ulauncher.internals import effects
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
 from ulauncher.modes.launcher.looks import chrome_from_settings
-from ulauncher.modes.launcher.plan import flags_from_settings, merge_empty_suggestions, plan_search
+from ulauncher.modes.launcher.plan import (
+    flags_from_settings,
+    merge_empty_suggestions,
+    plan_search,
+    should_refresh_command,
+    should_refresh_path,
+)
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
 from ulauncher.modes.mode import Mode
+from ulauncher.utils import scheduling
 from ulauncher.utils.eventbus import EventBus
 from ulauncher.utils.settings import Settings
 
@@ -20,17 +27,80 @@ logger = logging.getLogger()
 class LauncherMode(Mode):
     """Spotlight-style search: URLs, paths, apps, calc, units, color, clock, windows, settings, recents, web."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._lookup_idle: Any = None
+        self._paint_callback: Callable[[effects.EffectMessage], None] | None = None
+        self._paint_planned: dict[str, Any] | None = None
+        self._paint_settings: Settings | None = None
+        self._paint_chrome: dict[str, Any] | None = None
+
     def matches_query_str(self, query_str: str) -> bool:
         return bool(query_str)
 
     def handle_query(self, query: Query, callback: Callable[[effects.EffectMessage], None]) -> None:
+        from ulauncher.modes.launcher.commands import (
+            command_is_resolved,
+            command_needs_async,
+            ensure_command,
+            invalidate_command_lookup,
+        )
+        from ulauncher.modes.launcher.paths import ensure_path, invalidate_path_lookup, path_is_resolved
+
         settings = Settings.load()
         flags = flags_from_settings(settings)
         chrome = chrome_from_settings(settings)
         if flags.get("result_order") in (None, "", "default"):
             flags["result_order"] = chrome.get("result_order") or "default"
         planned = plan_search(str(query), flags)
+        self._paint_callback = callback
+        self._paint_planned = planned
+        self._paint_settings = settings
+        self._paint_chrome = chrome
+        want_path = should_refresh_path(bool(flags.get("path")), planned)
+        want_command = should_refresh_command(bool(flags.get("command")), planned)
+        slash_command = want_command and command_needs_async(planned["query"])
+        path_async = want_path and not path_is_resolved(planned["query"])
+        command_async = slash_command and not command_is_resolved(planned["query"])
+        callback(
+            effects.render_results(
+                self._results_for_plan(planned, settings, chrome),
+                final=not (path_async or command_async),
+            )
+        )
+        if want_path:
+            ensure_path(planned["query"], self._schedule_repaint)
+        else:
+            invalidate_path_lookup()
+        if slash_command:
+            ensure_command(planned["query"], self._schedule_repaint)
+        else:
+            invalidate_command_lookup()
+
+    def _schedule_repaint(self) -> None:
+        if self._lookup_idle:
+            return
+        self._lookup_idle = scheduling.run_when_idle(self._run_repaint)
+
+    def _run_repaint(self) -> None:
+        self._lookup_idle = None
+        callback = self._paint_callback
+        planned = self._paint_planned
+        settings = self._paint_settings
+        chrome = self._paint_chrome
+        if callback is None or planned is None or settings is None or chrome is None:
+            return
         callback(effects.render_results(self._results_for_plan(planned, settings, chrome)))
+
+    def flush_lookups(self) -> None:
+        from ulauncher.modes.launcher.commands import flush_command_lookup
+        from ulauncher.modes.launcher.paths import flush_path_lookup
+
+        flush_path_lookup()
+        flush_command_lookup()
+        if self._lookup_idle:
+            self._lookup_idle.cancel()
+            self._run_repaint()
 
     def get_home_results(self, limit: int) -> Sequence[Result]:
         settings = Settings.load()
@@ -227,28 +297,23 @@ class LauncherMode(Mode):
                     )
 
         if "path" in providers:
-            from ulauncher.modes.launcher.paths import match_path
+            from ulauncher.modes.launcher.paths import search_path
 
-            hit = match_path(q)
-            if hit:
-                from ulauncher.modes.launcher.paths import terminal_row_meta
-
+            for hit in search_path(q):
                 add(
                     "path",
                     {
                         "kind": "path",
-                        "score": 190,
+                        "score": 189 if hit.get("in_terminal") else 190,
                         "title": hit["title"],
                         "description": hit.get("description") or "",
                         "icon": hit.get("icon") or "folder",
                         "path": hit["path"],
-                        "in_terminal": False,
+                        "in_terminal": bool(hit.get("in_terminal")),
                         "exists": hit.get("exists", True),
+                        "checking": bool(hit.get("checking")),
                     },
                 )
-                if hit.get("is_dir") and hit.get("exists"):
-                    term = terminal_row_meta(hit["path"])
-                    add("path", {"kind": "path", "score": 189, **term})
 
         if "places" in providers:
             from ulauncher.modes.launcher.places import match_places
@@ -454,10 +519,9 @@ class LauncherMode(Mode):
                     add("files", row)
 
         if "command" in providers:
-            from ulauncher.modes.launcher.commands import resolve_command_row
+            from ulauncher.modes.launcher.commands import search_command
 
-            hit = resolve_command_row(q)
-            if hit:
+            for hit in search_command(q):
                 add(
                     "command",
                     {
@@ -468,6 +532,7 @@ class LauncherMode(Mode):
                         "icon": hit.get("icon") or "utilities-terminal",
                         "argv": hit.get("argv") or [],
                         "ready": bool(hit.get("ready")),
+                        "checking": bool(hit.get("checking")),
                         "cwd": hit.get("cwd"),
                     },
                 )

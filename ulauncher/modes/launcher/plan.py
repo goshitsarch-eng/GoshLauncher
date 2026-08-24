@@ -104,6 +104,32 @@ def is_path_query(query: str) -> bool:
     return text.startswith("/")
 
 
+def should_refresh_recent_files(enable_files: bool, plan: dict[str, Any]) -> bool:
+    if not enable_files:
+        return False
+    if plan.get("mode") == "files":
+        return True
+    return plan.get("mode") == "all" and "files" in plan.get("providers", [])
+
+
+def should_refresh_path(enable_path: bool, plan: dict[str, Any]) -> bool:
+    if not enable_path:
+        return False
+    return "path" in plan.get("providers", []) and is_path_query(plan.get("query") or "")
+
+
+def should_refresh_command(enable_command: bool, plan: dict[str, Any]) -> bool:
+    if not enable_command:
+        return False
+    return plan.get("mode") == "command" and "command" in plan.get("providers", [])
+
+
+def should_refresh_bookmarks(enable_bookmarks: bool, plan: dict[str, Any]) -> bool:
+    if not enable_bookmarks:
+        return False
+    return plan.get("mode") == "all" and "bookmarks" in plan.get("providers", [])
+
+
 def is_active_search_query(query: str) -> bool:
     return bool(query.strip())
 

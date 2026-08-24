@@ -32,6 +32,13 @@ def test_ctrl_nav_and_home_end_at_edges() -> None:
     assert resolve_home_end_action("End", 1, 4) == {"type": "propagate"}
 
 
+def test_preedit_defers_activate() -> None:
+    from ulauncher.modes.launcher.key_action import should_defer_activate_for_preedit
+
+    assert should_defer_activate_for_preedit("ﬀ") is True
+    assert should_defer_activate_for_preedit("") is False
+
+
 def test_keypad_aliases_match_goshos_nav() -> None:
     assert normalize_key_name("KP_Down") == "Down"
     assert normalize_key_name("KP_1") == "1"

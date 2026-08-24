@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ulauncher.modes.launcher.plan import flags_from_settings, merge_empty_suggestions, plan_search
+from ulauncher.modes.launcher.plan import (
+    flags_from_settings,
+    merge_empty_suggestions,
+    plan_search,
+    should_refresh_command,
+    should_refresh_path,
+)
 
 
 def _flags(**overrides: object) -> dict:
@@ -67,6 +73,21 @@ def test_merge_empty_suggestions_windows_first() -> None:
     assert merged == ["w1", "w2", "a1"]
     merged_apps = merge_empty_suggestions("default", ["w1"], ["a1", "a2"], 2)
     assert merged_apps == ["a1", "a2"]
+
+
+def test_should_refresh_path_only_for_path_queries() -> None:
+    planned = plan_search("/tmp", _flags())
+    assert should_refresh_path(True, planned) is True
+    planned = plan_search("firefox", _flags())
+    assert should_refresh_path(True, planned) is False
+    assert should_refresh_path(False, plan_search("/tmp", _flags())) is False
+
+
+def test_should_refresh_command_only_in_bang_mode() -> None:
+    planned = plan_search("! ls", _flags(enable_command_run=True))
+    assert should_refresh_command(True, planned) is True
+    planned = plan_search("ls", _flags(enable_command_run=True))
+    assert should_refresh_command(True, planned) is False
 
 
 def test_spoken_open_firefox_strips_verb() -> None:

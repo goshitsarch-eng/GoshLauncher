@@ -4,7 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from ulauncher.modes.launcher.commands import command_row_meta, parse_command_argv, resolve_command_row
+from ulauncher.modes.launcher.commands import (
+    command_needs_async,
+    command_row_meta,
+    ensure_command,
+    flush_command_lookup,
+    invalidate_command_lookup,
+    parse_command_argv,
+    resolve_command_row,
+    search_command,
+)
 
 
 def test_command_row_meta_states() -> None:
@@ -51,6 +60,29 @@ def test_resolve_command_row_not_found() -> None:
     assert row["ready"] is False
     assert row["description"] == "Command not found"
     assert row["argv"] == []
+
+
+def test_search_command_path_lookup_is_sync() -> None:
+    rows = search_command("definitely-not-a-ulauncher-binary-xyz")
+    assert rows
+    assert rows[0]["description"] == "Command not found"
+    assert rows[0]["checking"] is False
+    assert command_needs_async("ls") is False
+
+
+def test_search_command_slash_path_pending_then_flush() -> None:
+    binary = "/usr/bin/true" if Path("/usr/bin/true").is_file() else "/usr/bin/python3"
+    if not Path(binary).is_file():
+        return
+    invalidate_command_lookup()
+    rows = search_command(binary)
+    assert rows[0]["description"] == "Checking command"
+    assert command_needs_async(binary) is True
+    ensure_command(binary, lambda: None)
+    flush_command_lookup()
+    resolved = search_command(binary)
+    assert resolved[0]["description"] == "Run command"
+    assert resolved[0]["ready"] is True
 
 
 def test_resolve_command_row_ready_for_existing_binary() -> None:

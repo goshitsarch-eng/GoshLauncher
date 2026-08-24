@@ -62,6 +62,10 @@ def cursor_at_end(cursor: int, text_length: int) -> bool:
     return text_length == 0 or cursor < 0 or cursor >= text_length
 
 
+def should_defer_activate_for_preedit(preedit: str) -> bool:
+    return bool(preedit)
+
+
 def resolve_home_end_action(key: str, cursor: int, text_length: int) -> dict[str, Any] | None:
     key = normalize_key_name(key)
     if key == "Home":
