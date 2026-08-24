@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.clock import match_clock, time_query_kind
+from ulauncher.modes.launcher.clock import format_date_title, match_clock, time_query_kind
 
 
 def test_time_phrases() -> None:
@@ -20,3 +20,12 @@ def test_relative_days() -> None:
     assert time_query_kind("tomorrow") == "tomorrow"
     assert time_query_kind("yesterday") == "yesterday"
     assert match_clock("firefox") is None
+
+
+def test_date_title_format() -> None:
+    assert format_date_title("Monday", 5, "January", 2026) == "Monday, 5 January 2026"
+    hit = match_clock("date")
+    assert hit is not None
+    assert hit["title"].startswith(f"{hit['weekday']}, ")
+    assert hit["copy_text"] == hit["title"]
+    assert hit["description"] == hit["date"]

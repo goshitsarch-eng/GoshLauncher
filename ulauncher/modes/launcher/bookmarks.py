@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
+from ulauncher.modes.launcher.paths import (
+    canonicalize_file_uri,
+    canonicalize_launch_uri,
+    collapse_home,
+    expand_path,
+    file_uri_from_absolute,
+    path_from_file_uri,
+)
 from ulauncher.modes.launcher.word_match import path_matches_query, text_matches_query
 
 BOOKMARK_FILES = (
@@ -13,25 +21,15 @@ BOOKMARK_FILES = (
 )
 
 
-def _is_unsafe(uri: str) -> bool:
-    return uri.lower().split(":", 1)[0] in {"javascript", "data", "vbscript"}
-
-
-def _file_uri_from_path(path: str) -> str:
-    return "file://" + path.replace(" ", "%20")
-
-
 def normalize_bookmark_uri(uri: str) -> str:
     uri = uri.strip()
-    if not uri or _is_unsafe(uri):
+    if not uri:
         return ""
     if uri.startswith("/"):
-        return _file_uri_from_path(uri)
+        return canonicalize_file_uri(file_uri_from_absolute(uri))
     if uri == "~" or uri.startswith("~/"):
-        return _file_uri_from_path(str(Path(uri).expanduser()))
-    if uri.lower().startswith("file:"):
-        return uri.replace(" ", "%20")
-    return uri
+        return canonicalize_file_uri(file_uri_from_absolute(expand_path(uri)))
+    return canonicalize_launch_uri(uri)
 
 
 def parse_gtk_bookmarks(text: str) -> list[dict]:
@@ -53,24 +51,17 @@ def parse_gtk_bookmarks(text: str) -> list[dict]:
 
 
 def _title_from_uri(uri: str) -> str:
+    path = path_from_file_uri(uri)
+    if path:
+        return Path(path).name or path
     parsed = urlparse(uri)
-    if parsed.scheme == "file":
-        path = unquote(parsed.path)
-        name = Path(path).name
-        return name or path or uri
     return parsed.hostname or uri
 
 
 def bookmark_description(uri: str) -> str:
-    parsed = urlparse(uri)
-    if parsed.scheme == "file":
-        path = unquote(parsed.path)
-        home = str(Path.home())
-        if path == home:
-            return "~"
-        if path.startswith(home + "/"):
-            return "~" + path[len(home) :]
-        return path
+    path = path_from_file_uri(uri)
+    if path:
+        return collapse_home(path)
     return uri
 
 

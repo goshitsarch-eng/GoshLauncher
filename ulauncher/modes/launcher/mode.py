@@ -97,18 +97,19 @@ class LauncherMode(Mode):
         payload = result.payload if isinstance(result.payload, dict) else {}
         if kind == "app":
             from ulauncher.modes.apps.app_rankings import AppRankings
-            from ulauncher.modes.apps.app_result import AppResult
+            from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
             from ulauncher.modes.apps.launch_app import launch_app
 
             app_id = str(payload.get("app_id") or "")
             if not app_id or not AppResult.from_id(app_id):
                 callback(effects.do_nothing())
                 return
-            from ulauncher.modes.apps.app_result import ACTION_PREFIX
-
+            action_name = payload.get("action_name")
             launched = False
             if action_id.startswith(ACTION_PREFIX):
                 launched = launch_app(app_id, action_name=action_id[len(ACTION_PREFIX) :])
+            elif action_name:
+                launched = launch_app(app_id, action_name=str(action_name))
             else:
                 launched = launch_app(app_id)
             if launched:
@@ -118,19 +119,30 @@ class LauncherMode(Mode):
             callback(effects.do_nothing())
             return
         if kind == "url":
-            callback(effects.open(str(payload["url"])))
+            from ulauncher.modes.launcher.paths import canonicalize_launch_uri
+
+            url = canonicalize_launch_uri(str(payload.get("url") or ""))
+            if not url:
+                callback(effects.do_nothing())
+                return
+            callback(effects.open(url))
             return
         if kind == "path":
-            from ulauncher.modes.launcher.paths import first_terminal
+            from ulauncher.modes.launcher.paths import terminal_command
             from ulauncher.utils.launch_detached import launch_detached, open_detached
 
+            if not payload.get("exists", True) and not payload.get("in_terminal"):
+                callback(effects.do_nothing())
+                return
             path = str(payload["path"])
             if payload.get("in_terminal"):
-                term = first_terminal()
-                if term:
-                    launch_detached([term, "-e", "bash", "-lc", f"cd {path!s}; exec bash"])
+                cmd = terminal_command(path)
+                if cmd:
+                    launch_detached(list(cmd["argv"]), working_dir=cmd.get("cwd"))
                     callback(effects.close_window())
                     return
+                callback(effects.do_nothing())
+                return
             open_detached(path)
             callback(effects.close_window())
             return
@@ -159,6 +171,9 @@ class LauncherMode(Mode):
         if kind == "command":
             from ulauncher.utils.launch_detached import launch_detached
 
+            if not payload.get("ready") or not payload.get("argv"):
+                callback(effects.do_nothing())
+                return
             launch_detached(list(payload["argv"]))
             callback(effects.close_window())
             return
@@ -188,36 +203,36 @@ class LauncherMode(Mode):
 
             hit = match_url(q)
             if hit:
-                rows.append({"kind": "url", "score": 200, "title": hit.get("label") or hit["url"], "url": hit["url"]})
+                from ulauncher.modes.launcher.paths import canonicalize_launch_uri
+
+                url = canonicalize_launch_uri(str(hit["url"]))
+                if url:
+                    rows.append(
+                        {"kind": "url", "score": 200, "title": hit.get("label") or url, "url": url}
+                    )
 
         if "path" in providers:
             from ulauncher.modes.launcher.paths import match_path
 
             hit = match_path(q)
             if hit:
+                from ulauncher.modes.launcher.paths import terminal_row_meta
+
                 rows.append(
                     {
                         "kind": "path",
                         "score": 190,
                         "title": hit["title"],
-                        "description": hit.get("description") or hit.get("kind") or "",
+                        "description": hit.get("description") or "",
                         "icon": hit.get("icon") or "folder",
                         "path": hit["path"],
                         "in_terminal": False,
+                        "exists": hit.get("exists", True),
                     }
                 )
-                if hit.get("is_dir"):
-                    rows.append(
-                        {
-                            "kind": "path",
-                            "score": 189,
-                            "title": "Open in Terminal",
-                            "description": hit["title"],
-                            "icon": "utilities-terminal",
-                            "path": hit["path"],
-                            "in_terminal": True,
-                        }
-                    )
+                if hit.get("is_dir") and hit.get("exists"):
+                    term = terminal_row_meta(hit["path"])
+                    rows.append({"kind": "path", "score": 189, **term})
 
         if "places" in providers:
             from ulauncher.modes.launcher.places import match_places
@@ -234,39 +249,27 @@ class LauncherMode(Mode):
                     }
                 )
                 if index == 0:
-                    rows.append(
-                        {
-                            "kind": "path",
-                            "score": 79,
-                            "title": "Open in Terminal",
-                            "description": hit["title"],
-                            "path": hit["path"],
-                            "in_terminal": True,
-                        }
-                    )
+                    from ulauncher.modes.launcher.paths import terminal_row_meta
+
+                    term = terminal_row_meta(str(hit["path"]))
+                    rows.append({"kind": "path", "score": 79, **term})
 
         if "bookmarks" in providers:
             from ulauncher.modes.launcher.bookmarks import match_bookmarks
 
             for hit in match_bookmarks(q)[:cap]:
-                rows.append(
-                    {
-                        "kind": "path",
-                        "score": 75,
-                        "title": hit["title"],
-                        "description": hit.get("description") or "",
-                        "path": hit["path"],
-                        "in_terminal": False,
-                    }
-                )
+                row = _row_from_uri(hit, score=75)
+                if row:
+                    rows.append(row)
 
         if "apps" in providers:
             from ulauncher.modes.launcher.apps import match_apps
 
-            for app in match_apps(q, cap):
-                actions = dict(app.actions) if app.actions else None
-                if actions and not getattr(settings, "enable_app_actions", True):
-                    actions = {"launch": actions["launch"]} if "launch" in actions else {"launch": {"name": "Launch"}}
+            matched = match_apps(q, cap)
+            for app in matched:
+                actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
+                if not getattr(settings, "enable_app_actions", True):
+                    actions = {"launch": actions["launch"]} if "launch" in actions else {"activate": {"name": "Activate"}}
                 rows.append(
                     {
                         "kind": "app",
@@ -278,6 +281,22 @@ class LauncherMode(Mode):
                         "actions": actions,
                     }
                 )
+            if matched and getattr(settings, "enable_app_actions", True):
+                from ulauncher.modes.launcher.apps import app_action_rows
+
+                for action in app_action_rows(matched[0], cap):
+                    rows.append(
+                        {
+                            "kind": "app",
+                            "score": 69,
+                            "title": action["title"],
+                            "description": action["description"],
+                            "icon": action.get("icon") or "application-x-executable",
+                            "app_id": action["app_id"],
+                            "action_name": action["action_name"],
+                            "actions": {"activate": {"name": "Activate"}},
+                        }
+                    )
 
         if "calculator" in providers:
             from ulauncher.modes.launcher.calculator import calculator_description, evaluate_arithmetic, format_number
@@ -335,9 +354,9 @@ class LauncherMode(Mode):
                     {
                         "kind": "clock",
                         "score": 60,
-                        "title": hit["time"],
-                        "description": f"{hit['weekday']} {hit['date']}",
-                        "copy_text": hit["iso"],
+                        "title": hit["title"],
+                        "description": hit["description"],
+                        "copy_text": hit["copy_text"],
                     }
                 )
 
@@ -394,29 +413,24 @@ class LauncherMode(Mode):
             from ulauncher.modes.launcher.recents import match_recents
 
             for hit in match_recents(q)[:cap]:
-                rows.append(
-                    {
-                        "kind": "path",
-                        "score": 45,
-                        "title": hit["title"],
-                        "description": hit.get("description") or "",
-                        "path": hit["path"],
-                        "in_terminal": False,
-                    }
-                )
+                row = _row_from_uri(hit, score=45)
+                if row:
+                    rows.append(row)
 
         if "command" in providers:
-            from ulauncher.modes.launcher.commands import resolve_command
+            from ulauncher.modes.launcher.commands import resolve_command_row
 
-            argv = resolve_command(q)
-            if argv:
+            hit = resolve_command_row(q)
+            if hit:
                 rows.append(
                     {
                         "kind": "command",
                         "score": 40,
-                        "title": " ".join(argv),
-                        "description": "Run command",
-                        "argv": argv,
+                        "title": hit["title"],
+                        "description": hit["description"],
+                        "icon": hit.get("icon") or "utilities-terminal",
+                        "argv": hit.get("argv") or [],
+                        "ready": bool(hit.get("ready")),
                     }
                 )
 
@@ -469,6 +483,10 @@ class LauncherMode(Mode):
                 payload["kind"] = row.get("window_kind") or "focus"
             icon = "" if not show_icons else str(row.get("icon") or _default_icon(kind))
             actions = row.get("actions") or {"activate": {"name": "Activate"}}
+            if kind == "command" and not row.get("ready"):
+                actions = {}
+            if kind == "path" and not row.get("exists", True):
+                actions = {}
             yield LauncherResult(
                 name=str(row["title"]),
                 description="" if not show_descriptions else str(row.get("description") or ""),
@@ -479,6 +497,34 @@ class LauncherMode(Mode):
                 highlightable=True,
                 actions=actions,
             )
+
+
+def _row_from_uri(hit: dict[str, Any], score: int) -> dict[str, Any] | None:
+    from ulauncher.modes.launcher.paths import canonicalize_launch_uri, path_from_file_uri
+
+    uri = canonicalize_launch_uri(str(hit.get("uri") or hit.get("path") or ""))
+    if not uri:
+        return None
+    path = path_from_file_uri(uri)
+    if path:
+        return {
+            "kind": "path",
+            "score": score,
+            "title": hit["title"],
+            "description": hit.get("description") or "",
+            "icon": hit.get("icon") or "folder",
+            "path": path,
+            "in_terminal": False,
+            "exists": True,
+        }
+    return {
+        "kind": "url",
+        "score": score,
+        "title": hit["title"],
+        "description": hit.get("description") or "",
+        "icon": hit.get("icon") or "network-server",
+        "url": uri,
+    }
 
 
 def _default_icon(kind: str) -> str:

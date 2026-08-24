@@ -23,7 +23,48 @@ def extra_path() -> str:
     return os.pathsep.join([*parts, current]) if parts else current
 
 
-def resolve_command(query: str) -> list[str] | None:
+def first_command_arg(argv: list[str] | None) -> str:
+    if not argv:
+        return ""
+    exe = argv[0]
+    return exe if isinstance(exe, str) else ""
+
+
+def command_uses_path_lookup(exe: str) -> bool:
+    return bool(exe) and "/" not in exe
+
+
+def command_file_is_ready(is_directory: bool, is_executable: bool) -> bool:
+    return (not is_directory) and bool(is_executable)
+
+
+def command_row_meta(query: str, ready: bool, checking: bool = False) -> dict:
+    if checking:
+        return {
+            "title": query,
+            "description": "Checking command",
+            "icon": "utilities-terminal",
+            "ready": False,
+            "checking": True,
+        }
+    if not ready:
+        return {
+            "title": query,
+            "description": "Command not found",
+            "icon": "dialog-warning",
+            "ready": False,
+            "checking": False,
+        }
+    return {
+        "title": query,
+        "description": "Run command",
+        "icon": "utilities-terminal",
+        "ready": True,
+        "checking": False,
+    }
+
+
+def parse_command_argv(query: str) -> list[str] | None:
     text = query.strip()
     if not text:
         return None
@@ -35,15 +76,34 @@ def resolve_command(query: str) -> list[str] | None:
         return None
     first = argv[0]
     if first.startswith("~"):
-        first = str(Path(first).expanduser())
-        argv[0] = first
+        argv[0] = str(Path(first).expanduser())
     elif "/" in first and not first.startswith("/"):
         argv[0] = str(Path.home() / first)
-        first = argv[0]
-    found = which(argv[0], path=extra_path())
-    if found:
-        argv[0] = found
-        return argv
-    if Path(argv[0]).is_file() and os.access(argv[0], os.X_OK):
-        return argv
-    return None
+    return argv
+
+
+def resolve_command_row(query: str) -> dict | None:
+    argv = parse_command_argv(query)
+    if not argv:
+        return None
+    exe = first_command_arg(argv)
+    ready = False
+    if command_uses_path_lookup(exe):
+        found = which(exe, path=extra_path())
+        if found:
+            argv[0] = found
+            ready = True
+    else:
+        path = Path(exe)
+        ready = command_file_is_ready(path.is_dir(), path.is_file() and os.access(exe, os.X_OK))
+    meta = command_row_meta(query.strip(), ready)
+    meta["argv"] = argv if ready else []
+    return meta
+
+
+def resolve_command(query: str) -> list[str] | None:
+    row = resolve_command_row(query)
+    if not row or not row.get("ready"):
+        return None
+    argv = row.get("argv")
+    return list(argv) if argv else None

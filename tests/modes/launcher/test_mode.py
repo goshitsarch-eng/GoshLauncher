@@ -81,3 +81,26 @@ def test_spoken_math_and_units() -> None:
 def test_bare_hex_is_not_forced_color() -> None:
     kinds = _kinds(_handle("ff0000"))
     assert "color" not in kinds
+
+
+def test_command_prefix_always_shows_a_row(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_command_run = True
+    monkeypatch.setattr(Settings, "load", classmethod(lambda cls, **_kwargs: settings))
+    results = _handle("! definitely-not-a-ulauncher-binary-xyz")
+    kinds = _kinds(results)
+    assert "command" in kinds
+    command = next(row for row in results if getattr(row, "kind", "") == "command")
+    assert command.description == "Command not found"
+    assert command.payload.get("ready") is False
+    assert command.actions == {}
+
+
+def test_clock_query_uses_title_fields() -> None:
+    results = _handle("time")
+    kinds = _kinds(results)
+    assert "clock" in kinds
+    clock = next(row for row in results if getattr(row, "kind", "") == "clock")
+    assert clock.payload.get("copy_text") == clock.name

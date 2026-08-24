@@ -47,7 +47,8 @@ if tray_icon_lib is None:
             tray_icon_lib = "AyatanaIndicator"
 
 
-if getattr(Gtk, "Menu", None) is None:
+# Ayatana indicators need Gtk.Menu. XApp can still left-click to show the launcher.
+if getattr(Gtk, "Menu", None) is None and tray_icon_lib == "AyatanaIndicator":
     tray_icon_lib = None
 
 
@@ -63,9 +64,10 @@ class TrayIcon(GObject.Object):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         settings = Settings.load()
-        menu = Gtk.Menu()
+        menu = None
         show_menu_item: Gtk.MenuItem | None = None
-        if self.supports_appindicator():
+        if self.supports_appindicator() and getattr(Gtk, "Menu", None) is not None:
+            menu = Gtk.Menu()
             show_menu_item = _create_menu_item("Show Ulauncher", lambda *_: events.emit("app:show_launcher"))
             menu.append(show_menu_item)
             menu.append(_create_menu_item("Preferences", lambda *_: events.emit("app:show_preferences")))
@@ -103,7 +105,8 @@ class TrayIcon(GObject.Object):
             self.xapp_indicator = XApp.StatusIcon()
             self.xapp_indicator.set_icon_name(icon_name)
             # Show menu on right click and show launcher on left click
-            self.xapp_indicator.set_secondary_menu(menu)
+            if menu is not None:
+                self.xapp_indicator.set_secondary_menu(menu)
             self.xapp_indicator.connect("activate", lambda *_: events.emit("app:show_launcher"))
 
         elif tray_icon_lib == "AyatanaIndicator":

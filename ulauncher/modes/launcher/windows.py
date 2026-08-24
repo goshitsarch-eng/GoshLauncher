@@ -214,7 +214,7 @@ def activate_window(payload: dict) -> None:
         if pid:
             subprocess.run(["kill", "-9", str(pid)], check=False)
         return
-    if kind == "close":
+    if kind in {"close", "quit"}:
         _close_window(wid)
         return
     _focus_window(wid)

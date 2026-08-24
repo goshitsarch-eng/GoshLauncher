@@ -6,20 +6,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from ulauncher.modes.launcher.paths import canonicalize_launch_uri, collapse_home, path_from_file_uri
 from ulauncher.modes.launcher.word_match import path_matches_query, text_matches_query
 
 XBEL = Path.home() / ".local" / "share" / "recently-used.xbel"
 REMOTE_SCHEMES = frozenset({"sftp", "smb", "ftp", "dav", "davs"})
 SKIP_SCHEMES = frozenset({"http", "https", "javascript", "data"})
-
-
-def _collapse(path: str) -> str:
-    home = str(Path.home())
-    if path == home:
-        return "~"
-    if path.startswith(home + "/"):
-        return "~" + path[len(home) :]
-    return path
 
 
 def parse_xbel(text: str) -> list[dict]:
@@ -37,25 +29,24 @@ def parse_xbel(text: str) -> list[dict]:
         scheme = href.split(":", 1)[0].lower()
         if scheme in SKIP_SCHEMES:
             continue
-        if scheme == "file" or scheme in REMOTE_SCHEMES:
-            href = href.replace(" ", "%20")
-        else:
+        if scheme != "file" and scheme not in REMOTE_SCHEMES:
             continue
-        parsed = urlparse(href)
-        if parsed.scheme == "file":
-            path = unquote(parsed.path)
+        uri = canonicalize_launch_uri(href)
+        if not uri:
+            continue
+        path = path_from_file_uri(uri)
+        if path:
+            if not Path(path).exists():
+                continue
             title = Path(path).name or path
-            description = _collapse(str(Path(path).parent))
-            exists = Path(path).exists()
+            description = collapse_home(str(Path(path).parent))
         else:
-            title = Path(unquote(parsed.path)).name or parsed.hostname or href
-            description = parsed.hostname or href
-            exists = True
-        if parsed.scheme == "file" and not exists:
-            continue
+            parsed = urlparse(uri)
+            title = Path(unquote(parsed.path)).name or parsed.hostname or uri
+            description = parsed.hostname or uri
         rows.append(
             {
-                "uri": href,
+                "uri": uri,
                 "title": title,
                 "description": description,
                 "icon": "text-x-generic",

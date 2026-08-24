@@ -74,6 +74,14 @@ def time_query_kind(query: str) -> str | None:
     return None
 
 
+def format_clock(hours: int, minutes: int, seconds: int) -> str:
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def format_date_title(weekday: str, day: int, month: str, year: int) -> str:
+    return f"{weekday}, {day} {month} {year}"
+
+
 def match_clock(query: str) -> Optional[dict]:
     kind = time_query_kind(query)
     if not kind:
@@ -85,10 +93,25 @@ def _payload(kind: str) -> dict:
     now = datetime.now()
     offset = 1 if kind == "tomorrow" else -1 if kind == "yesterday" else 0
     day = now + timedelta(days=offset)
+    weekday = day.strftime("%A")
+    iso_date = day.strftime("%Y-%m-%d")
+    clock = format_clock(day.hour, day.minute, day.second)
+    date_title = format_date_title(weekday, day.day, day.strftime("%B"), day.year)
+    if kind == "time":
+        title = clock
+        description = weekday
+        copy_text = clock
+    else:
+        title = date_title
+        description = iso_date
+        copy_text = date_title
     return {
         "kind": kind,
-        "time": day.strftime("%H:%M:%S"),
-        "date": day.strftime("%Y-%m-%d"),
-        "weekday": day.strftime("%A"),
+        "time": clock,
+        "date": iso_date,
+        "weekday": weekday,
         "iso": day.isoformat(timespec="seconds"),
+        "title": title,
+        "description": description,
+        "copy_text": copy_text,
     }

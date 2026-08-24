@@ -257,6 +257,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 if string.isdigit() and not self._chrome.get("show_numbers"):
                     return False
                 self.results_view.select_jump(jump_keys.index(string))
+                if string.isdigit() and self._chrome.get("show_numbers"):
+                    self.activate_result(False)
                 return True
         return False
 

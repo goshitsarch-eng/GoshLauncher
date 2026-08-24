@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from ulauncher.modes.apps.app_mode import AppMode
-from ulauncher.modes.apps.app_result import AppResult
+from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
 from ulauncher.modes.launcher.word_match import (
     SUBSTRING_MIN,
     id_matches_query,
@@ -113,3 +113,44 @@ def match_apps(query: str, limit: int = 6) -> list[AppResult]:
 
 def home_apps(limit: int) -> list[AppResult]:
     return _app_mode.get_home_results(limit)
+
+
+def is_new_window_action(action_id: str) -> bool:
+    normalized = action_id.lower().replace("_", "-")
+    return normalized in {"new-window", "newwindow"}
+
+
+def new_window_title(app_name: str) -> str:
+    return f"New window — {app_name}"
+
+
+def desktop_action_title(action_name: str, app_name: str) -> str:
+    return f"{action_name} — {app_name}"
+
+
+def action_result_limit(max_results: int, _used_app_rows: int) -> int:
+    return max_results
+
+
+def app_action_rows(app: Any, limit: int) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    rows: list[dict[str, Any]] = []
+    for key, meta in (getattr(app, "actions", None) or {}).items():
+        if key == "launch" or not str(key).startswith(ACTION_PREFIX):
+            continue
+        action_id = str(key)[len(ACTION_PREFIX) :]
+        name = (meta or {}).get("name") or action_id
+        title = new_window_title(app.name) if is_new_window_action(action_id) else desktop_action_title(name, app.name)
+        rows.append(
+            {
+                "title": title,
+                "description": "Application action",
+                "icon": getattr(app, "icon", "") or "application-x-executable",
+                "app_id": getattr(app, "app_id", ""),
+                "action_name": action_id,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
