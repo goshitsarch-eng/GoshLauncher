@@ -7,7 +7,7 @@ from ulauncher.modes.launcher.color import parse_color
 from ulauncher.modes.launcher.plan import flags_from_settings, plan_search
 from ulauncher.modes.launcher.units import convert_query
 from ulauncher.modes.launcher.urls import match_url
-from ulauncher.modes.launcher.web import web_result
+from ulauncher.modes.launcher.web import engine_prefs_search_text, web_result
 
 
 def _flags(**overrides: object) -> dict:
@@ -79,3 +79,11 @@ def test_unit_conversion() -> None:
 def test_color_requires_hash() -> None:
     assert parse_color("#ff0000") is not None
     assert parse_color("ff0000") is None
+
+
+def test_engine_prefs_search_text_lists_catalog() -> None:
+    text = engine_prefs_search_text()
+    assert "DuckDuckGo" in text
+    assert "Kagi" in text
+    assert "Wikipedia" in text
+    assert "Brave" in text

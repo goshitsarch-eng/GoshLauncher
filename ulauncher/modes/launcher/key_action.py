@@ -66,6 +66,10 @@ def should_defer_activate_for_preedit(preedit: str) -> bool:
     return bool(preedit)
 
 
+def is_nav_action(action_type: str) -> bool:
+    return action_type in {"close", "move", "activate", "activate-index"}
+
+
 def resolve_home_end_action(key: str, cursor: int, text_length: int) -> dict[str, Any] | None:
     key = normalize_key_name(key)
     if key == "Home":

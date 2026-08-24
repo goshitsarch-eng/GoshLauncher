@@ -115,6 +115,27 @@ def test_search_bookmarks_empty_until_flush(tmp_path: Path, monkeypatch: pytest.
     assert rows[0]["title"] == "UniqueBookmarkLabelXYZ"
 
 
+def test_terminal_command_fallbacks_match_goshos() -> None:
+    ptyxis = terminal_command("/tmp/docs", find_in_path=lambda name: name if name == "ptyxis" else None)
+    assert ptyxis is not None
+    assert "--working-directory=/tmp/docs" in ptyxis["argv"]
+    wezterm = terminal_command("/tmp/docs", find_in_path=lambda name: name if name == "wezterm" else None)
+    assert wezterm is not None
+    assert wezterm["argv"][:2] == ["wezterm", "start"]
+    assert "--cwd=/tmp/docs" in wezterm["argv"]
+    ghostty = terminal_command("/tmp/docs", find_in_path=lambda name: name if name == "ghostty" else None)
+    assert ghostty is not None
+    assert "--working-directory=/tmp/docs" in ghostty["argv"]
+    foot = terminal_command("/tmp", find_in_path=lambda name: name if name == "foot" else None)
+    assert foot is not None
+    assert foot["argv"][0] == "foot"
+    tilix = terminal_command("/tmp", find_in_path=lambda name: name if name == "tilix" else None)
+    assert tilix is not None
+    assert tilix["argv"][0] == "tilix"
+    assert terminal_command("/tmp", find_in_path=lambda _name: None) is None
+    assert terminal_command("", find_in_path=lambda name: name) is None
+
+
 def test_expand_home_argv_and_spawn_path() -> None:
     from ulauncher.modes.launcher.paths import expand_home_argv, resolve_command_argv, resolve_spawn_path
 

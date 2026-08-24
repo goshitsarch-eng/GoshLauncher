@@ -8,8 +8,10 @@ from ulauncher.modes.launcher.looks import (
     chrome_from_settings,
     ensure_look_chrome,
     get_look,
+    icon_size_for_look,
     look_apply_action,
     look_ids,
+    search_icon_style_class,
     should_apply_look,
 )
 
@@ -60,6 +62,23 @@ def test_look_apply_action_stamps_default_without_rewriting_chrome() -> None:
     ensure_look_chrome(applied)
     assert applied.applied_look == "popos"
     assert applied.popup_position == "top"
+
+
+def test_search_icon_style_class_and_compact_icon_size() -> None:
+    assert search_icon_style_class(True) == ""
+    assert search_icon_style_class(False) == "gosh-no-search-icon"
+    gnome = get_look("gnome")
+    assert "session accent" in gnome["description"]
+    assert "Dark Adwaita" in gnome["description"]
+    assert "GNOME 47+" in gnome["description"]
+    light = get_look("light")
+    assert "session accent" in light["description"]
+    assert "GNOME 47+" in light["description"]
+    assert icon_size_for_look({"icon_size": 40}, "compact") == 32
+    assert icon_size_for_look({"icon_size": 28}, "comfortable") == 28
+    assert icon_size_for_look(get_look("popos")["look"], "comfortable") > icon_size_for_look(
+        get_look("krunner")["look"], "comfortable"
+    )
 
 
 def test_every_look_has_theme_css() -> None:

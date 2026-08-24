@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from shutil import which
 from typing import Any, Callable
 from urllib.parse import quote, unquote
 
@@ -266,8 +265,6 @@ def terminal_spec(find_in_path: Any | None = None) -> dict | None:
 
 
 def terminal_command(directory: str, find_in_path: Callable[[str], str | None] | None = None) -> dict | None:
-    if find_in_path is None:
-        find_in_path = which
     spec = terminal_spec(find_in_path)
     if not spec or not directory:
         return None
@@ -290,8 +287,10 @@ def terminal_row_meta(directory: str, home: str | None = None, kind: str | None 
 
 
 def first_terminal() -> str | None:
+    from ulauncher.modes.launcher.gio_launch import find_in_user_path
+
     for name in TERMINALS:
-        found = which(name)
+        found = find_in_user_path(name)
         if found:
             return found
     return None

@@ -191,6 +191,17 @@ def install_compat() -> None:
         )
     if hasattr(Gtk, "Dialog") and not hasattr(Gtk.Dialog, "run"):
         Gtk.Dialog.run = _dialog_run
+    if hasattr(Gtk, "Dialog") and not hasattr(Gtk.Dialog, "add_buttons"):
+
+        def _add_buttons(self: Gtk.Dialog, *args: Any) -> None:
+            index = 0
+            while index + 1 < len(args):
+                self.add_button(str(args[index]), args[index + 1])
+                index += 2
+
+        Gtk.Dialog.add_buttons = _add_buttons
+        if hasattr(Gtk, "FileChooserDialog") and not hasattr(Gtk.FileChooserDialog, "add_buttons"):
+            Gtk.FileChooserDialog.add_buttons = _add_buttons
     if not hasattr(Gtk, "DialogFlags"):
         Gtk.DialogFlags = SimpleNamespace(MODAL=1, DESTROY_WITH_PARENT=2)
     if not hasattr(Gdk, "Screen"):

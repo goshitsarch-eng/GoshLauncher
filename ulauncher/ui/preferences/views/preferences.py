@@ -456,7 +456,7 @@ class PreferencesView(BaseView):
         )
 
         engine_combo = Gtk.ComboBoxText()
-        from ulauncher.modes.launcher.web import SEARCH_ENGINES
+        from ulauncher.modes.launcher.web import SEARCH_ENGINES, engine_prefs_search_text
 
         for engine in SEARCH_ENGINES:
             engine_combo.append(engine["id"], engine["label"])
@@ -466,7 +466,7 @@ class PreferencesView(BaseView):
             launcher_box,
             "Web search engine",
             engine_combo,
-            "Engine used for @ queries and the web fallback.",
+            f"Engine used for @ queries and the web fallback. {engine_prefs_search_text()}.",
         )
 
         order_combo = Gtk.ComboBoxText()

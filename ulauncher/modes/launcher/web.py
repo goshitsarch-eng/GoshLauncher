@@ -17,6 +17,10 @@ SEARCH_ENGINES = [
 ]
 
 
+def engine_prefs_search_text() -> str:
+    return ", ".join(engine["label"] for engine in SEARCH_ENGINES)
+
+
 def get_engine(engine_id: str) -> dict:
     for engine in SEARCH_ENGINES:
         if engine["id"] == engine_id:

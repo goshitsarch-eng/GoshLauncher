@@ -190,8 +190,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         look_id = getattr(self.settings, "look_id", "spotlight")
         gtk4.add_css_class(self.theme_root, f"gosh-theme-{look_id}")
         gtk4.add_css_class(self.theme_root, f"gosh-density-{self._chrome.get('density') or 'comfortable'}")
-        if not self._chrome.get("show_search_icon", True):
-            gtk4.add_css_class(self.theme_root, "gosh-no-search-icon")
+        from ulauncher.modes.launcher.looks import search_icon_style_class
+
+        icon_class = search_icon_style_class(bool(self._chrome.get("show_search_icon", True)))
+        if icon_class:
+            gtk4.add_css_class(self.theme_root, icon_class)
         from ulauncher.modes.launcher.accent import accent_style_class, session_accent_nick
 
         accent = accent_style_class(look_id, session_accent_nick())

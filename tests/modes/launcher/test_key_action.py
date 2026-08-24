@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ulauncher.modes.launcher.key_action import (
+    is_nav_action,
     normalize_key_name,
     resolve_ctrl_nav,
     resolve_home_end_action,
@@ -15,7 +16,14 @@ def test_arrows_tab_shift_tab_and_alt_digits() -> None:
     assert resolve_key_action("Tab", True, False, False) == {"type": "move", "delta": -1}
     assert resolve_key_action("ISO_Left_Tab", False, False, False) == {"type": "move", "delta": -1}
     assert resolve_key_action("Page_Down", False, False, False) == {"type": "move", "delta": 5}
+    assert resolve_key_action("Page_Up", False, False, False) == {"type": "move", "delta": -5}
     assert resolve_key_action("Return", False, False, False) == {"type": "activate"}
+    assert resolve_key_action("KP_Enter", False, False, False) == {"type": "activate"}
+    assert is_nav_action("close") is True
+    assert is_nav_action("move") is True
+    assert is_nav_action("activate") is True
+    assert is_nav_action("activate-index") is True
+    assert is_nav_action("propagate") is False
     assert resolve_key_action("1", False, True, True) == {"type": "activate-index", "index": 0}
     assert resolve_key_action("1", False, True, False) == {"type": "propagate"}
 

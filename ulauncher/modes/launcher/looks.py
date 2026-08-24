@@ -236,6 +236,11 @@ def icon_size_for_look(chrome: LookChrome, density: str) -> int:
     return chrome["icon_size"]
 
 
+def search_icon_style_class(show_search_icon: bool) -> str:
+    # goshos searchIconStyleClass: the magnifier is the only left inset
+    return "" if show_search_icon else "gosh-no-search-icon"
+
+
 _CHROME_SETTINGS = (
     ("position", "popup_position"),
     ("density", "row_density"),
