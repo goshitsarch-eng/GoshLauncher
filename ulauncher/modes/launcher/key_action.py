@@ -30,6 +30,9 @@ def resolve_key_action(key: str, shift: bool, alt: bool, show_numbers: bool) -> 
 
     if key == "Escape":
         return {"type": "close"}
+    # in-process screenshot UI has no NameOwnerChanged; close and let Print reach the DE
+    if key in {"Print", "Sys_Req", "3270_PrintScreen", "PrintScreen"}:
+        return {"type": "close-and-propagate"}
     if key == "Down":
         return {"type": "move", "delta": 1}
     if key == "Tab":

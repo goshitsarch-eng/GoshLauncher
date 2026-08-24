@@ -16,6 +16,8 @@ SYSTEM_MODAL_BUS_NAMES = frozenset(
     {
         "org.gnome.Screenshot",
         "org.gnome.Snapshot",
+        "org.kde.Spectacle",
+        "org.xfce.Screenshooter",
     }
 )
 

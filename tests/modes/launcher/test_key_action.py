@@ -11,6 +11,8 @@ from ulauncher.modes.launcher.key_action import (
 
 def test_arrows_tab_shift_tab_and_alt_digits() -> None:
     assert resolve_key_action("Escape", False, False, False) == {"type": "close"}
+    assert resolve_key_action("Print", False, False, False) == {"type": "close-and-propagate"}
+    assert resolve_key_action("Sys_Req", False, False, False) == {"type": "close-and-propagate"}
     assert resolve_key_action("Down", False, False, False) == {"type": "move", "delta": 1}
     assert resolve_key_action("Tab", False, False, False) == {"type": "move", "delta": 1}
     assert resolve_key_action("Tab", True, False, False) == {"type": "move", "delta": -1}

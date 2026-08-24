@@ -70,6 +70,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._prefs_layout_idle = None
         self._input_chrome_idle = None
         self._refocus_idle = None
+        self._unredirect_held = False
+        self._unredirect_restore: Any = None
         self._osk_visible = False
         self._scale_watched = False
         width_request = self.settings.base_width
@@ -171,6 +173,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.connect("map", self.on_initial_draw)
         self.prefs_btn.connect("clicked", lambda *_: self.get_app().show_preferences())
 
+        self._apply_unredirect(True)
         self._show_backdrop()
         self.present()
         super().set_visible(True)
@@ -477,6 +480,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if action["type"] == "close":
             self.get_app().request_close(save_query=True)
             return True
+        if action["type"] == "close-and-propagate":
+            self.get_app().request_close(save_query=True)
+            return False
         if action["type"] == "move" and self.results_view.has_results:
             if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
                 return True
@@ -844,14 +850,24 @@ class UlauncherWindow(Gtk.ApplicationWindow):
 
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
         logger.info("Closing Ulauncher window")
+        from ulauncher.modes.launcher.popup_gate import run_isolated_teardown
+
         self._cancel_live_layout()
         self._cancel_input_chrome_idle()
         self._cancel_refocus_idle()
-        self._stop_live_search()
-        self._stop_session_watch()
-        self._stop_osk_watch()
-        self._stop_limits_timer()
+        # hide before host disconnects so a throw cannot leave visible true
+        if self.get_visible():
+            self.hide()
         self._destroy_backdrop()
+        self._apply_unredirect(False)
+        run_isolated_teardown(
+            (
+                self._stop_live_search,
+                self._stop_session_watch,
+                self._stop_osk_watch,
+                self._stop_limits_timer,
+            )
+        )
         if not save_query or not self.settings.auto_resume:
             self.get_app().set_query("", update_input=False)
         if self.settings.grab_mouse_pointer:
@@ -915,6 +931,94 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return
         idle.cancel()
         self._input_chrome_idle = None
+
+    def _gtk_unredirect_backend(self) -> str:
+        from ulauncher.modes.launcher.unredirect import gtk_unredirect_backend, hyprland_session_active
+
+        return gtk_unredirect_backend(self._mutter_has_unredirect_key(), hyprland_session_active())
+
+    def _mutter_has_unredirect_key(self) -> bool:
+        from ulauncher.gi import Gio, GLib
+        from ulauncher.modes.launcher.unredirect import MUTTER_KEY, MUTTER_SCHEMA
+
+        try:
+            source = Gio.SettingsSchemaSource.get_default()
+            schema = source.lookup(MUTTER_SCHEMA, True) if source else None
+            has_key = getattr(schema, "has_key", None) if schema is not None else None
+            return bool(callable(has_key) and has_key(MUTTER_KEY))
+        except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError):
+            return False
+
+    def _apply_unredirect(self, want_held: bool) -> None:
+        from ulauncher.modes.launcher.unredirect import next_unredirect_action
+
+        backend = self._gtk_unredirect_backend()
+        action = next_unredirect_action(bool(getattr(self, "_unredirect_held", False)), want_held, backend)
+        if action == "hold":
+            self._hold_unredirect(backend)
+        elif action == "release":
+            self._release_unredirect(backend)
+
+    def _hold_unredirect(self, backend: str) -> None:
+        from ulauncher.modes.launcher.unredirect import mutter_hold_write
+
+        if backend == "mutter-gsettings":
+            settings = self._mutter_unredirect_settings()
+            if settings is None:
+                return
+            previous = bool(settings.get_boolean(self._mutter_unredirect_key()))
+            settings.set_boolean(self._mutter_unredirect_key(), mutter_hold_write())
+            self._unredirect_restore = previous
+            self._unredirect_held = True
+            return
+        if backend == "hyprland":
+            from ulauncher.modes.launcher.unredirect import (
+                hyprland_getoption_argv,
+                hyprland_hold_argv,
+                parse_hyprland_scanout,
+            )
+
+            previous = parse_hyprland_scanout(self._run_unredirect_argv(hyprland_getoption_argv()))
+            self._run_unredirect_argv(hyprland_hold_argv())
+            self._unredirect_restore = previous
+            self._unredirect_held = True
+
+    def _release_unredirect(self, backend: str) -> None:
+        restore = getattr(self, "_unredirect_restore", None)
+        self._unredirect_restore = None
+        self._unredirect_held = False
+        if backend == "mutter-gsettings" and restore is not None:
+            settings = self._mutter_unredirect_settings()
+            if settings is not None:
+                settings.set_boolean(self._mutter_unredirect_key(), bool(restore))
+            return
+        if backend == "hyprland":
+            from ulauncher.modes.launcher.unredirect import hyprland_restore_argv
+
+            self._run_unredirect_argv(hyprland_restore_argv(str(restore or "")))
+
+    def _mutter_unredirect_key(self) -> str:
+        from ulauncher.modes.launcher.unredirect import MUTTER_KEY
+
+        return MUTTER_KEY
+
+    def _mutter_unredirect_settings(self) -> Any:
+        from ulauncher.gi import Gio, GLib
+        from ulauncher.modes.launcher.unredirect import MUTTER_SCHEMA
+
+        try:
+            return Gio.Settings.new(MUTTER_SCHEMA)
+        except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError):
+            return None
+
+    def _run_unredirect_argv(self, argv: list[str]) -> str:
+        import subprocess
+
+        try:
+            completed = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=1)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return completed.stdout or ""
 
     def _show_backdrop(self) -> None:
         from ulauncher.ui.backdrop_overlay import PopupBackdrop

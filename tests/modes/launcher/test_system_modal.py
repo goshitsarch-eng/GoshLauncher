@@ -14,6 +14,8 @@ def test_screenshot_name_appearing_closes_and_shell_screenshot_is_ignored() -> N
     assert "org.gnome.Shell.Screenshot" not in SYSTEM_MODAL_BUS_NAMES
     assert name_owner_changed_should_close("org.gnome.Screenshot", "", ":1.99") is True
     assert name_owner_changed_should_close("org.gnome.Snapshot", "", ":1.8") is True
+    assert name_owner_changed_should_close("org.kde.Spectacle", "", ":1.12") is True
+    assert name_owner_changed_should_close("org.xfce.Screenshooter", "", ":1.4") is True
     assert name_owner_changed_should_close("org.gnome.Screenshot", ":1.99", "") is False
     assert name_owner_changed_should_close("org.gnome.Screenshot", ":1.1", ":1.1") is False
     assert name_owner_changed_should_close("org.freedesktop.PolicyKit1", "", ":1.2") is False
