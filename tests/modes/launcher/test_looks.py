@@ -115,3 +115,18 @@ def test_hidden_search_icon_inset_follows_goshos_order() -> None:
     assert compact < no_icon_20 < compact_no < rofi
     leftover_16 = text.find(".app.gosh-no-search-icon .input {\n  padding-left: 16px;")
     assert leftover_16 == -1
+
+
+def test_spotlight_shell_is_transparent_like_goshos() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    app_rule = text.split(".app {", 1)[1].split("}", 1)[0]
+    assert "background-color: transparent" in app_rule
+    assert "box-shadow: none" in app_rule
+    assert "window," in text
+    assert "window.background" in text
+    omarchy = text.split(".gosh-theme-omarchy.app {", 1)[1].split("}", 1)[0]
+    assert "#1a1b26" in omarchy
+    popos = text.split(".gosh-theme-popos.app {", 1)[1].split("}", 1)[0]
+    assert "#242426" in popos
