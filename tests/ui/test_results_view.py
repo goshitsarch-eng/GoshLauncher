@@ -22,14 +22,14 @@ def _named_widget(name: str, *, searchable: bool = True) -> MagicMock:
 
 class TestResultsView:
     @pytest.mark.parametrize(
-        ("has_wrapped", "width", "current_min", "needed", "measured_width", "expected_min", "expects_resize"),
+        ("has_wrapped", "width", "current_min", "needed", "expected_min", "expects_resize"),
         [
-            pytest.param(True, 500, 46, 180, 500, 180, True, id="requests_the_height_for_width"),
-            pytest.param(True, 500, 46, 2000, 500, 600, True, id="clamps_to_max_content_height"),
-            pytest.param(True, 500, 180, 180, 500, None, False, id="noop_when_height_is_unchanged"),
-            pytest.param(True, 500, 180, 181, 500, None, False, id="tolerates_one_pixel_oscillation"),
-            pytest.param(True, 0, 46, 180, None, None, False, id="skips_early_allocation_passes"),
-            pytest.param(False, 500, 180, 180, None, None, False, id="noop_without_wrapped_results"),
+            pytest.param(True, 500, 46, 180, 180, True, id="requests_the_height_for_width"),
+            pytest.param(True, 500, 46, 2000, 600, True, id="clamps_to_max_content_height"),
+            pytest.param(True, 500, 180, 180, None, False, id="noop_when_height_is_unchanged"),
+            pytest.param(True, 500, 180, 181, None, False, id="tolerates_one_pixel_oscillation"),
+            pytest.param(True, 0, 46, 180, None, False, id="skips_early_allocation_passes"),
+            pytest.param(False, 500, 180, 180, None, False, id="noop_without_wrapped_results"),
         ],
     )
     def test_fit_results_height(
@@ -39,38 +39,42 @@ class TestResultsView:
         width: int,
         current_min: int,
         needed: int,
-        measured_width: int | None,
         expected_min: int | None,
         expects_resize: bool,
     ) -> None:
         run_when_idle = mocker.patch("ulauncher.ui.results_view.scheduling.run_when_idle")
+        measure = mocker.patch("ulauncher.ui.results_view.gtk4.measure_height_for_width", return_value=(needed, needed))
         box = MagicMock()
-        box.get_preferred_height_for_width.return_value = (needed, needed)
-        # a fake self lets us drive the scroller's reported heights directly
         view = cast(
             "Any",
             SimpleNamespace(
                 _has_wrapped_results=has_wrapped,
+                _box=box,
+                get_width=MagicMock(return_value=width),
                 get_min_content_height=MagicMock(return_value=current_min),
-                get_property=MagicMock(return_value=600),  # max-content-height
+                get_max_content_height=MagicMock(return_value=600),
                 set_min_content_height=MagicMock(),
                 queue_resize=MagicMock(),
+                _fit_results_height=MagicMock(),
             ),
         )
 
-        ResultsView._fit_results_height(view, box, cast("Any", SimpleNamespace(width=width)))
+        ResultsView._fit_results_height(view)
 
-        if measured_width is None:
-            box.get_preferred_height_for_width.assert_not_called()
+        if width <= 0 or not has_wrapped:
+            measure.assert_not_called()
         else:
-            box.get_preferred_height_for_width.assert_called_once_with(measured_width)
+            measure.assert_called_once_with(box, width)
 
         if expected_min is None:
             view.set_min_content_height.assert_not_called()
         else:
             view.set_min_content_height.assert_called_once_with(expected_min)
 
-        assert run_when_idle.called is expects_resize
+        if width <= 0 and has_wrapped:
+            assert run_when_idle.called
+        else:
+            assert run_when_idle.called is expects_resize
 
 
 class TestResultsViewNavigation:

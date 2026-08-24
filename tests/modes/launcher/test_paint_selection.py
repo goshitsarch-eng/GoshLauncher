@@ -51,6 +51,21 @@ def test_paint_selection_prefers_id_over_duplicate_titles() -> None:
     )
 
 
+def test_paint_selection_matches_python_result_name() -> None:
+    from ulauncher.internals.result import Result
+
+    previous = Result(name="Firefox", highlightable=True, actions={"activate": {"name": "Activate"}})
+    rows = [
+        Result(name="Chrome", highlightable=True, actions={"activate": {"name": "Activate"}}),
+        Result(name="Firefox", highlightable=True, actions={"activate": {"name": "Activate"}}),
+    ]
+    key = result_selection_key(previous, 0)
+    assert key is not None
+    assert key["title"] == "Firefox"
+    assert paint_selection_index(key, rows) == 1
+    assert row_matches_previous(key, rows[1])
+
+
 def test_first_selectable_skips_pending() -> None:
     assert (
         first_selectable_index(

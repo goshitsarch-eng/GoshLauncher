@@ -30,7 +30,10 @@ def _row_type(result: Any) -> str | None:
 
 def _row_title(result: Any) -> str | None:
     if isinstance(result, dict):
+        # Result is a dict subclass whose display string is `name`, not `title`
         value = result.get("title")
+        if not isinstance(value, str) or value == "":
+            value = result.get("name")
         return value if isinstance(value, str) else None
     value = getattr(result, "name", None) or getattr(result, "title", None)
     return value if isinstance(value, str) else None

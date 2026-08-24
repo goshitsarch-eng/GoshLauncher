@@ -29,12 +29,11 @@ class TestResultWidget:
 
     def test_select(self) -> None:
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop, JUMP_KEYS)
-        style = result_wgt.item_box.get_style_context()
-        assert "selected" not in style.list_classes()
+        assert not result_wgt.item_box.has_css_class("selected")
         result_wgt.select()
-        assert "selected" in style.list_classes()
+        assert result_wgt.item_box.has_css_class("selected")
         result_wgt.deselect()
-        assert "selected" not in style.list_classes()
+        assert not result_wgt.item_box.has_css_class("selected")
 
     def test_shortcut(self, mocker: MockerFixture) -> None:
         mocker.patch(
@@ -57,7 +56,7 @@ class TestResultWidget:
         name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
         descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
         for label in (name_label, descr_label):
-            assert label.get_line_wrap()
+            assert label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.NONE
 
     def test_wrap__defaults_to_single_ellipsized_line(self) -> None:
@@ -69,7 +68,7 @@ class TestResultWidget:
         name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
         descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
         for label in (name_label, descr_label):
-            assert not label.get_line_wrap()
+            assert not label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.END
 
     def test_wrap__highlighting_is_skipped(self) -> None:
@@ -82,4 +81,4 @@ class TestResultWidget:
         children = widget.title_box.get_children()
         assert len(children) == 1
         assert cast("Gtk.Label", children[0]).get_text() == "wrapped name"
-        assert not any("item-highlight" in c.get_style_context().list_classes() for c in children)
+        assert not any(c.has_css_class("item-highlight") for c in children)
