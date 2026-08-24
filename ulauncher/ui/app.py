@@ -201,6 +201,11 @@ class UlauncherApp(Adw.Application):
 
     def _on_window_destroyed(self, _window: Gtk.Window, key: Literal["main", "preferences"]) -> None:
         self.windows.pop(key, None)
+        self._popup_close_pending = False
+        if key == "main" and getattr(self, "_popup_reopen_after_close", False):
+            self._popup_reopen_after_close = False
+            self.show_launcher()
+            return
         if not self.windows and not self._persistent:
             # Clipboard contents only live as long as the owning app, and clipboard managers
             # (klipper, gpaste, wl-clip-persist, ...) need time to snapshot them after we set
@@ -263,10 +268,30 @@ class UlauncherApp(Adw.Application):
 
     def toggle_window(self) -> None:
         """Toggle window visibility - for explicit toggle requests only."""
-        if "main" in self.windows:
+        from ulauncher.modes.launcher.popup_gate import can_open_popup, next_toggle_action
+
+        main = self.windows.get("main")
+        is_open = main is not None
+        visible = bool(main is not None and main.get_mapped())
+        action = next_toggle_action(
+            is_open,
+            visible,
+            bool(getattr(self, "_popup_open_pending", False)),
+            bool(getattr(self, "_popup_close_pending", False)),
+        )
+        if action == "toggle-reopen":
+            self._popup_reopen_after_close = True
             self.close_launcher()
-        else:
-            self.show_launcher()
+            return
+        if action == "cancel-open":
+            self._popup_open_pending = False
+            return
+        if action == "close":
+            self.close_launcher()
+            return
+        if not can_open_popup(False, False, False, False, False):
+            return
+        self.show_launcher()
 
     def delegate_custom_message(self, json_message: str) -> None:
         """Parses and delegates custom JSON messages to the EventBus listener (if any)"""

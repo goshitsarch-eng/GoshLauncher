@@ -252,11 +252,13 @@ def terminal_command(directory: str, find_in_path: Callable[[str], str | None] |
     return {"argv": [*list(spec["argv"]), f"{flag}={directory}"], "cwd": None}
 
 
-def terminal_row_meta(directory: str, home: str | None = None) -> dict:
+def terminal_row_meta(directory: str, home: str | None = None, kind: str | None = None) -> dict:
     return {
+        "type": kind or "path",
         "title": "Open in Terminal",
         "description": collapse_home(directory, home),
         "icon": "utilities-terminal-symbolic",
+        "id": f"terminal:{directory}",
         "path": directory,
         "in_terminal": True,
     }

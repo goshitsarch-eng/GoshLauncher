@@ -35,19 +35,16 @@ def get_app_mode() -> Mode:
 
 @lru_cache(maxsize=None)
 def get_modes() -> list[Mode]:
-    from ulauncher.modes.calc.calc_mode import CalcMode
     from ulauncher.modes.extensions.extension_mode import ExtensionMode
     from ulauncher.modes.extensions.extension_service import ext_service
-    from ulauncher.modes.file_browser.file_browser_mode import FileBrowserMode
     from ulauncher.modes.launcher.mode import LauncherMode
     from ulauncher.modes.shortcuts.shortcut_mode import ShortcutMode
 
-    # LauncherMode owns Spotlight-goshos search, including ~/ ./ and absolute
-    # paths, so it must run before the legacy file-browser listing.
+    # LauncherMode owns Spotlight-goshos typed search, including calculator
+    # and filesystem paths, so the legacy CalcMode and FileBrowserMode stay
+    # out of the registered mode list.
     return [
         LauncherMode(),
-        FileBrowserMode(),
-        CalcMode(),
         ShortcutMode(),
         ExtensionMode(ext_service),
         get_app_mode(),

@@ -299,3 +299,15 @@ def test_search_order_windows_first_puts_windows_before_apps(monkeypatch: pytest
     assert "window" in kinds
     assert "app" in kinds
     assert kinds.index("window") < kinds.index("app")
+
+
+def test_get_modes_launcher_owns_typed_search() -> None:
+    from ulauncher.core import get_modes
+
+    get_modes.cache_clear()
+    names = [type(mode).__name__ for mode in get_modes()]
+    assert names[0] == "LauncherMode"
+    assert "FileBrowserMode" not in names
+    assert "CalcMode" not in names
+    assert "ShortcutMode" in names
+    assert "ExtensionMode" in names

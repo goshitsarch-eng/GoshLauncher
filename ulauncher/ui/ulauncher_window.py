@@ -30,17 +30,26 @@ logger = logging.getLogger(__name__)
 
 
 def _read_entry_preedit(entry: Any) -> str:
+    from ulauncher.modes.launcher.key_action import read_preedit
+
     getter = getattr(entry, "get_preedit_string", None)
     if callable(getter):
-        value = getter()
-        if isinstance(value, tuple):
-            return str(value[0] or "")
-        return str(value or "")
+        return read_preedit(getter())
     delegate_fn = getattr(entry, "get_delegate", None)
     delegate = delegate_fn() if callable(delegate_fn) else None
     if delegate is not None and delegate is not entry:
         return _read_entry_preedit(delegate)
     return ""
+
+
+def _event_time_us(controller: Any) -> int:
+    getter = getattr(controller, "get_current_event_time", None)
+    if not callable(getter):
+        return 0
+    time_ms = int(getter() or 0)
+    if time_ms <= 0:
+        return 0
+    return time_ms * 1000
 
 
 class UlauncherWindow(Gtk.ApplicationWindow):
@@ -54,6 +63,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.settings = Settings.load(force=True)
         ensure_look_chrome(self.settings)
         self._chrome = chrome_from_settings(self.settings)
+        self._nav_last_key = 0
+        self._nav_last_time_us = 0
         width_request = self.settings.base_width
         height_request = -1
 
@@ -274,15 +285,17 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         elif delta < 0:
             self.results_view.go_up()
 
-    def on_input_key_press(  # noqa: PLR0911, PLR0912
-        self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: Gdk.ModifierType
+    def on_input_key_press(  # noqa: PLR0911, PLR0912, PLR0915
+        self, controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: Gdk.ModifierType
     ) -> bool:
         from ulauncher.modes.launcher.key_action import (
             resolve_ctrl_nav,
             resolve_home_end_action,
             resolve_key_action,
             should_defer_activate_for_preedit,
+            should_propagate_for_ime,
         )
+        from ulauncher.modes.launcher.nav_repeat import should_ignore_nav_repeat
 
         keyname = Gdk.keyval_name(keyval) or ""
         shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
@@ -307,6 +320,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             return True
 
         entry = self.prompt_input
+        preedit = _read_entry_preedit(entry)
+        now_us = _event_time_us(controller)
+        ime_owns_nav = should_propagate_for_ime(preedit, False)
         if (
             keyname == "BackSpace"
             and not ctrl
@@ -319,6 +335,12 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if ctrl:
             nav = resolve_ctrl_nav(keyname)
             if nav and self.results_view.has_results:
+                if ime_owns_nav:
+                    return False
+                if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
+                    return True
+                self._nav_last_key = keyval
+                self._nav_last_time_us = now_us
                 self._apply_move(int(nav["delta"]))
                 return True
 
@@ -329,6 +351,12 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             if home_end["type"] == "propagate":
                 return False
             if self.results_view.has_results:
+                if ime_owns_nav:
+                    return False
+                if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
+                    return True
+                self._nav_last_key = keyval
+                self._nav_last_time_us = now_us
                 self._apply_move(int(home_end["delta"]))
                 return True
             return False
@@ -338,11 +366,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.close(save_query=True)
             return True
         if action["type"] == "move" and self.results_view.has_results:
+            if ime_owns_nav:
+                return False
+            if should_ignore_nav_repeat(keyval, self._nav_last_key, now_us, self._nav_last_time_us):
+                return True
+            self._nav_last_key = keyval
+            self._nav_last_time_us = now_us
             self._apply_move(int(action["delta"]))
             return True
-        if action["type"] in {"activate", "activate-index"} and should_defer_activate_for_preedit(
-            _read_entry_preedit(entry)
-        ):
+        if action["type"] in {"activate", "activate-index"} and should_defer_activate_for_preedit(preedit):
             return False
         if action["type"] == "activate" and self.results_view.has_results:
             self.activate_result(alt)
@@ -459,23 +491,33 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return None
 
     def position_window(self) -> None:
+        from ulauncher.modes.launcher.popup_position import place_popup, popup_width_for_work_area
+
         if layout_size := self.get_layout_size():
-            window_width = self.settings.base_width
-            pos_x = (layout_size.width - window_width) / 2
-            pos_y = layout_size.height * (0.02 if self._chrome.get("position") == "top" else 0.1)
-            prompt_height = self.prompt.get_allocated_height() or 60
-            max_height = int(getattr(self.settings, "results_max_height", 400) or 400)
-            self.results_view.set_max_height(int(min(max_height, layout_size.height - prompt_height - pos_y * 2)))
+            work = {
+                "x": int(getattr(layout_size, "x", 0) or 0),
+                "y": int(getattr(layout_size, "y", 0) or 0),
+                "width": int(layout_size.width),
+                "height": int(layout_size.height),
+            }
+            popup_width = popup_width_for_work_area(self.settings.base_width, work["width"])
+            empty_height = self.prompt.get_allocated_height() or 80
+            position = str(self._chrome.get("position") or "center")
+            requested = int(getattr(self.settings, "results_max_height", 400) or 400)
+            placed = place_popup(work, popup_width, empty_height, position, requested)
+            pos_x = int(placed["x"] - work["x"])
+            pos_y = int(placed["y"] - work["y"])
+            self.results_view.set_max_height(int(placed["results_max"]))
 
             if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:
-                self.frame.set_margin_top(int(pos_y))
-                self.frame.set_margin_bottom(int(pos_y))
-                self.frame.set_margin_start(int(pos_x))
-                self.frame.set_margin_end(int(pos_x))
+                self.frame.set_margin_top(pos_y)
+                self.frame.set_margin_bottom(0)
+                self.frame.set_margin_start(pos_x)
+                self.frame.set_margin_end(max(0, int(work["width"] - pos_x - popup_width)))
             elif self.layer_shell_enabled:
                 layer_shell.set_vertical_position(self, pos_y)
             elif hasattr(self, "move"):
-                self.move(int(pos_x + getattr(layout_size, "x", 0)), int(pos_y + getattr(layout_size, "y", 0)))
+                self.move(int(placed["x"]), int(placed["y"]))
 
     def _ensure_monitor_watch(self) -> None:
         if getattr(self, "_monitors_watched", False):
@@ -512,13 +554,17 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self._live_idle = None
 
     def _on_live_search_change(self) -> None:
-        if getattr(self, "_live_idle", None):
+        from ulauncher.modes.launcher.async_paint import should_schedule_async_paint
+
+        if not should_schedule_async_paint(bool(getattr(self, "_live_idle", None)), self.get_mapped()):
             return
         self._live_idle = scheduling.run_when_idle(self._run_live_repaint)
 
     def _run_live_repaint(self) -> None:
+        from ulauncher.modes.launcher.async_paint import should_run_async_paint
+
         self._live_idle = None
-        if self.get_mapped():
+        if should_run_async_paint(True, self.get_mapped()):
             self.get_app().query_changed(self.prompt_input.get_text())
 
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]

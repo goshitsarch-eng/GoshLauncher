@@ -45,3 +45,20 @@ def test_keypad_aliases_match_goshos_nav() -> None:
     assert resolve_key_action("KP_Down", False, False, False) == {"type": "move", "delta": 1}
     assert resolve_key_action("KP_1", False, True, True) == {"type": "activate-index", "index": 0}
     assert resolve_home_end_action("KP_Home", 0, 4) == {"type": "move", "delta": -999}
+
+
+def test_preedit_and_ime_propagation_match_goshos() -> None:
+    from ulauncher.modes.launcher.key_action import (
+        read_preedit,
+        should_propagate_for_ime,
+        should_propagate_for_preedit,
+    )
+
+    assert read_preedit("あ") == "あ"
+    assert read_preedit(["漢", None, 1]) == "漢"
+    assert read_preedit(None) == ""
+    assert should_propagate_for_preedit("あ") is True
+    assert should_propagate_for_preedit("") is False
+    assert should_propagate_for_ime("", True) is True
+    assert should_propagate_for_ime("", False) is False
+    assert should_propagate_for_ime("あ", False) is True

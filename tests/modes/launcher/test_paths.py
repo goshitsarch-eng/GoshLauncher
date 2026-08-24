@@ -88,6 +88,8 @@ def test_terminal_row_meta() -> None:
     row = terminal_row_meta("/home/me/code", home="/home/me")
     assert row["title"] == "Open in Terminal"
     assert row["in_terminal"] is True
+    assert row["id"] == "terminal:/home/me/code"
+    assert row["type"] == "path"
     assert row["description"] == "~/code"
 
 

@@ -77,3 +77,21 @@ def resolve_home_end_action(key: str, cursor: int, text_length: int) -> dict[str
             return {"type": "move", "delta": 999}
         return {"type": "propagate"}
     return None
+
+
+def read_preedit(result: object) -> str:
+    if isinstance(result, str):
+        return result
+    if result and isinstance(result, (list, tuple)) and isinstance(result[0], str):
+        return result[0]
+    return ""
+
+
+def should_propagate_for_preedit(preedit: str) -> bool:
+    return should_propagate_for_ime(preedit, False)
+
+
+def should_propagate_for_ime(preedit: object, candidate_visible: bool) -> bool:
+    if isinstance(preedit, str) and len(preedit) > 0:
+        return True
+    return bool(candidate_visible)

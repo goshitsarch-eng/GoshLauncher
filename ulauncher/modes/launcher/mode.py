@@ -37,6 +37,7 @@ class LauncherMode(Mode):
         self._paint_planned: dict[str, Any] | None = None
         self._paint_settings: Settings | None = None
         self._paint_chrome: dict[str, Any] | None = None
+        self._accept_paint = False
 
     def matches_query_str(self, query_str: str) -> bool:
         return bool(query_str)
@@ -62,6 +63,7 @@ class LauncherMode(Mode):
         self._paint_planned = planned
         self._paint_settings = settings
         self._paint_chrome = chrome
+        self._accept_paint = True
         want_path = should_refresh_path(bool(flags.get("path")), planned)
         want_command = should_refresh_command(bool(flags.get("command")), planned)
         want_bookmarks = should_refresh_bookmarks(bool(flags.get("bookmarks")), planned)
@@ -91,17 +93,24 @@ class LauncherMode(Mode):
             ensure_recent_files(self._schedule_repaint)
 
     def _schedule_repaint(self) -> None:
-        if self._lookup_idle:
+        from ulauncher.modes.launcher.async_paint import should_schedule_async_paint
+
+        if not should_schedule_async_paint(bool(self._lookup_idle), self._accept_paint):
             return
         self._lookup_idle = scheduling.run_when_idle(self._run_repaint)
 
     def _run_repaint(self) -> None:
+        from ulauncher.modes.launcher.async_paint import should_run_async_paint
+
         self._lookup_idle = None
         callback = self._paint_callback
         planned = self._paint_planned
         settings = self._paint_settings
         chrome = self._paint_chrome
+        query_active = planned is not None and bool(planned.get("query"))
         if callback is None or planned is None or settings is None or chrome is None:
+            return
+        if not should_run_async_paint(query_active, self._accept_paint):
             return
         callback(effects.render_results(self._results_for_plan(planned, settings, chrome)))
 
