@@ -11,6 +11,11 @@ from ulauncher.modes.launcher.session_watch import (
     screensaver_active_changed_should_close,
     session_signal_should_close,
 )
+from ulauncher.modes.launcher.time_limits import (
+    MALCONTENT_TIMER_IFACE,
+    MALCONTENT_TIMER_SIGNAL,
+    TIME_LIMITS_WATCHES,
+)
 
 
 def test_next_session_watch_action() -> None:
@@ -57,6 +62,8 @@ def test_overview_and_login_signals_close_the_popup() -> None:
     assert len(LOGIN_WATCHES) == 3
     assert ALL_WATCHES[:2] == SCREENSAVER_WATCHES
     assert OVERVIEW_WATCHES[0] in ALL_WATCHES
+    assert TIME_LIMITS_WATCHES[0] in ALL_WATCHES
+    assert session_signal_should_close(MALCONTENT_TIMER_IFACE, MALCONTENT_TIMER_SIGNAL, ()) is False
 
 
 def test_session_watcher_injected_subscribe_and_close() -> None:
@@ -87,3 +94,21 @@ def test_session_watcher_injected_subscribe_and_close() -> None:
     assert watcher.listening is False
     watcher.stop()
     assert closed == ["close", "close"]
+
+
+def test_estimated_times_changed_reprobes_instead_of_closing() -> None:
+    closed: list[str] = []
+    probes: list[int] = []
+
+    def limits_reached() -> bool:
+        probes.append(1)
+        return len(probes) > 1
+
+    watcher = SessionWatcher(lambda: closed.append("close"), subscribe=lambda *_a: 1, limits_reached=limits_reached)
+    watcher.start()
+    watcher._on_signal(MALCONTENT_TIMER_IFACE, MALCONTENT_TIMER_SIGNAL, ())
+    assert closed == []
+    assert probes == [1]
+    watcher._on_signal(MALCONTENT_TIMER_IFACE, MALCONTENT_TIMER_SIGNAL, ())
+    assert closed == ["close"]
+    assert probes == [1, 1]

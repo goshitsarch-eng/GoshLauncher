@@ -5,6 +5,12 @@ from __future__ import annotations
 import contextlib
 from typing import Any, Callable
 
+from ulauncher.modes.launcher.time_limits import (
+    MALCONTENT_TIMER_IFACE,
+    MALCONTENT_TIMER_SIGNAL,
+    TIME_LIMITS_WATCHES,
+)
+
 # GNOME sessionMode.updated is in-process. A GTK app gets lock via ScreenSaver D-Bus.
 SCREENSAVER_WATCHES = (
     ("org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver", "ActiveChanged"),
@@ -48,7 +54,7 @@ LOGIN_WATCHES = (
     ),
 )
 
-ALL_WATCHES = (*SCREENSAVER_WATCHES, *OVERVIEW_WATCHES, *LOGIN_WATCHES)
+ALL_WATCHES = (*SCREENSAVER_WATCHES, *OVERVIEW_WATCHES, *LOGIN_WATCHES, *TIME_LIMITS_WATCHES)
 
 
 def next_session_watch_action(was_listening: bool, want_listening: bool) -> str:
@@ -129,9 +135,15 @@ def session_signal_should_close(interface_name: str, signal_name: str, args: Any
 class SessionWatcher:
     """Subscribe to lock/overview/sleep signals and close the popup."""
 
-    def __init__(self, on_close: Callable[[], None], subscribe: Callable[..., int] | None = None) -> None:
+    def __init__(
+        self,
+        on_close: Callable[[], None],
+        subscribe: Callable[..., int] | None = None,
+        limits_reached: Callable[[], bool] | None = None,
+    ) -> None:
         self._on_close = on_close
         self._subscribe = subscribe
+        self._limits_reached = limits_reached
         self._listening = False
         self._ids: list[tuple[Any, int]] = []
 
@@ -162,6 +174,16 @@ class SessionWatcher:
         self._listening = False
 
     def _on_signal(self, interface_name: str, signal_name: str, args: Any) -> None:
+        if signal_name == MALCONTENT_TIMER_SIGNAL and interface_name == MALCONTENT_TIMER_IFACE:
+            # gnome-shell re-probes GetEstimatedTimes; the signal itself is not LIMIT_REACHED
+            probe = self._limits_reached
+            if probe is None:
+                from ulauncher.modes.launcher.session_state import session_limits_reached_now
+
+                probe = session_limits_reached_now
+            if probe():
+                self._on_close()
+            return
         if session_signal_should_close(interface_name, signal_name, args):
             self._on_close()
 
@@ -187,7 +209,7 @@ class SessionWatcher:
             args = params.unpack() if hasattr(params, "unpack") else params
             self._on_signal(iface, member, args)
 
-        system_names = {"org.freedesktop.login1"}
+        system_names = {"org.freedesktop.login1", "org.freedesktop.MalcontentTimer1"}
         for dest, path, iface, member in ALL_WATCHES:
             connection = _bus_for_dest(Gio, bus, dest, system_names)
             if connection is None:

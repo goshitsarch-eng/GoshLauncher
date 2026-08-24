@@ -78,7 +78,9 @@ def session_is_greeter(environ: Mapping[str, str] | None = None) -> bool:
 def session_limits_reached_now(probe: Callable[[], Any] | None = None) -> bool:
     if probe is not None:
         return session_limits_reached(time_limits_state(probe()))
-    return False
+    from ulauncher.modes.launcher.time_limits import live_limits_reached
+
+    return live_limits_reached()
 
 
 def session_popup_blockers(

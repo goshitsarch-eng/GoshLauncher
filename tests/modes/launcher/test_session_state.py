@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from ulauncher.modes.launcher.popup_gate import TIME_LIMITS_REACHED, can_open_popup, should_close_on_session
 from ulauncher.modes.launcher.session_state import (
     session_is_greeter,
@@ -25,3 +27,12 @@ def test_session_probes_are_injectable() -> None:
     assert can_open_popup(False, False, locked, greeter, limits) is False
     assert should_close_on_session(locked, greeter, limits) is True
     assert can_open_popup(False, False, False, False, False) is True
+
+
+def test_session_limits_reached_now_uses_live_malcontent_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import time_limits
+
+    monkeypatch.setattr(time_limits, "live_limits_reached", lambda: True)
+    assert session_limits_reached_now() is True
+    monkeypatch.setattr(time_limits, "live_limits_reached", lambda: False)
+    assert session_limits_reached_now() is False

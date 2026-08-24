@@ -67,6 +67,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._nav_last_time_us = 0
         self._backdrop = None
         self._backdrop_close_idle = None
+        self._osk_visible = False
+        self._scale_watched = False
         width_request = self.settings.base_width
         height_request = -1
 
@@ -257,8 +259,10 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.apply_styling()
         self.get_app().window_ready()
         self._ensure_monitor_watch()
+        self._ensure_scale_watch()
         self._start_live_search()
         self._start_session_watch()
+        self._start_osk_watch()
 
     def on_initial_draw(self, *_: Any) -> None:
         if t0 := os.environ.get("ULAUNCHER_PERF_START_BOOTTIME"):
@@ -524,7 +528,12 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return None
 
     def position_window(self) -> None:
-        from ulauncher.modes.launcher.popup_position import place_popup, popup_width_for_work_area
+        from ulauncher.modes.launcher.osk import osk_keyboard_for_work_area
+        from ulauncher.modes.launcher.popup_position import (
+            place_popup,
+            popup_width_for_work_area,
+            work_area_avoiding_keyboard,
+        )
 
         if layout_size := self.get_layout_size():
             work = {
@@ -533,11 +542,16 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 "width": int(layout_size.width),
                 "height": int(layout_size.height),
             }
-            popup_width = popup_width_for_work_area(self.settings.base_width, work["width"])
+            scale = self.get_scale_factor()
+            work = work_area_avoiding_keyboard(
+                work,
+                osk_keyboard_for_work_area(work, bool(getattr(self, "_osk_visible", False))),
+            )
+            popup_width = popup_width_for_work_area(self.settings.base_width, work["width"], scale)
             empty_height = self.prompt.get_allocated_height() or 80
             position = str(self._chrome.get("position") or "center")
             requested = int(getattr(self.settings, "results_max_height", 400) or 400)
-            placed = place_popup(work, popup_width, empty_height, position, requested)
+            placed = place_popup(work, popup_width, empty_height, position, requested, None, scale)
             pos_x = int(placed["x"] - work["x"])
             pos_y = int(placed["y"] - work["y"])
             self.results_view.set_max_height(int(placed["results_max"]))
@@ -576,6 +590,58 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self._live_idle = None
         if next_live_search_action(self._live_search.listening, True) == "start":
             self._live_search.start()
+
+    def _ensure_scale_watch(self) -> None:
+        from ulauncher.gi import Gio, GLib
+        from ulauncher.modes.launcher.ui_scale import next_scale_listen_action
+
+        if next_scale_listen_action(bool(getattr(self, "_scale_watched", False)), self) != "listen":
+            return
+        self._scale_watched = True
+        self.connect("notify::scale-factor", lambda *_: self._on_scale_changed())
+        try:
+            source = Gio.SettingsSchemaSource.get_default()
+            schema = source.lookup("org.gnome.desktop.interface", True) if source else None
+            if schema is None:
+                return
+            settings = getattr(self, "_accent_settings", None) or Gio.Settings.new("org.gnome.desktop.interface")
+            settings.connect("changed::text-scaling-factor", lambda *_: self._on_scale_changed())
+            self._interface_settings = settings
+        except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError):
+            return
+
+    def _on_scale_changed(self) -> None:
+        if not self.get_mapped():
+            return
+        self._apply_look_classes()
+        self.apply_theme()
+        self.position_window()
+        self._relayout_backdrop()
+
+    def _start_osk_watch(self) -> None:
+        from ulauncher.modes.launcher.osk import OskWatcher, next_osk_watch_action
+
+        if getattr(self, "_osk_watch", None) is None:
+            self._osk_watch = OskWatcher(self._on_osk_changed)
+        if next_osk_watch_action(self._osk_watch.listening, True) == "start":
+            self._osk_watch.start()
+            self._osk_visible = bool(self._osk_watch.visible)
+            if self._osk_visible:
+                self.position_window()
+
+    def _stop_osk_watch(self) -> None:
+        from ulauncher.modes.launcher.osk import next_osk_watch_action
+
+        watcher = getattr(self, "_osk_watch", None)
+        if watcher is None:
+            return
+        if next_osk_watch_action(watcher.listening, False) == "stop":
+            watcher.stop()
+
+    def _on_osk_changed(self, visible: bool) -> None:
+        self._osk_visible = bool(visible)
+        if self.get_mapped():
+            self.position_window()
 
     def _start_session_watch(self) -> None:
         from ulauncher.modes.launcher.session_watch import SessionWatcher, next_session_watch_action
@@ -625,6 +691,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         logger.info("Closing Ulauncher window")
         self._stop_live_search()
         self._stop_session_watch()
+        self._stop_osk_watch()
         self._destroy_backdrop()
         if not save_query or not self.settings.auto_resume:
             self.get_app().set_query("", update_input=False)
