@@ -12,6 +12,7 @@ import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable
+from urllib.parse import quote, unquote
 
 from ulauncher.modes.launcher.number_words import replace_number_words
 from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_query, text_matches_query
@@ -345,7 +346,52 @@ def compositor_window_argv(wid: str, action: str) -> list[str] | None:
     if kind == "niri":
         verb = "focus-window" if action == "focus" else "close-window"
         return ["niri", "msg", "action", verb, "--id", ident]
+    if kind == "wlr":
+        if action != "focus":
+            # wlrctl has focus/minimize, not close; SIGTERM can still run.
+            return None
+        app_id, title = _wlr_ident_parts(ident)
+        argv = ["wlrctl", "toplevel", "focus"]
+        if app_id:
+            argv.append(f"app_id:{app_id}")
+        if title:
+            argv.append(f"title:{title}")
+        return argv if app_id or title else None
     return None
+
+
+def _wlr_ident_parts(ident: str) -> tuple[str, str]:
+    encoded_app, sep, encoded_title = ident.partition(" ")
+    if not sep:
+        return unquote(encoded_app), ""
+    return unquote(encoded_app), unquote(encoded_title)
+
+
+def windows_from_wlrctl_list(text: str) -> list[WindowInfo]:
+    """Parse undocumented ``wlrctl toplevel list`` lines: ``app_id: title``."""
+    if not text:
+        return []
+    windows: list[WindowInfo] = []
+    for line in text.splitlines():
+        raw = line.strip()
+        if not raw or ":" not in raw:
+            continue
+        app_id, title = raw.split(":", 1)
+        app_id = app_id.strip()
+        title = title.strip()
+        if not app_id and not title:
+            continue
+        ident = quote(app_id, safe="") + " " + quote(title, safe="")
+        windows.append(
+            WindowInfo(
+                wid=f"wlr:{ident}",
+                title=title or app_id,
+                wm_class=app_id,
+                desktop=0,
+                app_id=app_id,
+            )
+        )
+    return windows
 
 
 def compositor_list_commands(
@@ -380,6 +426,13 @@ def _json_command(argv: list[str]) -> Any:
         return None
 
 
+def _text_command(argv: list[str]) -> str | None:
+    try:
+        return subprocess.check_output(argv, text=True, errors="replace", timeout=0.4)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+
+
 def _compositor_windows() -> list[WindowInfo]:
     for argv, parser in compositor_list_commands():
         if not shutil.which(argv[0]):
@@ -390,6 +443,12 @@ def _compositor_windows() -> list[WindowInfo]:
         parsed = parser(payload)
         if parsed:
             return parsed
+    if shutil.which("wlrctl"):
+        text = _text_command(["wlrctl", "toplevel", "list"])
+        if text:
+            parsed = windows_from_wlrctl_list(text)
+            if parsed:
+                return parsed
     return []
 
 
@@ -663,18 +722,19 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
     wid = payload.get("wid") or payload.get("payload") or ""
     pid = int(payload.get("pid") or 0)
     app_id = str(payload.get("app_id") or "")
-    compositor_owned = compositor_window_argv(str(wid), "focus") is not None
+    compositor_can_focus = compositor_window_argv(str(wid), "focus") is not None
+    compositor_can_close = compositor_window_argv(str(wid), "close") is not None
     if kind == "kill":
         if pid:
             _signal_pid(pid, signal.SIGKILL)
         return
     if kind in {"close", "quit"}:
         _close_window(wid)
-        if pid and not session_has_x11_window_control() and not compositor_owned:
+        if pid and not session_has_x11_window_control() and not compositor_can_close:
             _signal_pid(pid, signal.SIGTERM)
         return
     _focus_window(wid)
-    if app_id and not session_has_x11_window_control() and not compositor_owned:
+    if app_id and not session_has_x11_window_control() and not compositor_can_focus:
         activate = application_activate or _focus_application
         activate(app_id)
 

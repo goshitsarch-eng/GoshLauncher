@@ -29,6 +29,7 @@ from ulauncher.modes.launcher.windows import (
     windows_from_introspect_payload,
     windows_from_niri_windows,
     windows_from_sway_tree,
+    windows_from_wlrctl_list,
     workspace_index_in_range,
     workspace_label_matches,
     workspace_result_id,
@@ -244,6 +245,17 @@ def test_hypr_sway_niri_window_payloads() -> None:
         "7",
     ]
     assert compositor_window_argv("0x1", "focus") is None
+    wlr = windows_from_wlrctl_list("firefox: Mozilla Firefox\nfoot: Terminal: bash\n: \n")
+    assert [row.app_id for row in wlr] == ["firefox", "foot"]
+    assert wlr[1].title == "Terminal: bash"
+    assert compositor_window_argv(wlr[0].wid, "focus") == [
+        "wlrctl",
+        "toplevel",
+        "focus",
+        "app_id:firefox",
+        "title:Mozilla Firefox",
+    ]
+    assert compositor_window_argv(wlr[0].wid, "close") is None
     hypr_alt = windows_from_hypr_clients(
         [
             {
@@ -314,6 +326,16 @@ def test_activate_window_uses_application_activate_on_wayland(monkeypatch: pytes
     calls.clear()
     activate_window({"kind": "close", "wid": "niri:7", "pid": 9})
     assert calls == [("close", "niri:7")]
+    calls.clear()
+    wlr_wid = windows_from_wlrctl_list("firefox: Mozilla Firefox")[0].wid
+    activate_window({"kind": "close", "wid": wlr_wid, "pid": 9})
+    assert calls == [("close", wlr_wid), ("sig", 9, signal.SIGTERM)]
+    calls.clear()
+    activate_window(
+        {"kind": "focus", "wid": wlr_wid, "app_id": "firefox"},
+        application_activate=lambda app: calls.append(("app", app)) or True,
+    )
+    assert calls == [("x11", wlr_wid)]
 
 
 def test_wayland_workspace_switch_prefers_compositor_ipc() -> None:
