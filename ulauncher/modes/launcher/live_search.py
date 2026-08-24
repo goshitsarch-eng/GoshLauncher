@@ -26,6 +26,8 @@ class LiveSearchWatcher:
         self._apps: Any = None
         self._apps_handler = 0
         self._fingerprint: tuple[tuple[Any, ...], ...] = ()
+        self._bus: Any = None
+        self._windows_changed_id = 0
 
     @property
     def listening(self) -> bool:
@@ -37,6 +39,7 @@ class LiveSearchWatcher:
         self._listening = True
         self._fingerprint = windows_fingerprint(self._current_windows())
         self._listen_apps()
+        self._listen_shell_windows()
         if self._poll_interval > 0:
             self._timer = scheduling.interval(self._poll_interval, self.poll)
 
@@ -49,6 +52,7 @@ class LiveSearchWatcher:
         if self._apps is not None and self._apps_handler:
             with contextlib.suppress(TypeError, RuntimeError):
                 self._apps.disconnect(self._apps_handler)
+        self._unlisten_shell_windows()
         self._apps = None
         self._apps_handler = 0
         self._fingerprint = ()
@@ -84,3 +88,30 @@ class LiveSearchWatcher:
         except (TypeError, RuntimeError):
             self._apps = None
             self._apps_handler = 0
+
+    def _listen_shell_windows(self) -> None:
+        # goshos uses global.display window-created; GTK gets WindowsChanged from Mutter introspect
+        try:
+            from ulauncher.gi import Gio
+
+            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            self._windows_changed_id = bus.signal_subscribe(
+                "org.gnome.Shell.Introspect",
+                "org.gnome.Shell.Introspect",
+                "WindowsChanged",
+                "/org/gnome/Shell/Introspect",
+                None,
+                Gio.DBusSignalFlags.NONE,
+                lambda *_args: self._on_change(),
+            )
+            self._bus = bus
+        except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
+            self._windows_changed_id = 0
+            self._bus = None
+
+    def _unlisten_shell_windows(self) -> None:
+        if self._bus is not None and self._windows_changed_id:
+            with contextlib.suppress(TypeError, RuntimeError, OSError, AttributeError):
+                self._bus.signal_unsubscribe(self._windows_changed_id)
+        self._bus = None
+        self._windows_changed_id = 0

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.system_actions import SYSTEM_ACTIONS, action_is_available, match_system_actions
+from ulauncher.modes.launcher.system_actions import (
+    SYSTEM_ACTIONS,
+    action_is_available,
+    match_system_actions,
+    screenshot_commands,
+)
 
 
 def test_spoken_lock_sign_out_and_power_off() -> None:
@@ -37,3 +42,8 @@ def test_screenshot_icon_matches_goshos() -> None:
     shot = next(action for action in SYSTEM_ACTIONS if action["id"] == "screenshot")
     assert shot["title"] == "Take a Screenshot"
     assert shot["icon"] == "record-screen-symbolic"
+    commands = screenshot_commands()
+    assert commands[0] == ["gtk-launch", "org.gnome.Screenshot"]
+    assert ["gnome-screenshot", "-i"] in commands
+    assert ["grim"] in commands
+    assert shot["commands"] == commands

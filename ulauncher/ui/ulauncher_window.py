@@ -255,6 +255,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.get_app().window_ready()
         self._ensure_monitor_watch()
         self._start_live_search()
+        self._start_session_watch()
 
     def on_initial_draw(self, *_: Any) -> None:
         if t0 := os.environ.get("ULAUNCHER_PERF_START_BOOTTIME"):
@@ -569,6 +570,23 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if next_live_search_action(self._live_search.listening, True) == "start":
             self._live_search.start()
 
+    def _start_session_watch(self) -> None:
+        from ulauncher.modes.launcher.session_watch import SessionWatcher, next_session_watch_action
+
+        if getattr(self, "_session_watch", None) is None:
+            self._session_watch = SessionWatcher(lambda: self.get_app().close_launcher())
+        if next_session_watch_action(self._session_watch.listening, True) == "start":
+            self._session_watch.start()
+
+    def _stop_session_watch(self) -> None:
+        from ulauncher.modes.launcher.session_watch import next_session_watch_action
+
+        watcher = getattr(self, "_session_watch", None)
+        if watcher is None:
+            return
+        if next_session_watch_action(watcher.listening, False) == "stop":
+            watcher.stop()
+
     def _stop_live_search(self) -> None:
         from ulauncher.modes.launcher.search_live import next_live_search_action
 
@@ -599,6 +617,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
         logger.info("Closing Ulauncher window")
         self._stop_live_search()
+        self._stop_session_watch()
         if not save_query or not self.settings.auto_resume:
             self.get_app().set_query("", update_input=False)
         if self.settings.grab_mouse_pointer:

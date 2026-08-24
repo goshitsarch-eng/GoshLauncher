@@ -13,6 +13,18 @@ logger = logging.getLogger(__name__)
 
 STOP_WORDS = re.compile(r"\b(the|a|an|my|please|computer|system|session|machine|pc|of|now)\b", re.IGNORECASE)
 
+
+def screenshot_commands() -> list[list[str]]:
+    # Goshos opens Screenshot.showScreenshotUI(); a GTK app launches the same UI.
+    return [
+        ["gtk-launch", "org.gnome.Screenshot"],
+        ["gtk-launch", "org.gnome.Snapshot"],
+        ["gnome-screenshot", "-i"],
+        ["gnome-screenshot"],
+        ["grim"],
+    ]
+
+
 SYSTEM_ACTIONS = [
     {
         "id": "lock",
@@ -85,7 +97,7 @@ SYSTEM_ACTIONS = [
         "title": "Take a Screenshot",
         "icon": "record-screen-symbolic",
         "keywords": ["screenshot", "snip", "capture", "screencast", "record"],
-        "commands": [["gnome-screenshot"], ["grim"]],
+        "commands": screenshot_commands(),
     },
 ]
 

@@ -239,6 +239,9 @@ class UlauncherApp(Adw.Application):
         if main_window := self.windows.get("main"):
             main_window.close()
 
+    def close_window(self) -> None:
+        self.close_launcher()
+
     @events.on
     def show_preferences(self, page: str | None = None) -> None:
         # It's technically possible to trigger this GAction before the app has started,
