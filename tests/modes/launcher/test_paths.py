@@ -22,6 +22,7 @@ def test_canonicalize_launch_uri_blocks_unsafe_schemes() -> None:
     assert canonicalize_launch_uri("javascript:alert(1)") == ""
     assert canonicalize_launch_uri("data:text/html,hi") == ""
     assert canonicalize_launch_uri("vbscript:msgbox") == ""
+    assert canonicalize_launch_uri("java\u200bscript:alert(1)") == ""
 
 
 def test_match_path_missing_keeps_row() -> None:

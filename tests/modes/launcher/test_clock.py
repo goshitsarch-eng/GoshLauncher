@@ -4,7 +4,17 @@ from ulauncher.modes.launcher.clock import format_date_title, match_clock, time_
 
 
 def test_time_phrases() -> None:
-    for query in ("time", "now", "what time is it", "what's the time", "current time"):
+    for query in (
+        "time",
+        "now",
+        "what time is it",
+        "what's the time",
+        "current time",
+        "what's the time right now",
+        "show me the time",
+        "tell me the time",
+        "tell me what time it is",
+    ):
         assert time_query_kind(query) == "time"
         hit = match_clock(query)
         assert hit is not None
@@ -14,6 +24,8 @@ def test_time_phrases() -> None:
 def test_date_phrases() -> None:
     for query in ("date", "today", "what day is it", "what's the date"):
         assert time_query_kind(query) == "date"
+    assert time_query_kind("today's date") == "date"
+    assert time_query_kind("tell me the day") == "date"
 
 
 def test_relative_days() -> None:

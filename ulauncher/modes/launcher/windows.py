@@ -151,6 +151,32 @@ def parse_window_intent(query: str) -> tuple[str, str]:
     return intent, title
 
 
+def workspace_label_matches(label: str, query: str) -> bool:
+    if not label or not query:
+        return False
+    q = replace_number_words(query.strip().lower())
+    lower = label.lower()
+    if lower == "on all workspaces":
+        return q in {"sticky", "all"} or q.startswith("on all") or q.startswith("all work")
+    numbered = re.fullmatch(r"workspace (\d+)", lower)
+    if not numbered:
+        return False
+    number = numbered.group(1)
+    return q in {number, f"workspace {number}", f"ws {number}"}
+
+
+def workspace_switch_title(number: int) -> str:
+    return f"Switch to Workspace {number}"
+
+
+def window_close_title(intent: str, title: str) -> str:
+    if intent == "kill":
+        return f"Kill {title}"
+    if intent == "quit":
+        return f"Quit {title}"
+    return f"Close {title}"
+
+
 def window_matches(win: WindowInfo, query: str) -> bool:
     if not query:
         return False
@@ -161,7 +187,7 @@ def window_matches(win: WindowInfo, query: str) -> bool:
         return True
     if id_matches_query(win.wm_class.replace(".", " "), query) or id_matches_query(win.wm_class, query):
         return True
-    return False
+    return workspace_label_matches(_workspace_label(win), query)
 
 
 def match_windows(query: str, limit: int = 6) -> list[dict]:
@@ -172,7 +198,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
         results.append(
             {
                 "kind": "workspace",
-                "title": f"Switch to workspace {workspace + 1}",
+                "title": workspace_switch_title(workspace + 1),
                 "description": "Workspace",
                 "icon": "workspace-switcher",
                 "payload": str(workspace),
@@ -181,16 +207,15 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
         )
     for win in list_windows():
         target = rest if intent != "focus" else query
-        if intent == "focus" and workspace is not None and rest.isdigit():
-            continue
         if not window_matches(win, target):
             continue
-        verb = {"focus": "Switch to", "close": "Close", "quit": "Quit", "kill": "Force quit"}[intent]
+        name = win.title or win.wm_class
+        title = name if intent == "focus" else window_close_title(intent, name)
         results.append(
             {
                 "kind": intent,
-                "title": win.title or win.wm_class,
-                "description": f"{verb} · {_workspace_label(win)}",
+                "title": title,
+                "description": _workspace_label(win),
                 "icon": "focus-windows",
                 "payload": win.wid,
                 "wid": win.wid,

@@ -28,6 +28,7 @@ TERMINALS = (
 
 _UNSAFE_SCHEMES = frozenset({"javascript", "data", "vbscript"})
 _PERCENT_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_SCHEME_FUZZ_RE = re.compile(r"[\0\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]")
 _REMOTE_URI_RE = re.compile(r"^(sftp|ftp|smb|davs?)://([^/]+)(/[^?#]*)?([?#].*)?$", re.IGNORECASE)
 _FILE_AUTH_RE = re.compile(r"^(file)://([^/]+)(/[^?#]*)?([?#].*)?$", re.IGNORECASE)
 
@@ -91,7 +92,7 @@ def file_uri_from_absolute(path: str) -> str:
 
 
 def path_from_file_uri(uri: str) -> str:
-    href = uri.split("#")[0].split("?")[0]
+    href = uri.split("#", 1)[0].split("?", 1)[0]
     if not href.lower().startswith("file://"):
         return ""
     raw = href[len("file://") :]
@@ -140,7 +141,8 @@ def canonicalize_remote_uri(uri: str) -> str:
 def canonicalize_launch_uri(uri: str) -> str:
     if not uri:
         return uri
-    if uri.lower().split(":", 1)[0] in _UNSAFE_SCHEMES:
+    scheme = _SCHEME_FUZZ_RE.sub("", uri).strip().split(":", 1)[0].lower()
+    if scheme in _UNSAFE_SCHEMES:
         return ""
     if uri.lower().startswith("file:"):
         return canonicalize_file_uri(uri)
@@ -215,7 +217,7 @@ def terminal_command(directory: str, find_in_path: Callable[[str], str | None] |
     if spec.get("use_directory_cwd"):
         return {"argv": list(spec["argv"]), "cwd": directory}
     flag = spec["working_directory_flag"]
-    return {"argv": list(spec["argv"]) + [f"{flag}={directory}"], "cwd": None}
+    return {"argv": [*list(spec["argv"]), f"{flag}={directory}"], "cwd": None}
 
 
 def terminal_row_meta(directory: str, home: str | None = None) -> dict:

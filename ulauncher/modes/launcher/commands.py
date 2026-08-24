@@ -74,12 +74,18 @@ def parse_command_argv(query: str) -> list[str] | None:
         return None
     if not argv:
         return None
-    first = argv[0]
-    if first.startswith("~"):
-        argv[0] = str(Path(first).expanduser())
-    elif "/" in first and not first.startswith("/"):
-        argv[0] = str(Path.home() / first)
-    return argv
+    home = Path.home()
+    expanded: list[str] = []
+    for index, arg in enumerate(argv):
+        if arg.startswith("~"):
+            expanded.append(str(Path(arg).expanduser()))
+        elif arg in {".", ".."} or arg.startswith("./") or arg.startswith("../"):
+            expanded.append(str((home / arg).resolve()) if arg != "." else str(home))
+        elif index == 0 and "/" in arg and not arg.startswith("/"):
+            expanded.append(str(home / arg))
+        else:
+            expanded.append(arg)
+    return expanded
 
 
 def resolve_command_row(query: str) -> dict | None:
@@ -98,6 +104,7 @@ def resolve_command_row(query: str) -> dict | None:
         ready = command_file_is_ready(path.is_dir(), path.is_file() and os.access(exe, os.X_OK))
     meta = command_row_meta(query.strip(), ready)
     meta["argv"] = argv if ready else []
+    meta["cwd"] = str(Path.home())
     return meta
 
 

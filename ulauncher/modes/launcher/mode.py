@@ -174,7 +174,9 @@ class LauncherMode(Mode):
             if not payload.get("ready") or not payload.get("argv"):
                 callback(effects.do_nothing())
                 return
-            launch_detached(list(payload["argv"]))
+            from pathlib import Path
+
+            launch_detached(list(payload["argv"]), working_dir=str(payload.get("cwd") or Path.home()))
             callback(effects.close_window())
             return
         if kind == "system":
@@ -208,7 +210,14 @@ class LauncherMode(Mode):
                 url = canonicalize_launch_uri(str(hit["url"]))
                 if url:
                     rows.append(
-                        {"kind": "url", "score": 200, "title": hit.get("label") or url, "url": url}
+                        {
+                            "kind": "url",
+                            "score": 200,
+                            "title": hit.get("label") or url,
+                            "description": hit.get("description") or "",
+                            "icon": hit.get("icon") or "web-browser",
+                            "url": url,
+                        }
                     )
 
         if "path" in providers:
@@ -269,7 +278,9 @@ class LauncherMode(Mode):
             for app in matched:
                 actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
                 if not getattr(settings, "enable_app_actions", True):
-                    actions = {"launch": actions["launch"]} if "launch" in actions else {"activate": {"name": "Activate"}}
+                    actions = (
+                        {"launch": actions["launch"]} if "launch" in actions else {"activate": {"name": "Activate"}}
+                    )
                 rows.append(
                     {
                         "kind": "app",

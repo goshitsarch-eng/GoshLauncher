@@ -86,6 +86,11 @@ def place_matches(title: str, keywords: list[str], query: str) -> bool:
         return False
     q = query.lower()
     title_lower = title.lower()
+    # a one-letter query must be a prefix so o does not list every folder
+    if len(q) == 1:
+        if title_lower.startswith(q):
+            return True
+        return any(keyword.lower().startswith(q) for keyword in keywords)
     if title_lower.startswith(q) or word_prefix_match(title_lower, q):
         return True
     return any(keyword_matches_query(keyword, q) for keyword in keywords)

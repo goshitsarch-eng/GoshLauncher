@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ulauncher.modes.launcher.commands import command_row_meta, parse_command_argv, resolve_command_row
 
 
@@ -17,12 +19,30 @@ def test_command_row_meta_states() -> None:
     assert ready["ready"] is True
 
 
-def test_parse_command_argv_expands_home(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_parse_command_argv_expands_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     argv = parse_command_argv("~/bin/tool --flag")
     assert argv is not None
     assert argv[0] == str(tmp_path / "bin" / "tool")
     assert argv[1] == "--flag"
+    later = parse_command_argv("ls ~/notes.txt")
+    assert later is not None
+    assert later[1] == str(tmp_path / "notes.txt")
+    relative = parse_command_argv("scripts/deploy")
+    assert relative is not None
+    assert relative[0] == str(tmp_path / "scripts" / "deploy")
+
+
+def test_resolve_command_row_sets_home_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    python = Path("/usr/bin/python3")
+    if not python.is_file():
+        python = Path("/usr/bin/true")
+    if not python.is_file():
+        return
+    row = resolve_command_row(f"{python} --version")
+    assert row is not None
+    assert row["cwd"] == str(tmp_path)
 
 
 def test_resolve_command_row_not_found() -> None:
