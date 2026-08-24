@@ -42,9 +42,13 @@ def enable(window: Gtk.Window) -> bool:
     return True
 
 
-def set_vertical_position(window: Gtk.Window, pos_y: float) -> None:
+def set_position(window: Gtk.Window, pos_x: float, pos_y: float) -> None:
+    # TOP/LEFT are from the output edge; callers pass placed - monitor origin so a
+    # panel strut in the work area is not subtracted twice.
     LayerShell.set_anchor(window, LayerShell.Edge.TOP, True)
+    LayerShell.set_anchor(window, LayerShell.Edge.LEFT, True)
     LayerShell.set_margin(window, LayerShell.Edge.TOP, int(pos_y))
+    LayerShell.set_margin(window, LayerShell.Edge.LEFT, int(pos_x))
 
 
 def set_layer(window: Gtk.Window, name: str) -> None:

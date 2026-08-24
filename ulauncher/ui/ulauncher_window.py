@@ -665,6 +665,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         from ulauncher.modes.launcher.popup_position import (
             empty_popup_height,
             gtk_window_owns_popup_width,
+            offset_from_origin,
             place_popup,
             popup_width_for_work_area,
             work_area_avoiding_keyboard,
@@ -691,8 +692,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             position = str(self._chrome.get("position") or "center")
             requested = clamp_results_max_height(int(getattr(self.settings, "results_max_height", 400) or 400))
             placed = place_popup(work, popup_width, empty_height, position, requested, None, scale)
-            pos_x = int(placed["x"] - work["x"])
-            pos_y = int(placed["y"] - work["y"])
+            surface = work
+            if self.layer_shell_enabled and (
+                monitor := get_monitor(self.settings.render_on_screen != "default-monitor")
+            ):
+                geo = monitor.get_geometry()
+                surface = {"x": int(geo.x), "y": int(geo.y)}
+            offset = offset_from_origin(placed, surface)
+            pos_x = offset["x"]
+            pos_y = offset["y"]
             self.results_view.set_max_height(int(placed["results_max"]))
             if gtk_window_owns_popup_width(DESKTOP_ID, IS_X11_COMPATIBLE):
                 self.set_default_size(popup_width, -1)
@@ -703,7 +711,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self.frame.set_margin_start(pos_x)
                 self.frame.set_margin_end(max(0, int(work["width"] - pos_x - popup_width)))
             elif self.layer_shell_enabled:
-                layer_shell.set_vertical_position(self, pos_y)
+                layer_shell.set_position(self, pos_x, pos_y)
             elif hasattr(self, "move"):
                 self.move(int(placed["x"]), int(placed["y"]))
 

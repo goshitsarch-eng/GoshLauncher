@@ -9,6 +9,7 @@ from ulauncher.modes.launcher.popup_position import (
     gtk_window_owns_popup_width,
     keyboard_overlap_from_box,
     lift_origin_for_results,
+    offset_from_origin,
     place_popup,
     popup_origin,
     popup_width_for_work_area,
@@ -221,3 +222,14 @@ def test_work_area_from_sway_workspace_rect() -> None:
         ],
     }
     assert work_area_from_sway_tree(visible_only, geometry) == {"x": 0, "y": 32, "width": 1920, "height": 1048}
+
+
+def test_layer_shell_offset_keeps_panel_inset() -> None:
+    work = {"x": 0, "y": 32, "width": 1920, "height": 1048}
+    placed = place_popup(work, 600, 80, "top", 400)
+    overlay = offset_from_origin(placed, work)
+    output = offset_from_origin(placed, {"x": 0, "y": 0})
+    assert overlay["y"] == int(placed["y"] - 32)
+    assert output["y"] == int(placed["y"])
+    assert output["y"] - overlay["y"] == 32
+    assert output["x"] == int(placed["x"])

@@ -204,6 +204,11 @@ def resolve_monitor_work_area(
     return work_area_for_monitor(geometry, desktop_work_area)
 
 
+def offset_from_origin(placed: dict[str, float], origin: dict[str, float]) -> dict[str, int]:
+    """Translate a work-area origin into surface-local x/y (overlay, layer-shell, or monitor)."""
+    return {"x": int(placed["x"] - origin["x"]), "y": int(placed["y"] - origin["y"])}
+
+
 def results_max_height_for_work_area(requested: float, space_below: float) -> float:
     if space_below <= 0:
         return 0
