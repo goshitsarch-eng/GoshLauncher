@@ -166,8 +166,6 @@ class ResultsView(Gtk.ScrolledWindow):
 
             self._add_widgets(result_list, update["query"], start_index=0)
             self._apply_selection(update["selected_name"], previous_pick)
-            self._box.set_margin_bottom(10)
-            self._box.set_margin_top(3)
             self._apply_css(self._box)
             gtk4.show_all(self)
             self._fit_results_height()
@@ -286,8 +284,6 @@ class ResultsView(Gtk.ScrolledWindow):
         box.append(title)
         box.append(detail)
         self._box.append(box)
-        self._box.set_margin_bottom(10)
-        self._box.set_margin_top(3)
         self._apply_css(self._box)
         gtk4.show_all(self)
         self.set_visible(True)
