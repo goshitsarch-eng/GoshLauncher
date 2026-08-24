@@ -230,6 +230,23 @@ def look_ids() -> list[str]:
     return [look["id"] for look in LOOKS]
 
 
+def look_prefs_search_text() -> str:
+    # goshos prefs/appearancePage.js: search matches the group description, not combo rows.
+    # Walker / COSMIC / Dark Adwaita are aliases that must appear as those words.
+    aliases = {
+        "omarchy": "Omarchy (Walker)",
+        "popos": "Pop!_OS (COSMIC)",
+        "gnome": "GNOME (Dark Adwaita)",
+    }
+    names = [aliases.get(look["id"], look["title"]) for look in LOOKS]
+    listed = ", ".join(names[:-1]) + f", and {names[-1]}"
+    return (
+        f"{listed}. A look sets colors, position, density, headers, number hints, "
+        "the search icon, result icons, descriptions, icon size, and result order. "
+        "You can still change those after. Width is not part of a look."
+    )
+
+
 def icon_size_for_look(chrome: LookChrome, density: str) -> int:
     if density == "compact":
         return round(chrome["icon_size"] * 0.8)

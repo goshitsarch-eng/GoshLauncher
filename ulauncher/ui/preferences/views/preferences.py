@@ -150,18 +150,14 @@ class PreferencesView(BaseView):
             combo.set_active(index)
 
     def _add_look_combo(self, general_box: Gtk.Box) -> None:
-        from ulauncher.modes.launcher.looks import LOOKS
+        from ulauncher.modes.launcher.looks import LOOKS, look_prefs_search_text
 
         look_combo = Gtk.ComboBoxText()
         for look in LOOKS:
             look_combo.append(look["id"], look["title"])
         self._select_combo_id(look_combo, LOOKS, getattr(self.settings, "look_id", "spotlight"))
         look_combo.connect("changed", self._on_look_changed)
-        look_desc = (
-            "Launcher chrome (position, density, headers, number hints, icons). "
-            "Width is separate. Matches Spotlight-goshos looks."
-        )
-        self._add_setting_row(general_box, "Launcher look", look_combo, look_desc)
+        self._add_setting_row(general_box, "Launcher look", look_combo, look_prefs_search_text())
 
     def _add_background_row(self, general_box: Gtk.Box, run_in_bg_footer: str) -> None:
         autostart_status = self.autostart_pref.status()

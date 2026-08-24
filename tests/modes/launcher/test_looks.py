@@ -11,6 +11,7 @@ from ulauncher.modes.launcher.looks import (
     icon_size_for_look,
     look_apply_action,
     look_ids,
+    look_prefs_search_text,
     search_icon_style_class,
     should_apply_look,
 )
@@ -79,6 +80,16 @@ def test_search_icon_style_class_and_compact_icon_size() -> None:
     assert icon_size_for_look(get_look("popos")["look"], "comfortable") > icon_size_for_look(
         get_look("krunner")["look"], "comfortable"
     )
+
+
+def test_look_prefs_search_text_finds_walker_cosmic_and_titles() -> None:
+    text = look_prefs_search_text()
+    assert "Walker" in text
+    assert "COSMIC" in text
+    assert "Dark Adwaita" in text
+    for look in LOOKS:
+        assert look["title"] in text
+    assert "Width is not part of a look" in text
 
 
 def test_every_look_has_theme_css() -> None:
