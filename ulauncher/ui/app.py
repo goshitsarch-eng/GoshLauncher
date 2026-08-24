@@ -149,7 +149,7 @@ class UlauncherApp(Adw.Application):
             from ulauncher.ui.helpers.hotkey_controller import HotkeyController
 
             if HotkeyController.is_supported():
-                hotkey = "<Primary>space"
+                hotkey = "<Control>space"
                 if settings.hotkey_show_app and not HotkeyController.is_plasma():
                     hotkey = settings.hotkey_show_app
                 if HotkeyController.setup_default(hotkey):

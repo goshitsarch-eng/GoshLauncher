@@ -10,6 +10,13 @@ from ulauncher.utils import scheduling
 
 _POLL_SEC = 0.8
 
+# goshos connects to global.display window-created. Mutter exports the same
+# change as WindowsChanged on Introspect; some sessions own it on org.gnome.Shell.
+INTROSPECT_WINDOW_WATCHES = (
+    ("org.gnome.Shell.Introspect", "/org/gnome/Shell/Introspect", "org.gnome.Shell.Introspect", "WindowsChanged"),
+    ("org.gnome.Shell", "/org/gnome/Shell/Introspect", "org.gnome.Shell.Introspect", "WindowsChanged"),
+)
+
 
 class LiveSearchWatcher:
     def __init__(
@@ -27,7 +34,7 @@ class LiveSearchWatcher:
         self._apps_handler = 0
         self._fingerprint: tuple[tuple[Any, ...], ...] = ()
         self._bus: Any = None
-        self._windows_changed_id = 0
+        self._windows_changed_ids: list[int] = []
 
     @property
     def listening(self) -> bool:
@@ -95,23 +102,32 @@ class LiveSearchWatcher:
             from ulauncher.gi import Gio
 
             bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-            self._windows_changed_id = bus.signal_subscribe(
-                "org.gnome.Shell.Introspect",
-                "org.gnome.Shell.Introspect",
-                "WindowsChanged",
-                "/org/gnome/Shell/Introspect",
-                None,
-                Gio.DBusSignalFlags.NONE,
-                lambda *_args: self._on_change(),
-            )
-            self._bus = bus
         except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
-            self._windows_changed_id = 0
+            self._windows_changed_ids = []
             self._bus = None
+            return
+        self._bus = bus
+        self._windows_changed_ids = []
+        for dest, path, iface, member in INTROSPECT_WINDOW_WATCHES:
+            try:
+                watch_id = bus.signal_subscribe(
+                    dest,
+                    iface,
+                    member,
+                    path,
+                    None,
+                    Gio.DBusSignalFlags.NONE,
+                    lambda *_args: self._on_change(),
+                )
+            except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
+                continue
+            if watch_id:
+                self._windows_changed_ids.append(int(watch_id))
 
     def _unlisten_shell_windows(self) -> None:
-        if self._bus is not None and self._windows_changed_id:
-            with contextlib.suppress(TypeError, RuntimeError, OSError, AttributeError):
-                self._bus.signal_unsubscribe(self._windows_changed_id)
+        if self._bus is not None:
+            for watch_id in self._windows_changed_ids:
+                with contextlib.suppress(TypeError, RuntimeError, OSError, AttributeError):
+                    self._bus.signal_unsubscribe(watch_id)
         self._bus = None
-        self._windows_changed_id = 0
+        self._windows_changed_ids = []

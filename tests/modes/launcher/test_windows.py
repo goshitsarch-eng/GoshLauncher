@@ -6,13 +6,16 @@ from ulauncher.modes.launcher.windows import (
     parse_window_intent,
     parse_workspace_query,
     parse_workspace_switch_query,
+    pick_window_list,
     should_force_quit_window,
     sort_windows_most_recent,
+    tab_ranks_from_introspect_payload,
     take_window_results,
     window_close_title,
     window_matches,
     window_recency_value,
     window_result_id,
+    windows_from_introspect_payload,
     workspace_index_in_range,
     workspace_label_matches,
     workspace_result_id,
@@ -124,3 +127,26 @@ def test_window_and_workspace_result_ids() -> None:
     assert workspace_result_id(2) == "workspace:2"
     assert window_result_id("0x42", "Firefox", "Navigator", "Workspace 1") == "0x42"
     assert window_result_id("", "Firefox", "Navigator", "Workspace 1") == "Firefox\0Navigator\0Workspace 1"
+
+
+def test_introspect_payload_lists_wayland_windows() -> None:
+    payload = {
+        0x1A00001: {"title": "Firefox", "wm-class": "firefox", "pid": 42},
+        2: {"title": "Hidden", "wm-class": "x", "is-hidden": True},
+        3: {"title": "", "wm-class": ""},
+        4: {"title": "Term", "app-id": "org.gnome.Console"},
+    }
+    rows = windows_from_introspect_payload(payload)
+    assert [row.title for row in rows] == ["Firefox", "Term"]
+    assert rows[0].wid == hex(0x1A00001)
+    assert rows[0].wm_class == "firefox"
+    assert rows[0].pid == 42
+    assert rows[1].wm_class == "org.gnome.Console"
+    ranks = tab_ranks_from_introspect_payload(payload)
+    assert ranks["firefox"] == 0
+    native = [WindowInfo(wid="0x1", title="Only X11", wm_class="x", desktop=0)]
+    wayland = windows_from_introspect_payload(payload)
+    picked = pick_window_list(native, [], wayland)
+    assert picked == wayland
+    assert pick_window_list(native, [], []) == native
+    assert pick_window_list([], [], []) == []

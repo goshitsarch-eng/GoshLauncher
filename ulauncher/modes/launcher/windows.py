@@ -134,44 +134,110 @@ def sort_windows_most_recent(
     return [win for _index, win in sorted(enumerate(indexed), key=recency, reverse=True)]
 
 
-def _introspect_tab_ranks() -> dict[str, int]:
+INTROSPECT_DESTS = ("org.gnome.Shell.Introspect", "org.gnome.Shell")
+INTROSPECT_PATH = "/org/gnome/Shell/Introspect"
+INTROSPECT_IFACE = "org.gnome.Shell.Introspect"
+
+
+def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
+    """Map Mutter Introspect GetWindows onto WindowInfo (Wayland has no EWMH list)."""
+    if not isinstance(payload, dict):
+        return []
+    windows: list[WindowInfo] = []
+    for xid, props in payload.items():
+        if not isinstance(props, dict):
+            continue
+        if props.get("is-hidden") or props.get("hidden"):
+            continue
+        title = str(props.get("title") or "")
+        wm_class = str(props.get("wm-class") or props.get("wm_class") or props.get("app-id") or "")
+        if not title and not wm_class:
+            continue
+        try:
+            pid = int(props.get("pid") or 0)
+        except (TypeError, ValueError):
+            pid = 0
+        try:
+            wid = hex(int(xid))
+        except (TypeError, ValueError):
+            wid = str(xid)
+        windows.append(WindowInfo(wid=wid, title=title, wm_class=wm_class, desktop=0, pid=pid))
+    return windows
+
+
+def tab_ranks_from_introspect_payload(payload: Any) -> dict[str, int]:
+    if not isinstance(payload, dict):
+        return {}
+    ranks: dict[str, int] = {}
+    for index, (xid, props) in enumerate(payload.items()):
+        props_map = props if isinstance(props, dict) else {}
+        wm_class = str(props_map.get("wm-class") or props_map.get("app-id") or "").lower()
+        if wm_class:
+            ranks[wm_class] = index
+        ranks[str(xid)] = index
+        if isinstance(xid, int):
+            ranks[hex(xid)] = index
+    return ranks
+
+
+def pick_window_list(
+    ewmh: list[WindowInfo],
+    wmctrl: list[WindowInfo],
+    introspect: list[WindowInfo],
+) -> list[WindowInfo]:
+    native = ewmh or wmctrl
+    if len(introspect) > len(native):
+        return introspect
+    return native or introspect
+
+
+def _introspect_windows_payload() -> dict[Any, Any]:
     try:
         from ulauncher.gi import Gio, GLib
-
+    except (ImportError, AttributeError, RuntimeError, OSError):
+        return {}
+    try:
         bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        result = bus.call_sync(
-            "org.gnome.Shell.Introspect",
-            "/org/gnome/Shell/Introspect",
-            "org.gnome.Shell.Introspect",
-            "GetWindows",
-            None,
-            GLib.VariantType.new("(a{ta{sv}})"),
-            Gio.DBusCallFlags.NONE,
-            80,
-            None,
-        )
-        payload = result.unpack()[0]
-        ranks: dict[str, int] = {}
-        for index, (xid, props) in enumerate(payload.items()):
-            wm_class = str(props.get("wm-class") or props.get("app-id") or "").lower()
-            if wm_class:
-                ranks[wm_class] = index
-            ranks[str(xid)] = index
-        return ranks
     except Exception:
         return {}
+    for dest in INTROSPECT_DESTS:
+        try:
+            result = bus.call_sync(
+                dest,
+                INTROSPECT_PATH,
+                INTROSPECT_IFACE,
+                "GetWindows",
+                None,
+                GLib.VariantType.new("(a{ta{sv}})"),
+                Gio.DBusCallFlags.NONE,
+                80,
+                None,
+            )
+            payload = result.unpack()[0]
+        except Exception:
+            logger.debug("Introspect GetWindows failed on %s", dest, exc_info=True)
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return {}
 
 
 def list_windows() -> list[WindowInfo]:
+    ewmh: list[WindowInfo] = []
     try:
-        windows = _ewmh_windows()
+        ewmh = _ewmh_windows()
     except Exception:
         logger.debug("EWMH window list failed", exc_info=True)
+    wmctrl: list[WindowInfo] = []
+    if not ewmh:
         try:
-            windows = _wmctrl_windows()
+            wmctrl = _wmctrl_windows()
         except (OSError, subprocess.CalledProcessError):
-            return []
-    ranks = _introspect_tab_ranks()
+            wmctrl = []
+    payload = _introspect_windows_payload()
+    introspect = windows_from_introspect_payload(payload)
+    windows = pick_window_list(ewmh, wmctrl, introspect)
+    ranks = tab_ranks_from_introspect_payload(payload)
     return sort_windows_most_recent(windows, tab_ranks=ranks or None)
 
 

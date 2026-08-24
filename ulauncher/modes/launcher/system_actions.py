@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from typing import Callable
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 from ulauncher.utils.launch_detached import launch_detached
@@ -183,7 +184,44 @@ def match_system_actions(query: str, limit: int = 6, can_map: dict[str, str] | N
     return results
 
 
-def run_system_action(action_id: str) -> None:
+def show_screenshot_ui(bus_call: Callable[[], bool] | None = None) -> bool:
+    """Open the GNOME screenshot UI (goshos Screenshot.showScreenshotUI).
+
+    A GTK app cannot import gnome-shell's screenshot.js. The session portal
+    interactive Screenshot request is the public equivalent.
+    """
+    call = bus_call or _portal_screenshot_call
+    return bool(call())
+
+
+def _portal_screenshot_call() -> bool:
+    try:
+        from ulauncher.gi import Gio, GLib
+    except (ImportError, AttributeError, RuntimeError, OSError):
+        return False
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call_sync(
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Screenshot",
+            "Screenshot",
+            GLib.Variant("(sa{sv})", ("", {"interactive": GLib.Variant("b", True)})),
+            None,
+            Gio.DBusCallFlags.NONE,
+            400,
+            None,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def run_system_action(action_id: str, screenshot_ui: Callable[[], bool] | None = None) -> None:
+    if action_id == "screenshot":
+        show = screenshot_ui if screenshot_ui is not None else show_screenshot_ui
+        if show():
+            return
     for action in SYSTEM_ACTIONS:
         if action["id"] != action_id:
             continue

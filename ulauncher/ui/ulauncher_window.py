@@ -263,6 +263,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._start_live_search()
         self._start_session_watch()
         self._start_osk_watch()
+        self._start_limits_timer()
 
     def on_initial_draw(self, *_: Any) -> None:
         if t0 := os.environ.get("ULAUNCHER_PERF_START_BOOTTIME"):
@@ -643,6 +644,26 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if self.get_mapped():
             self.position_window()
 
+    def _start_limits_timer(self) -> None:
+        from ulauncher.modes.launcher.time_limits import seconds_until_limit
+        from ulauncher.utils import scheduling
+
+        self._stop_limits_timer()
+        remaining = seconds_until_limit()
+        if remaining is None:
+            return
+        if remaining <= 0:
+            self.get_app().close_launcher()
+            return
+        self._limits_timer = scheduling.timer(remaining, lambda: self.get_app().close_launcher())
+
+    def _stop_limits_timer(self) -> None:
+        timer = getattr(self, "_limits_timer", None)
+        if timer is None:
+            return
+        timer.cancel()
+        self._limits_timer = None
+
     def _start_session_watch(self) -> None:
         from ulauncher.modes.launcher.session_watch import SessionWatcher, next_session_watch_action
 
@@ -692,6 +713,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._stop_live_search()
         self._stop_session_watch()
         self._stop_osk_watch()
+        self._stop_limits_timer()
         self._destroy_backdrop()
         if not save_query or not self.settings.auto_resume:
             self.get_app().set_query("", update_input=False)

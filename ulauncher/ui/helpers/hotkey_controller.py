@@ -115,7 +115,7 @@ class HotkeyController:
             if config.decode().strip():
                 logger.debug("Ulauncher Plasma global shortcut already created")
                 return False
-            if default_hotkey != "<Primary>space":
+            if default_hotkey not in {"<Primary>space", "<Control>space"}:
                 # We don't want to convert the hotkey, so instead we just hard code it
                 logger.warning("Ignoring hotkey argument %s and using default '%s'", default_hotkey, hotkey)
             logger.debug("Executing kwriteconfig5 commands to add Plasma global shortcut for '%s'", hotkey)

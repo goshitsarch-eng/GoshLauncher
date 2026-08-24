@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from ulauncher.modes.launcher.system_actions import (
     SYSTEM_ACTIONS,
     action_is_available,
     match_system_actions,
+    run_system_action,
     screenshot_commands,
+    show_screenshot_ui,
 )
 
 
@@ -47,3 +51,16 @@ def test_screenshot_icon_matches_goshos() -> None:
     assert ["gnome-screenshot", "-i"] in commands
     assert ["grim"] in commands
     assert shot["commands"] == commands
+
+
+def test_screenshot_portal_runs_before_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert show_screenshot_ui(lambda: True) is True
+    assert show_screenshot_ui(lambda: False) is False
+    launched: list[list[str]] = []
+    monkeypatch.setattr("ulauncher.modes.launcher.system_actions.launch_detached", launched.append)
+    monkeypatch.setattr("ulauncher.modes.launcher.system_actions.shutil.which", lambda exe: exe)
+    run_system_action("screenshot", screenshot_ui=lambda: True)
+    assert launched == []
+    run_system_action("screenshot", screenshot_ui=lambda: False)
+    assert launched
+    assert launched[0] == ["gtk-launch", "org.gnome.Screenshot"]
