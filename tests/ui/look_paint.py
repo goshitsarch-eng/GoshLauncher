@@ -77,8 +77,8 @@ def build_look_tree(look_id: str) -> tuple[object, object, object, object]:
     return win, app, prompt, selected
 
 
-def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
-    from gi.repository import Graphene, Gtk
+def widget_pixbuf(widget: object) -> object:
+    from gi.repository import Gdk, Graphene, Gtk
 
     native = widget.get_native()
     renderer = native.get_renderer() if native is not None else None
@@ -97,12 +97,15 @@ def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
     viewport = Graphene.Rect()
     viewport.init(0, 0, float(width), float(height))
     texture = renderer.render_texture(node, viewport)
-    from gi.repository import Gdk
-
     pixbuf = Gdk.pixbuf_get_from_texture(texture)
     if pixbuf is None:
         msg = "could not read look texture"
         raise RuntimeError(msg)
+    return pixbuf
+
+
+def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
+    pixbuf = widget_pixbuf(widget)
     rowstride = pixbuf.get_rowstride()
     channels = pixbuf.get_n_channels()
     pixels = pixbuf.get_pixels()
@@ -110,6 +113,18 @@ def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
     py = min(max(y, 0), pixbuf.get_height() - 1)
     idx = py * rowstride + px * channels
     return pixels[idx], pixels[idx + 1], pixels[idx + 2]
+
+
+def widget_pixbuf_retry(widget: object, tries: int = 24) -> object:
+    last: Exception | None = None
+    for _ in range(tries):
+        try:
+            return widget_pixbuf(widget)
+        except RuntimeError as exc:
+            last = exc
+            pump(4)
+    assert last is not None
+    raise last
 
 
 def widget_rgb_retry(widget: object, x: int, y: int, tries: int = 24) -> tuple[int, int, int]:
@@ -122,6 +137,47 @@ def widget_rgb_retry(widget: object, x: int, y: int, tries: int = 24) -> tuple[i
             pump(4)
     assert last is not None
     raise last
+
+
+def _nearest_colored_rgb(pixbuf: object, expected: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Closest non-black pixel to ``expected``. Placeholder glyphs sit on a transparent snapshot."""
+    rowstride = pixbuf.get_rowstride()
+    channels = pixbuf.get_n_channels()
+    pixels = pixbuf.get_pixels()
+    width = pixbuf.get_width()
+    height = pixbuf.get_height()
+    best: tuple[int, int, int] | None = None
+    best_d = 10**9
+    y0 = max(height // 2 - 2, 0)
+    y1 = min(height // 2 + 3, height)
+    for py in range(y0, y1):
+        for px in range(width):
+            idx = py * rowstride + px * channels
+            rgb = (pixels[idx], pixels[idx + 1], pixels[idx + 2])
+            if rgb == (0, 0, 0):
+                continue
+            delta = abs(rgb[0] - expected[0]) + abs(rgb[1] - expected[1]) + abs(rgb[2] - expected[2])
+            if delta < best_d:
+                best_d = delta
+                best = rgb
+    if best is None:
+        msg = "placeholder produced no colored pixels"
+        raise RuntimeError(msg)
+    return best
+
+
+def _placeholder_label(entry: object) -> object:
+    from gi.repository import Gtk
+
+    from ulauncher.ui import gtk4
+
+    for child in gtk4.iter_children(entry):
+        if isinstance(child, Gtk.Label):
+            return child
+        for nested in gtk4.iter_children(child):
+            if isinstance(nested, Gtk.Label):
+                return nested
+    return entry
 
 
 def sample_look(look_id: str) -> dict[str, tuple[int, int, int]]:
@@ -460,3 +516,60 @@ def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
     finally:
         win.close()
         pump(8)
+
+
+def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Paint an empty search hint so look ``text.placeholder`` CSS can be sampled."""
+    from gi.repository import GLib
+
+    from ulauncher.modes.launcher.looks import get_look
+
+    win, _app, prompt, _selected = build_look_tree(look_id)
+    entry = _entry_in_prompt(prompt)
+    if entry is None:
+        win.close()
+        pump(8)
+        msg = f"look {look_id} has no search entry"
+        raise RuntimeError(msg)
+    entry.set_placeholder_text(get_look(look_id)["hint"])
+    entry.set_text("")
+    mapped = {"ok": False}
+
+    def on_map(*_args: object) -> None:
+        mapped["ok"] = True
+
+    win.connect("map", on_map)
+    win.present()
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 2_000_000
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        if mapped["ok"] and entry.get_width() > 40 and entry.get_height() > 8:
+            break
+    try:
+        target = _placeholder_label(entry)
+        pixbuf = widget_pixbuf_retry(target)
+        return _nearest_colored_rgb(pixbuf, expected)
+    finally:
+        win.close()
+        pump(8)
+
+
+def sample_popup_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Sample the live popup's empty-entry hint after restyling to ``look_id``."""
+    from gi.repository import GLib
+
+    win = open_popup_window()
+    restyle_popup(win, look_id)
+    entry = win.prompt_input  # type: ignore[attr-defined]
+    entry.set_text("")
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 2_000_000
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        if entry.get_width() > 40 and entry.get_height() > 8 and not entry.get_text():
+            pump(8)
+            break
+    target = _placeholder_label(entry)
+    pixbuf = widget_pixbuf_retry(target)
+    return _nearest_colored_rgb(pixbuf, expected)

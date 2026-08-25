@@ -19,7 +19,9 @@ if GTK4_AVAILABLE:
         open_popup_window,
         sample_entry_selection,
         sample_look,
+        sample_placeholder,
         sample_popup_look,
+        sample_popup_placeholder,
     )
 
 # Spotlight-goshos stylesheet / README panel fills. Spotlight's .app is transparent;
@@ -59,7 +61,24 @@ LOOK_SELECTED_HEX = {
     "onagre": "#f59e0b",
 }
 
+# Opaque goshos StLabel.hint-text colors. Spotlight/Pop!_OS/Ulauncher/KRunner/GNOME use rgba.
+LOOK_PLACEHOLDER_HEX = {
+    "omarchy": "#565f89",
+    "rofi": "#666666",
+    "raycast": "#6e6e73",
+    "albert": "#7f8c8d",
+    "wofi": "#707880",
+    "fuzzel": "#93a1a1",
+    "anyrun": "#6c7086",
+    "tofi": "#888888",
+    "light": "#9a9996",
+    "powertoys": "#9a9a9a",
+    "synapse": "#a39e93",
+    "onagre": "#78716c",
+}
+
 _PIXEL_TOLERANCE = 3
+_PLACEHOLDER_TOLERANCE = 8
 
 
 def _hex_rgb(value: str) -> tuple[int, int, int]:
@@ -155,3 +174,19 @@ def test_entry_selection_paints_tofi_highlight() -> None:
     rgb = sample_entry_selection("tofi")
     expected = _hex_rgb("#555555")
     assert _near(rgb, expected, 24), f"tofi entry selection {rgb} != {expected}"
+
+
+@pytest.mark.parametrize("look_id", sorted(LOOK_PLACEHOLDER_HEX))
+def test_look_placeholder_pixels(look_id: str) -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    expected = _hex_rgb(LOOK_PLACEHOLDER_HEX[look_id])
+    rgb = sample_placeholder(look_id, expected)
+    assert _near(rgb, expected, _PLACEHOLDER_TOLERANCE), f"{look_id} placeholder {rgb} != {expected}"
+
+
+@pytest.mark.parametrize("look_id", ("omarchy", "light"))
+def test_popup_placeholder_pixels(popup_window: object, look_id: str) -> None:
+    expected = _hex_rgb(LOOK_PLACEHOLDER_HEX[look_id])
+    rgb = sample_popup_placeholder(look_id, expected)
+    assert _near(rgb, expected, _PLACEHOLDER_TOLERANCE), f"{look_id} popup placeholder {rgb} != {expected}"
