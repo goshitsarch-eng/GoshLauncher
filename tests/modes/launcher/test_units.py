@@ -53,9 +53,7 @@ def test_cal_is_not_food_calorie() -> None:
 
 
 def test_goshos_unit_conversion_battery() -> None:
-    import math
-
-    from ulauncher.modes.launcher.units import convert_units, parse_unit_query
+    from ulauncher.modes.launcher.units import parse_unit_query
 
     ten = convert_query("ten km to mi")
     assert ten is not None
@@ -91,6 +89,13 @@ def test_goshos_unit_conversion_battery() -> None:
     assert convert_query("5 km to km") is None
     assert convert_query("1 kg to km") is None
     assert convert_query("1 min to m") is None
+
+
+def test_goshos_pressure_energy_and_angle() -> None:
+    import math
+
+    from ulauncher.modes.launcher.units import convert_units, parse_unit_query
+
     assert convert_query("32 psi to bar")["title"].split()[1] == "bar"
     assert convert_query("760 mmhg to atm")["title"].split()[1] == "atm"
     assert convert_query("10 m/s to kph")["title"].split()[1] == "kph"

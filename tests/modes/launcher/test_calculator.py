@@ -124,10 +124,17 @@ def test_goshos_implicit_percent_factorial_and_hex() -> None:
     assert evaluate_arithmetic("0b1010", True) == 10
     assert evaluate_arithmetic("e") is None
     assert evaluate_arithmetic("e", True) == pytest.approx(math.e)
+    assert evaluate_arithmetic("pi") == pytest.approx(math.pi)
+    assert format_hex(255) == "0xff"
+    assert format_hex(-1) == ""
+    assert calculator_description(255) == "0xff · press Enter to copy"
+    assert calculator_description(0.5) == "Press Enter to copy to clipboard"
+
+
+def test_goshos_trig_log_and_scientific() -> None:
     assert evaluate_arithmetic("e+1") == pytest.approx(math.e + 1)
     assert evaluate_arithmetic("e+e") == pytest.approx(2 * math.e)
     assert evaluate_arithmetic("-e") == pytest.approx(-math.e)
-    assert evaluate_arithmetic("pi") == pytest.approx(math.pi)
     assert evaluate_arithmetic("log(100)") == 2
     assert evaluate_arithmetic("log2(8)") == 3
     assert evaluate_arithmetic("2log2(8)") == 6
@@ -152,10 +159,6 @@ def test_goshos_implicit_percent_factorial_and_hex() -> None:
     assert evaluate_arithmetic("50 %") == 0.5
     assert evaluate_arithmetic("0xff * 2") == 510
     assert evaluate_arithmetic("sqrt") is None
-    assert format_hex(255) == "0xff"
-    assert format_hex(-1) == ""
-    assert calculator_description(255) == "0xff · press Enter to copy"
-    assert calculator_description(0.5) == "Press Enter to copy to clipboard"
 
 
 def test_format_number_is_stable() -> None:
