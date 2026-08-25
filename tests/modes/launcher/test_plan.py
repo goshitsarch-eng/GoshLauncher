@@ -129,6 +129,15 @@ def test_should_refresh_recent_files_for_dot_prefix_and_all() -> None:
     planned = plan_search("@ notes", _flags())
     assert should_refresh_recent_files(True, planned) is False
     assert should_refresh_recent_files(False, plan_search(". notes", _flags())) is False
+    lone = plan_search(".", _flags())
+    assert lone["mode"] == "files"
+    assert lone["query"] == ""
+    assert lone["providers"] == ["files"]
+    assert should_refresh_recent_files(True, lone) is True
+    windows = plan_search("$", _flags())
+    assert windows["query"] == ""
+    assert windows["providers"] == ["windows"]
+    assert should_refresh_windows(True, False, windows) is True
 
 
 def test_spoken_open_firefox_strips_verb() -> None:

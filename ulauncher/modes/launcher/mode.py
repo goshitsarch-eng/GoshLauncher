@@ -10,6 +10,7 @@ from ulauncher.internals.result import Result
 from ulauncher.modes.launcher.looks import chrome_from_settings
 from ulauncher.modes.launcher.plan import (
     flags_from_settings,
+    is_active_search_query,
     merge_empty_suggestions,
     plan_search,
     should_refresh_bookmarks,
@@ -37,6 +38,7 @@ class LauncherMode(Mode):
         self._lookup_idle: Any = None
         self._paint_callback: Callable[[effects.EffectMessage], None] | None = None
         self._paint_planned: dict[str, Any] | None = None
+        self._paint_query = ""
         self._paint_settings: Settings | None = None
         self._paint_chrome: Mapping[str, Any] | None = None
         self._accept_paint = False
@@ -64,6 +66,9 @@ class LauncherMode(Mode):
         planned = plan_search(str(query), flags)
         self._paint_callback = callback
         self._paint_planned = planned
+        # goshos shouldRunAsyncPaint(isActiveSearchQuery(_lastQuery)): the entry
+        # text, not plan.query. `.` / `$` / `#` strip to "" but are still a search.
+        self._paint_query = str(query)
         self._paint_settings = settings
         self._paint_chrome = chrome
         self._accept_paint = True
@@ -114,10 +119,9 @@ class LauncherMode(Mode):
         planned = self._paint_planned
         settings = self._paint_settings
         chrome = self._paint_chrome
-        query_active = planned is not None and bool(planned.get("query"))
         if callback is None or planned is None or settings is None or chrome is None:
             return
-        if not should_run_async_paint(query_active, self._accept_paint):
+        if not should_run_async_paint(is_active_search_query(self._paint_query), self._accept_paint):
             return
         callback(effects.render_results(self._results_for_plan(planned, settings, chrome)))
 
@@ -144,6 +148,7 @@ class LauncherMode(Mode):
         self._lookup_idle = None
         self._paint_callback = None
         self._paint_planned = None
+        self._paint_query = ""
         self._paint_settings = None
         self._paint_chrome = None
         if idle is not None:
@@ -166,11 +171,14 @@ class LauncherMode(Mode):
         Clearing the query never calls handle_query, so _paint_planned would still be the
         previous ~/ path. An idle scheduled before the delete would then paint that row
         over frequent apps. Bookmarks, recents, and windows stay; empty-state uses them.
+        Async paints also key off _paint_query (the entry text), matching goshos
+        isActiveSearchQuery(_lastQuery) rather than the stripped plan query.
         """
         idle = self._lookup_idle
         self._lookup_idle = None
         self._paint_callback = None
         self._paint_planned = None
+        self._paint_query = ""
         self._paint_settings = None
         self._paint_chrome = None
         if idle is not None:

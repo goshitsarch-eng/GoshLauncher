@@ -96,11 +96,46 @@ def test_empty_state_drops_in_flight_path_paint(monkeypatch: pytest.MonkeyPatch)
     assert cancelled == ["cancel"]
     assert mode._lookup_idle is None
     assert mode._paint_planned is None
+    assert mode._paint_query == ""
     mode._run_repaint()
     assert painted == []
     assert invalidated == ["path", "command"]
     mode.handle_query(Query(None, "2+2"), lambda *_args: None)
     assert mode._accept_paint is True
+
+
+def test_prefix_only_entry_still_runs_async_paint() -> None:
+    """goshos shouldRunAsyncPaint uses the entry text, not plan.query.
+
+    `.` and `$` strip to an empty plan query but are still a search. A Gio
+    xbel or window-list finish must replace the empty first paint.
+    """
+    mode = LauncherMode()
+    painted: list[object] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "", "providers": ["files"], "mode": "files"}
+    mode._paint_query = "."
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._results_for_plan = lambda *_args: []  # type: ignore[method-assign]
+    mode._run_repaint()
+    assert painted
+
+
+def test_empty_entry_drops_async_paint_even_if_plan_remains() -> None:
+    """goshos onTextChanged empty: _lastQuery is '' so a leftover ~/ plan cannot paint."""
+    mode = LauncherMode()
+    painted: list[object] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "~/foo", "providers": ["path"], "mode": "all"}
+    mode._paint_query = ""
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._results_for_plan = lambda *_args: []  # type: ignore[method-assign]
+    mode._run_repaint()
+    assert painted == []
 
 
 def test_launcher_result_has_activate_action() -> None:
