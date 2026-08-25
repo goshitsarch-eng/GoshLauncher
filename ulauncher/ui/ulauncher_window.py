@@ -54,6 +54,7 @@ def _event_time_us(controller: Any) -> int:
 
 class UlauncherWindow(Gtk.ApplicationWindow):
     _css_provider: Gtk.CssProvider | None = None
+    _css_on_display = False
     is_dragging = False
     layer_shell_enabled = False
     settings: Settings
@@ -88,6 +89,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             title="Ulauncher - Application Launcher",
             **kwargs,
         )
+        gtk4.add_css_class(self, "gosh-popup")
         self.set_default_size(width_request, height_request if height_request > 0 else 1)
         self.set_opacity(0)
 
@@ -627,11 +629,31 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return self.get_app().query
 
     def apply_css(self, widget: Gtk.Widget) -> None:
+        if getattr(self, "_css_on_display", False):
+            return
         if not self._css_provider:
             self._css_provider = Gtk.CssProvider()
         widget.get_style_context().add_provider(self._css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         for child in gtk4.iter_children(widget):
             self.apply_css(child)
+
+    def apply_theme(self) -> None:
+        css = launcher_popup_css()
+        if not self._css_provider:
+            self._css_provider = gtk4.load_css_provider(css)
+            display = self.get_display() or Gdk.Display.get_default()
+            if display:
+                Gtk.StyleContext.add_provider_for_display(
+                    display, self._css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+                )
+                self._css_on_display = True
+            else:
+                self.apply_css(self)
+        else:
+            self._css_provider.load_from_data(css.encode())
+            if not getattr(self, "_css_on_display", False):
+                self.apply_css(self)
+        logger.info('Applying look "%s"', getattr(self.settings, "look_id", "spotlight"))
 
     def _sync_shadow_inset(self) -> int:
         from ulauncher.modes.launcher.popup_shadow import look_shadow_inset
@@ -650,13 +672,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             box.set_margin_start(inset)
             box.set_margin_end(inset)
         return inset
-
-    def apply_theme(self) -> None:
-        if not self._css_provider:
-            self._css_provider = Gtk.CssProvider()
-        self._css_provider.load_from_data(launcher_popup_css().encode())
-        self.apply_css(self)
-        logger.info('Applying look "%s"', getattr(self.settings, "look_id", "spotlight"))
 
     def get_layout_size(self) -> Gdk.Rectangle | None:
         if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:

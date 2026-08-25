@@ -4,10 +4,10 @@
 /* theme classes hang on the outer container and restyle children */
 /* no blur effects - gnome blur is expensive and noisy on some hardware */
 
-/* GTK paints Adwaita on window.background; goshos .gosh-container is a transparent actor. */
-window,
-window.background,
-.background {
+/* GTK paints Adwaita on window.background; goshos .gosh-container is a transparent actor.
+   Scope to the popup window so look CSS can sit on the display without restyling prefs. */
+window.gosh-popup,
+window.gosh-popup.background {
   background-color: transparent;
   background-image: none;
   box-shadow: none;

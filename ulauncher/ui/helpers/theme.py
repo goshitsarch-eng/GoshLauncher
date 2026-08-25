@@ -25,6 +25,8 @@ CSS_RESET = """
   outline: initial;
 }
 """
+# Unscoped `*` would restyle Adwaita prefs if this sheet is on the display.
+POPUP_CSS_RESET = CSS_RESET.replace("* {", ".gosh-popup, .gosh-popup * {")
 
 
 def _load_legacy_theme(manifest_path: Path) -> LegacyTheme | None:
@@ -85,7 +87,7 @@ def get_themes() -> dict[str, Theme]:
 def launcher_popup_css() -> str:
     """Looks own popup colors. Do not layer Ulauncher color-theme CSS on top."""
     looks = Path(paths.ASSETS) / "themes" / "gosh-looks.css"
-    css = CSS_RESET
+    css = POPUP_CSS_RESET
     if looks.is_file():
         css += "\n" + looks.read_text()
     return css

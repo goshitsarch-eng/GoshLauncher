@@ -72,14 +72,16 @@ def test_get_themes__unusable_root_manifest__leaves_the_css_themes_alone(user_th
 
 
 def test_css_reset_omits_gtk3_icon_shadow() -> None:
-    from ulauncher.ui.helpers.theme import CSS_RESET
+    from ulauncher.ui.helpers.theme import CSS_RESET, POPUP_CSS_RESET
 
     assert "-icon-shadow" not in CSS_RESET
+    assert "-icon-shadow" not in POPUP_CSS_RESET
+    assert POPUP_CSS_RESET.strip().startswith(".gosh-popup, .gosh-popup * {")
 
 
 def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:
     css = launcher_popup_css()
-    assert "window.background" in css
+    assert "window.gosh-popup" in css
     assert ".gosh-theme-spotlight" in css
     assert "@define-color bg_color" not in css
     assert ".prefs-btn" in css

@@ -136,8 +136,8 @@ def test_spotlight_shell_is_transparent_like_goshos() -> None:
     app_rule = text.split(".app {", 1)[1].split("}", 1)[0]
     assert "background-color: transparent" in app_rule
     assert "box-shadow: none" in app_rule
-    assert "window," in text
-    assert "window.background" in text
+    assert "window.gosh-popup" in text
+    assert "window.gosh-popup.background" in text
     omarchy = text.split(".gosh-theme-omarchy.app {", 1)[1].split("}", 1)[0]
     assert "#1a1b26" in omarchy
     popos = text.split(".gosh-theme-popos.app {", 1)[1].split("}", 1)[0]

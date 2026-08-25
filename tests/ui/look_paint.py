@@ -43,7 +43,7 @@ def build_look_tree(look_id: str) -> tuple[object, object, object, object]:
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_default_size(480, 280)
-    win.add_css_class("background")
+    win.add_css_class("gosh-popup")
 
     app = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
     app.add_css_class("app")
