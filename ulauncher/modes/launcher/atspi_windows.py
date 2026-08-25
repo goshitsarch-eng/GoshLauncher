@@ -74,7 +74,7 @@ def split_atspi_ref(ref: str) -> tuple[str, str] | None:
 
 def note_atspi_focus(title: str, app_id: str = "") -> None:
     """Record a Window:Activate so search can sort like get_tab_list."""
-    keys = [key for key in ((title or "").strip().lower(), (app_id or "").strip().lower()) if key]
+    keys = [key for key in ((app_id or "").strip().lower(), (title or "").strip().lower()) if key]
     for key in keys:
         while key in _FOCUS_HISTORY:
             _FOCUS_HISTORY.remove(key)
