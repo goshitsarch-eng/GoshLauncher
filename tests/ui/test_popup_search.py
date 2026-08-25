@@ -125,6 +125,7 @@ def test_enter_activates_calculator_row(popup: SearchPopup) -> None:
 
     kinds = popup.type_query("2+2")
     assert "calculator" in kinds
+    assert "Calculator" in popup.header_names()
     popup.app.activated = None
     assert popup.press(Gdk.KEY_Return)
     chosen, alt = popup.app.activated
@@ -147,6 +148,12 @@ def test_dollar_and_dot_prefixes_need_a_space() -> None:
         assert "window-close" in kinds
         kinds = probe.type_query("workspace 2")
         assert "workspace" in kinds
+        kinds = probe.type_query("workspace two")
+        assert "workspace" in kinds
+        kinds = probe.type_query("kill firefox")
+        assert "window-close" in kinds
+        kinds = probe.type_query("force quit firefox")
+        assert "window-close" in kinds
         home_kinds = probe.type_query("$HOME")
         assert "window" not in home_kinds
         bashrc = probe.type_query(".bashrc")
@@ -305,6 +312,11 @@ def test_rofi_hides_search_icon() -> None:
         assert "gosh-no-search-icon" in classes
         assert probe.win.search_icon.get_visible() is False
         assert probe.win.prompt_input.get_placeholder_text() == "Filter"
+        assert "calculator" in probe.type_query("2+2")
+        from ulauncher.ui import gtk4
+
+        for widget in probe.win.results_view._widgets:
+            assert not any(child.has_css_class("item-icon") for child in gtk4.list_children(widget.item_container))
     finally:
         probe.close()
 
@@ -393,3 +405,36 @@ def test_click_row_activates_and_click_outside_closes(popup: SearchPopup) -> Non
     popup.app.closed = False
     popup.win.on_backdrop_released(SimpleNamespace(), 1, -8.0, -8.0)
     assert popup.app.closed is True
+
+
+def test_typed_app_offers_new_window_when_running() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    app = SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        _executable="firefox",
+        actions={
+            "launch": {"name": "Launch"},
+            "action:new-window": {"name": "New Window"},
+            "action:private": {"name": "Private"},
+        },
+    )
+    windows = [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)]
+    try:
+        probe = open_search_popup(typed_apps=[app], home_windows=windows)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.type_query("open firefox")
+        assert "app" in kinds
+        assert "app-action" in kinds
+        assert "window" in kinds
+        assert "New window — Firefox" in probe.names()
+        assert "Private — Firefox" in probe.names()
+        assert "Applications" in probe.header_names()
+        assert "Actions" in probe.header_names()
+        assert "Windows" in probe.header_names()
+    finally:
+        probe.close()

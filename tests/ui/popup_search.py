@@ -30,6 +30,11 @@ class SearchPopup:
     def names(self) -> list[str]:
         return [str(row.name) for row in self.win.results_view.get_result_objects() if getattr(row, "name", "")]
 
+    def header_names(self) -> list[str]:
+        return [
+            str(widget.result.name) for widget in self.win.results_view._widgets if widget.has_css_class("item-header")
+        ]
+
     def number_hints(self) -> list[str]:
         return [
             widget.shortcut_label.get_text()
@@ -97,6 +102,7 @@ def open_search_popup(
     home_windows: list | None = None,
     bookmark_hits: list | None = None,
     recent_hits: list | None = None,
+    typed_apps: list | None = None,
 ) -> SearchPopup:
     from contextlib import ExitStack
     from unittest.mock import patch
@@ -184,6 +190,11 @@ def open_search_popup(
     stack.enter_context(
         patch("ulauncher.modes.launcher.bookmarks.search_bookmarks", lambda *_args, **_kwargs: bookmarks)
     )
+    if typed_apps is not None:
+        matched = list(typed_apps)
+        stack.enter_context(
+            patch("ulauncher.modes.launcher.apps.match_apps", lambda _query, limit=6, **_kwargs: matched[:limit])
+        )
     win = UlauncherWindow(application=app)
     try:
         wait_popup_styled(win)

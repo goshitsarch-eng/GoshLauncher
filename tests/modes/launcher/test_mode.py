@@ -430,6 +430,43 @@ def test_mailto_and_localhost_are_urls() -> None:
     assert "url" not in _kinds(_handle("https://example.com/foo bar"))
 
 
+def test_running_app_offers_new_window_action(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_app_actions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    app = SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        _executable="firefox",
+        actions={
+            "launch": {"name": "Launch"},
+            "action:new-window": {"name": "New Window"},
+            "action:private": {"name": "Private"},
+        },
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.match_apps", lambda _query, _limit: [app])
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.cached_windows",
+        lambda: [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    results = _handle("open firefox")
+    kinds = _kinds(results)
+    assert "app" in kinds
+    assert "app-action" in kinds
+    assert "window" in kinds
+    assert any(row.name == "New window — Firefox" for row in results)
+    assert any(row.name == "Private — Firefox" for row in results)
+    assert any(row.name == "Applications" for row in results)
+    assert any(row.description == "Switch to application" for row in results)
+
+
 def test_calculator_activate_copies_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[str, str]] = []
     monkeypatch.setattr(
