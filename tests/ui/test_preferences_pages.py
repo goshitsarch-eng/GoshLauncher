@@ -22,6 +22,30 @@ def test_preferences_view_omits_ulauncher_color_theme_and_window_shadow() -> Non
     assert "max_recent_apps" not in text
 
 
+def test_help_page_documents_goshos_keyboard() -> None:
+    source = Path(__file__).resolve().parents[2] / "ulauncher" / "ui" / "preferences" / "views" / "help.py"
+    text = source.read_text()
+    assert "Alt+Number/Letter" not in text
+    assert "Jump to result by position" not in text
+    assert "pack_start" not in text
+    assert "Alt+1" in text
+    assert "Ctrl+N / Ctrl+P" in text
+    assert "Checking" in text
+    assert "Ctrl+Space" in text
+
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher.ui.preferences.views.help import build_help_page
+
+    page = build_help_page()
+    assert page.get_title() == "Help"
+
+
 def test_goshos_pref_page_titles() -> None:
     import gi
 

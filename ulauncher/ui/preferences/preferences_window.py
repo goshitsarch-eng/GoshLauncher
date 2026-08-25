@@ -11,7 +11,7 @@ from ulauncher.ui.helpers.system_theme import SystemThemeWatcher
 from ulauncher.ui.preferences.adw_rows import wrap_custom_view
 from ulauncher.ui.preferences.page_names import GOSHOS_PAGE_IDS, normalize_prefs_page
 from ulauncher.ui.preferences.views.extensions import ExtensionsView
-from ulauncher.ui.preferences.views.help import HelpView
+from ulauncher.ui.preferences.views.help import build_help_page
 from ulauncher.ui.preferences.views.preferences import PreferencesView
 from ulauncher.ui.preferences.views.shortcuts import ShortcutsView
 
@@ -21,7 +21,6 @@ WINDOW_DEFAULT_HEIGHT = 720
 _CUSTOM_PAGES = (
     ("shortcuts", "Shortcuts", "input-keyboard-symbolic", ShortcutsView),
     ("extensions", "Extensions", "application-x-addon-symbolic", ExtensionsView),
-    ("help", "Help", "help-browser-symbolic", HelpView),
 )
 
 
@@ -56,6 +55,9 @@ class PreferencesWindow(Adw.PreferencesWindow):
             self._pages[key] = page
             self.views[key] = view
             self.add(page)
+        help_page = build_help_page()
+        self._pages["help"] = help_page
+        self.add(help_page)
         self.add(self._pages["about"])
 
     def present(self, view: str | None = None) -> None:  # type: ignore[override]
