@@ -2014,6 +2014,14 @@ def _window_row_icon(win: WindowInfo, apps: Sequence[Any]) -> str:
     return window_app_icon(win, apps)
 
 
+def _window_row_app_id(win: WindowInfo, apps: Sequence[Any]) -> str:
+    try:
+        from ulauncher.modes.launcher.apps import window_app_id
+    except Exception:
+        return win.app_id or win.gtk_app_id
+    return window_app_id(win, apps)
+
+
 def match_windows(
     query: str,
     limit: int = 6,
@@ -2071,7 +2079,7 @@ def match_windows(
                 "wid": win.wid,
                 "pid": win.pid,
                 "wm_class": win.wm_class,
-                "app_id": win.app_id or win.gtk_app_id,
+                "app_id": _window_row_app_id(win, icon_apps),
                 "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
                 "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
                 "atspi_ref": getattr(win, "atspi_ref", "") or "",

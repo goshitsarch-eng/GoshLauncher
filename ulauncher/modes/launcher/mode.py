@@ -691,7 +691,7 @@ def _empty_app_row(app: Any, open_windows: Sequence[Any]) -> dict[str, Any] | No
 
 def _empty_window_row(win: Any, apps: Sequence[Any] | None = None) -> dict[str, Any] | None:
     try:
-        from ulauncher.modes.launcher.apps import window_app_icon
+        from ulauncher.modes.launcher.apps import window_app_icon, window_app_id
         from ulauncher.modes.launcher.windows import window_workspace_label
 
         workspace = window_workspace_label(win.desktop, win.sticky)
@@ -704,7 +704,7 @@ def _empty_window_row(win: Any, apps: Sequence[Any] | None = None) -> dict[str, 
             "wid": win.wid,
             "pid": win.pid,
             "wm_class": win.wm_class,
-            "app_id": getattr(win, "app_id", "") or getattr(win, "gtk_app_id", "") or "",
+            "app_id": window_app_id(win, apps),
             "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
             "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
             "atspi_ref": getattr(win, "atspi_ref", "") or "",

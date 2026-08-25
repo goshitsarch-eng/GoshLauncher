@@ -24,6 +24,7 @@ from ulauncher.modes.launcher.apps import (
     take_app_actions,
     unique_by_base_name,
     window_app_icon,
+    window_app_id,
 )
 from ulauncher.modes.launcher.windows import WindowInfo
 
@@ -328,6 +329,8 @@ def test_window_app_icon_uses_matching_desktop_icon() -> None:
     assert window_app_icon(win, [firefox]) == "firefox"
     assert window_app_icon(other, [firefox]) == "focus-windows-symbolic"
     assert window_app_icon(win, []) == "focus-windows-symbolic"
+    assert window_app_id(win, [firefox]) == "firefox"
+    assert window_app_id(other, [firefox]) == ""
 
 
 def test_window_app_icon_survives_desktop_list_failure(monkeypatch: pytest.MonkeyPatch) -> None:

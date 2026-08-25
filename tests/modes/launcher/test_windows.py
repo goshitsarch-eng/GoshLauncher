@@ -916,6 +916,7 @@ def test_match_windows_uses_desktop_app_icon() -> None:
     win = WindowInfo(wid="1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=1)
     rows = match_windows("firefox", windows=[win], apps=[firefox])
     assert rows[0]["icon"] == "firefox"
+    assert rows[0]["app_id"] == "firefox"
     assert match_windows("firefox", windows=[win], apps=[])[0]["icon"] == "focus-windows-symbolic"
 
 

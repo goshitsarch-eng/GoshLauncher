@@ -637,7 +637,7 @@ def test_close_window_row_keeps_muxer_and_atspi_payload(monkeypatch: pytest.Monk
             }
         ],
     )
-    row = next(result for result in _handle("close firefox") if result.kind == "window-close")
+    row = next(result for result in _handle("close firefox") if getattr(result, "kind", "") == "window-close")
     assert row.icon == "firefox"
     assert row.payload["kind"] == "close"
     assert row.payload["window_title"] == "Mozilla Firefox"

@@ -211,22 +211,36 @@ def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     return True
 
 
-def window_app_icon(win: Any, apps: Sequence[Any] | None = None) -> str:
-    """goshos windowSearch._windowIcon via Shell.WindowTracker.get_window_app."""
+def matching_window_app(win: Any, apps: Sequence[Any] | None = None) -> Any | None:
     try:
         scan = apps if apps is not None else iter_apps()
     except Exception:
-        return "focus-windows-symbolic"
+        return None
     for app in scan:
         try:
-            if not _app_matches_window(app, win):
-                continue
-            icon = str(getattr(app, "icon", "") or "")
-            if icon:
-                return icon
+            if _app_matches_window(app, win):
+                return app
         except Exception:  # noqa: S112
             continue
-    return "focus-windows-symbolic"
+    return None
+
+
+def window_app_icon(win: Any, apps: Sequence[Any] | None = None) -> str:
+    """goshos windowSearch._windowIcon via Shell.WindowTracker.get_window_app."""
+    app = matching_window_app(win, apps)
+    icon = str(getattr(app, "icon", "") or "") if app is not None else ""
+    return icon or "focus-windows-symbolic"
+
+
+def window_app_id(win: Any, apps: Sequence[Any] | None = None) -> str:
+    existing = str(getattr(win, "app_id", "") or getattr(win, "gtk_app_id", "") or "")
+    if existing:
+        return existing
+    app = matching_window_app(win, apps)
+    ident = str(getattr(app, "app_id", "") or "") if app is not None else ""
+    if ident.endswith(".desktop"):
+        ident = ident[:-8]
+    return ident
 
 
 def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:
