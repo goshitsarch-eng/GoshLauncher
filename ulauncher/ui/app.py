@@ -38,7 +38,7 @@ class UlauncherApp(Adw.Application):
     _persistent: bool = False
     # App-scoped query/mode controller, shared by every launcher window.
     core: UlauncherCore
-    windows: WeakValueDictionary[Literal["main", "preferences"], Gtk.ApplicationWindow]
+    windows: WeakValueDictionary[Literal["main", "preferences"], Gtk.Window]
     _tray_icon: ulauncher.ui.helpers.tray_icon.TrayIcon | None = None  # pyrefly: ignore[implicit-import]
 
     @staticmethod

@@ -9,6 +9,7 @@ from ulauncher.modes.launcher.looks import (
     ensure_look_chrome,
     get_look,
     icon_size_for_look,
+    look_about_subtitle,
     look_apply_action,
     look_ids,
     look_prefs_search_text,
@@ -90,6 +91,15 @@ def test_look_prefs_search_text_finds_walker_cosmic_and_titles() -> None:
     for look in LOOKS:
         assert look["title"] in text
     assert "Width is not part of a look" in text
+
+
+def test_look_about_subtitle_matches_goshos() -> None:
+    text = look_about_subtitle()
+    assert "Walker" in text
+    assert "COSMIC" in text
+    assert "Dark Adwaita" not in text
+    for look in LOOKS:
+        assert look["title"] in text
 
 
 def test_every_look_has_theme_css() -> None:

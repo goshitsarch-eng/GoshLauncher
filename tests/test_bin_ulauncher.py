@@ -26,7 +26,7 @@ def _stub_gapplication(tmp_path: Path, *, exit_code: int = 0) -> tuple[Path, dic
         ("--hide-window", "use start"),
         ("--autostart-method-xdg", ""),
         ("--no-extensions", "see --help for available commands"),
-        ("--no-window-shadow", "the Window shadow size setting"),
+        ("--no-window-shadow", "look CSS owns popup shadows"),
     ],
 )
 def test_legacy_terminal_flags_exit_without_python(flag: str, hint: str) -> None:

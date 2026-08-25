@@ -3,10 +3,31 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from gi.repository import Gtk
+from gi.repository import Adw, Gdk, Gtk
 
+from ulauncher import api_version, version
+from ulauncher.modes.launcher.looks import LOOKS, look_about_subtitle, look_prefs_search_text
+from ulauncher.modes.launcher.prefs_combo import (
+    DENSITY_ITEMS,
+    ORDER_ITEMS,
+    POSITION_ITEMS,
+    JsonSettingsSignals,
+    bind_settings_changed,
+    bind_settings_combo,
+    combo_selected_index,
+    combo_should_set,
+    dependent_row_sensitive,
+)
+from ulauncher.modes.launcher.web import SEARCH_ENGINES, engine_prefs_search_text
 from ulauncher.ui.helpers.hotkey_controller import HotkeyController
-from ulauncher.ui.preferences.views import BaseView, styled
+from ulauncher.ui.preferences.adw_rows import (
+    add_button_row,
+    add_combo_row,
+    add_entry_row,
+    add_spin_row,
+    add_switch_row,
+)
+from ulauncher.ui.preferences.page_names import GOSHOS_PAGE_IDS
 from ulauncher.utils.environment import IS_X11
 from ulauncher.utils.eventbus import EventBus
 from ulauncher.utils.settings import Settings
@@ -15,271 +36,252 @@ from ulauncher.utils.systemd_controller import SystemdController
 logger = logging.getLogger(__name__)
 events = EventBus()
 
+_PROVIDER_SWITCHES = (
+    (
+        "enable_calculator",
+        "Calculator",
+        (
+            "Evaluate math including 50%, sqrt, asin, log2, sin 90, 1+2=, 1+2=3, 1 000 + 2, 5!, e+1, =e, "
+            "2pi^2, 5 squared, 2 to the power of 8, 2 to the 8th, 2 to the eighth, 2 plus 2, two plus two, "
+            "twenty plus two, two million, 2 add 3, 8 subtract 3, half of 80, square root of 16, and 8 over 2 "
+            "and copy the result with Enter"
+        ),
+    ),
+    (
+        "enable_unit_convert",
+        "Unit conversion",
+        (
+            "10 km to mi, ten km to mi, 10 km into mi, convert 10 km to mi, how many miles in 10 km, "
+            "how many miles in ten km, how many km in a mile, a cup to ml, two million km to mi, 1 000 km to mi, "
+            "1 cup to tbsp, 1 fl oz to ml, 2 hours to min, 100 kph to mph, 32 psi to bar, 200 kcal to kj, "
+            "1 hp to kw, 180 deg to rad, 32 f to c"
+        ),
+    ),
+    (
+        "enable_color_hex",
+        "Colors",
+        (
+            "Type #f00, red, rebeccapurple, rgb(255, 0, 0), rgb 255 0 0, rgb 100% 0% 0%, rgba 255 0 0 0.5, "
+            "rgb(100%, 0%, 0%), hsl(0deg 100% 50%), hsl 0 100% 50%, hsl(0 100 50), or hwb(0 0% 0%) and press Enter "
+            "to copy"
+        ),
+    ),
+    (
+        "enable_window_search",
+        "Open windows",
+        (
+            "Switch by title, class, workspace 2, workspace two, workspace twenty, switch to firefox, or "
+            "find windows firefox. Type close firefox, close the firefox window, close the firefox application, "
+            "can you close firefox, kill firefox, force quit firefox, or force close firefox"
+        ),
+    ),
+    (
+        "enable_system_actions",
+        "System actions",
+        (
+            "Lock, suspend, restart, power off, log out, switch user, lock or unlock rotation, screenshot. "
+            "lock the screen, lock now, unlock, lock orientation, turn off, power off, sign out, and sign off match"
+        ),
+    ),
+    (
+        "enable_settings_search",
+        "GNOME Settings",
+        (
+            "Jump to Settings panels including Privacy & Security. open wifi settings and open display "
+            "preferences still find the panel"
+        ),
+    ),
+    ("enable_recent_files", "Recent files", "Open recently used local files and sftp/smb locations"),
+    (
+        "enable_url_open",
+        "Open URLs",
+        "Launch typed addresses, domains, sftp/smb locations, and mailto links",
+    ),
+    (
+        "enable_path_open",
+        "Open paths",
+        (
+            "Open ~/ ./ and absolute paths. Directories also offer Open in Terminal including Kitty, Foot, "
+            "Ghostty, Alacritty, WezTerm, and Tilix"
+        ),
+    ),
+    (
+        "enable_places",
+        "Folders",
+        (
+            "Home, Documents, Downloads, and the other XDG user folders. open my documents, navigate to "
+            "downloads, open the pictures folder, and open pictures dir still find those folders"
+        ),
+    ),
+    ("enable_bookmarks", "Bookmarks", "Folders saved in the GTK 3 and GTK 4 bookmark files"),
+    (
+        "enable_time_date",
+        "Time and date",
+        (
+            "Type time, now, what time is it, what's the time right now, show me the time, tell me the time, "
+            "tell me what time it is, date, today, today's date, what day is it, what's the day, tell me the day, "
+            "tomorrow, or yesterday to copy the local clock"
+        ),
+    ),
+)
 
-class PreferencesView(BaseView):
-    """General preferences page"""
+
+class PreferencesView:
+    """Spotlight-goshos preference pages (Shortcut / Appearance / Features / Web Search / About)."""
 
     def __init__(self) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self.settings: Settings = Settings.load()
         self.autostart_pref: SystemdController = SystemdController("ulauncher")
-
-        scrolled = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        scrolled.set_propagate_natural_width(True)
-        scrolled.set_propagate_natural_height(True)
-        self.pack_start(scrolled, True, True, 0)
-
-        # Create main container - centers on wide screens, fills on narrow screens
-        prefs_view = styled(
-            Gtk.Box(
-                orientation=Gtk.Orientation.VERTICAL,
-                margin_top=30,
-                margin_bottom=30,
-                margin_start=30,
-                margin_end=30,
-                spacing=24,
-            ),
-            "preferences-content",
-        )
-        prefs_view.set_halign(Gtk.Align.CENTER)
-        prefs_view.set_valign(Gtk.Align.START)
-        prefs_view.set_size_request(600, -1)  # min-width of 600px
-        scrolled.add(prefs_view)
-
-        # Add sections
         self._updating_chrome = False
-        self._prefs_signals = None
+        self._prefs_signals: JsonSettingsSignals | None = None
         self._feature_switches: dict[str, Gtk.Switch] = {}
-        self._add_general_section(prefs_view)
-        self._add_chrome_section(prefs_view)
-        self._add_applications_section(prefs_view)
-        self._add_launcher_section(prefs_view)
-        self._add_advanced_section(prefs_view)
+        self._chrome_switches: dict[str, Gtk.Switch] = {}
+        self._hotkey_capturing = False
+        self.pages: dict[str, Adw.PreferencesPage] = {
+            "shortcut": self._build_shortcut_page(),
+            "appearance": self._build_appearance_page(),
+            "features": self._build_features_page(),
+            "web-search": self._build_web_search_page(),
+            "about": self._build_about_page(),
+        }
         self._bind_settings_follow()
 
-    def _add_section_header(self, parent: Gtk.Box, title: str) -> None:
-        """Add a section header"""
-        label = Gtk.Label(
-            label=title,
-            halign=Gtk.Align.START,
-            margin_top=10,
-            margin_bottom=2,
-        )
-        styled(label, "preferences-section-title")
-        parent.pack_start(label, False, False, 0)
+    def goshos_pages(self) -> list[Adw.PreferencesPage]:
+        return [self.pages[key] for key in GOSHOS_PAGE_IDS]
 
-    def _create_section_container(self, parent: Gtk.Box, title: str) -> Gtk.Box:
-        """Create a stylized section card"""
-        self._add_section_header(parent, title)
-        section_box = styled(
-            Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, margin_top=0),
-            "preferences-section-card",
-        )
-        parent.pack_start(section_box, False, False, 0)
-        return section_box
+    def unbind_settings(self) -> None:
+        box = getattr(self, "_prefs_signals", None)
+        if box is not None:
+            box.disconnect_all()
 
-    def _add_setting_row(
-        self,
-        parent: Gtk.Box,
-        label_text: str,
-        widget: Gtk.Widget,
-        description: str,
-        full_width: bool = False,
-        is_warning: bool = False,
-    ) -> None:
-        """Add a settings row with label and widget
+    def _bool_toggle(self, attr: str) -> Any:
+        def on_toggle(switch: Gtk.Switch, _: Any) -> None:
+            if self._updating_chrome:
+                return
+            self.settings.save({attr: switch.get_active()})
+            if attr in ("enable_application_mode", "enable_prefix_modes"):
+                self._sync_dependent_switches()
 
-        Args:
-            parent: The parent container
-            label_text: The setting label
-            widget: The control widget
-            description: Description text
-            full_width: If True, widget takes full width below label (for long inputs like Entry)
-            is_warning: If True, style the description as a warning using GTK's 'warning' class
-        """
-        row_box = styled(Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24), "preferences-setting-row")
-        row_box.set_hexpand(True)
+        return on_toggle
 
-        # Left side - label and description
-        label_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        if not full_width:
-            label_container.set_hexpand(True)
-        else:
-            label_container.set_size_request(360, -1)
+    def _int_spin(self, attr: str) -> Any:
+        def on_changed(spin: Gtk.SpinButton) -> None:
+            if self._updating_chrome:
+                return
+            self.settings.save({attr: spin.get_value_as_int()})
 
-        label = styled(Gtk.Label(label=label_text, halign=Gtk.Align.START), "preferences-setting-title")
-        label.set_xalign(0.0)
-        label_container.pack_start(label, False, False, 0)
+        return on_changed
 
-        desc_label = styled(
-            Gtk.Label(
-                label=description,
-                halign=Gtk.Align.START,
-                wrap=True,
-                max_width_chars=70,
-                margin_top=2,
-                use_markup=True,
-            ),
-            "preferences-setting-description",
-        )
-        desc_label.set_xalign(0.0)
-        if is_warning:
-            desc_label.get_style_context().add_class("warning-label")
-        label_container.pack_start(desc_label, False, False, 0)
+    def _feature_switch(self, group: Adw.PreferencesGroup, attr: str, title: str, subtitle: str) -> Gtk.Switch:
+        switch = add_switch_row(group, title, subtitle, bool(getattr(self.settings, attr)), self._bool_toggle(attr))
+        self._feature_switches[attr] = switch
+        return switch
 
-        if full_width:
-            # For long inputs: stack vertically
-            container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-            container.pack_start(label_container, False, False, 0)
-            widget.set_halign(Gtk.Align.FILL)
-            widget.set_hexpand(True)
-            container.pack_start(widget, False, False, 0)
-            row_box.pack_start(container, True, True, 0)
-        else:
-            # For buttons/switches/combos: place on right side
-            row_box.pack_start(label_container, True, True, 0)
-            widget.set_halign(Gtk.Align.END)
-            widget.set_valign(Gtk.Align.START)
-            row_box.pack_start(widget, False, False, 0)
-
-        parent.pack_start(row_box, False, False, 0)
-
-    def _select_combo_id(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
-        from ulauncher.modes.launcher.prefs_combo import combo_selected_index, combo_should_set
-
+    def _select_combo(self, combo: Adw.ComboRow, items: list, current_id: str | None) -> None:
         index = combo_selected_index(items, current_id)
-        if combo_should_set(index, combo.get_active()):
-            combo.set_active(index)
+        selected = int(combo.get_selected())
+        if combo_should_set(index, selected):
+            combo.set_selected(index)
 
-    def _add_look_combo(self, general_box: Gtk.Box) -> None:
-        from ulauncher.modes.launcher.looks import LOOKS, look_prefs_search_text
+    def _build_shortcut_page(self) -> Adw.PreferencesPage:
+        page = Adw.PreferencesPage(title="Shortcut", icon_name="preferences-desktop-keyboard-symbolic")
+        group = Adw.PreferencesGroup(
+            title="Keyboard Shortcut",
+            description="Set the shortcut to open GoshLauncher",
+        )
 
-        look_combo = Gtk.ComboBoxText()
-        for look in LOOKS:
-            look_combo.append(look["id"], look["title"])
-        self._select_combo_id(look_combo, LOOKS, getattr(self.settings, "look_id", "spotlight"))
-        look_combo.connect("changed", self._on_look_changed)
-        self._look_combo = look_combo
-        self._add_setting_row(general_box, "Launcher look", look_combo, look_prefs_search_text())
-
-    def _add_background_row(self, general_box: Gtk.Box, run_in_bg_footer: str) -> None:
-        autostart_status = self.autostart_pref.status()
-        if autostart_status.can_start:
-            autostart_switch = Gtk.Switch(active=autostart_status.is_enabled)
-            autostart_switch.connect("notify::active", self._on_autostart_toggled)
-            desc = "Start Ulauncher automatically with your desktop session so it's ready when you need it."
-            self._add_setting_row(general_box, "Run in background", autostart_switch, f"{desc}{run_in_bg_footer}")
-            return
-        keep_alive_switch = Gtk.Switch(active=self.settings.keep_alive)
-        keep_alive_switch.connect("notify::active", self._on_keep_alive_toggled)
-        desc = "Keep Ulauncher running in the background after first use so it stays ready"
-        self._add_setting_row(general_box, "Run in background", keep_alive_switch, f"{desc}{run_in_bg_footer}")
-
-    def _add_hotkey_row(self, general_box: Gtk.Box) -> None:
+        shortcut_row = Adw.ActionRow(
+            title="Toggle shortcut",
+            subtitle="Click here, then press a key combination",
+        )
+        shortcut_row.set_activatable(True)
         from ulauncher.modes.launcher.shortcut import shortcut_row_label
 
-        self._hotkey_capturing = False
         accel = HotkeyController.current_accelerator()
-        label = Gtk.Label(label=shortcut_row_label([accel], False), xalign=1)
-        label.set_can_focus(True)
-        self._hotkey_label = label
-
-        click = Gtk.GestureClick()
-        click.connect("pressed", lambda *_args: self._on_hotkey_capture_activate())
-        label.add_controller(click)
+        self._hotkey_label = Gtk.Label(
+            label=shortcut_row_label([accel], False), halign=Gtk.Align.END, valign=Gtk.Align.CENTER
+        )
+        shortcut_row.add_suffix(self._hotkey_label)
+        self._shortcut_row = shortcut_row
+        shortcut_row.connect("activated", lambda *_args: self._on_hotkey_capture_activate())
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self._on_hotkey_capture_key)
-        label.add_controller(keys)
-        focus = Gtk.EventControllerFocus()
-        focus.connect("leave", lambda *_args: self._on_hotkey_capture_focus_out())
-        label.add_controller(focus)
+        shortcut_row.add_controller(keys)
+        shortcut_row.connect("notify::has-focus", self._on_hotkey_focus)
+        group.add(shortcut_row)
 
-        self._add_setting_row(
-            general_box,
-            "Toggle shortcut",
-            label,
-            "Click here, then press a key combination.",
-        )
-        reset_btn = Gtk.Button(label="Reset")
-        reset_btn.connect("clicked", self._on_hotkey_reset_clicked)
-        self._add_setting_row(
-            general_box,
-            "Reset to default",
-            reset_btn,
-            "Set shortcut to Ctrl+Space.",
-        )
+        add_button_row(group, "Reset to default", "Set shortcut to Ctrl+Space", "Reset", self._on_hotkey_reset_clicked)
         if HotkeyController.is_plasma():
-            kcm_btn = Gtk.Button.new_with_label("Keyboard settings")
-            kcm_btn.connect("clicked", self._on_hotkey_clicked)
-            self._add_setting_row(
-                general_box,
+            add_button_row(
+                group,
                 "Plasma shortcuts",
-                kcm_btn,
                 "Plasma stores the grab in System Settings.",
+                "Keyboard settings",
+                self._on_hotkey_clicked,
             )
+        page.add(group)
 
-    def _add_general_section(self, parent: Gtk.Box) -> None:
-        """Add general settings section"""
-        general_box = self._create_section_container(parent, "General")
-        run_in_bg_footer = "\n<b>Recommended:</b> Enabling this will make Ulauncher open noticeably faster."
-        self._add_background_row(general_box, run_in_bg_footer)
-        self._add_tray_icon_row(general_box)
-        self._add_hotkey_row(general_box)
-
-        self._add_look_combo(general_box)
-
-        # Screen to show on
-        screen_combo = Gtk.ComboBoxText()
-        screen_combo.append("mouse-pointer-monitor", "The screen with the mouse pointer")
-        screen_combo.append("default-monitor", "The default screen")
-        screen_combo.set_active_id(self.settings.render_on_screen)
-        screen_combo.connect("changed", self._on_screen_changed)
-        screen_desc = "Decide which monitor presents Ulauncher when you press the hotkey."
-        self._add_setting_row(general_box, "Screen to show on", screen_combo, screen_desc)
-
-        # Auto resume
-        auto_resume_switch = Gtk.Switch(active=self.settings.auto_resume)
-        auto_resume_switch.connect("notify::active", self._on_auto_resume_toggled)
-        auto_resume_desc = "If you close Ulauncher without running the query, restore it on the next session."
-        self._add_setting_row(general_box, "Auto-resume unfinished sessions", auto_resume_switch, auto_resume_desc)
-
-        # Close on focus out
-        close_focus_switch = Gtk.Switch(active=self.settings.close_on_focus_out)
-        close_focus_switch.connect("notify::active", self._on_close_focus_toggled)
-        focus_desc = "Hide the Ulauncher window automatically as soon as another app grabs focus."
-        self._add_setting_row(general_box, "Close Ulauncher when losing focus", close_focus_switch, focus_desc)
-
-        # Grab mouse pointer
-        grab_mouse_switch = Gtk.Switch(active=self.settings.grab_mouse_pointer)
-        grab_mouse_switch.connect("notify::active", self._on_grab_mouse_toggled)
-        grab_desc = "Capture the pointer to prevent focus-follows-mouse setups from stealing the launcher focus."
-        self._add_setting_row(general_box, "Grab mouse pointer focus", grab_mouse_switch, grab_desc)
-
-    def _add_chrome_section(self, parent: Gtk.Box) -> None:
-        """Look chrome overrides from spotlight-goshos appearance page."""
-        chrome_box = self._create_section_container(parent, "Launcher chrome")
-
-        position_combo = Gtk.ComboBoxText()
-        position_combo.append("center", "Center")
-        position_combo.append("top", "Top")
-        position_combo.set_active_id(self.settings.popup_position)
-        position_combo.connect("changed", self._on_chrome_combo("popup_position"))
-        self._position_combo = position_combo
-        self._add_setting_row(
-            chrome_box,
-            "Position",
-            position_combo,
-            "Center stays put and grows down. Top matches Pop!_OS and KRunner.",
+        session = Adw.PreferencesGroup(title="Session")
+        self._add_background_row(session)
+        self._add_tray_icon_row(session)
+        add_switch_row(
+            session,
+            "Close when losing focus",
+            "Hide the launcher as soon as another app grabs focus.",
+            self.settings.close_on_focus_out,
+            self._on_close_focus_toggled,
         )
+        add_switch_row(
+            session,
+            "Grab mouse pointer focus",
+            "Capture the pointer so focus-follows-mouse setups do not steal the launcher.",
+            self.settings.grab_mouse_pointer,
+            self._on_grab_mouse_toggled,
+        )
+        add_switch_row(
+            session,
+            "Auto-resume unfinished sessions",
+            "If you close without running the query, restore it next time.",
+            self.settings.auto_resume,
+            self._on_auto_resume_toggled,
+        )
+        screen_items = (
+            {"id": "mouse-pointer-monitor", "label": "The screen with the mouse pointer"},
+            {"id": "default-monitor", "label": "The default screen"},
+        )
+        self._screen_combo = add_combo_row(
+            session,
+            "Screen to show on",
+            "Which monitor presents the launcher when you press the shortcut.",
+            screen_items,
+            self.settings.render_on_screen,
+        )
+        self._screen_items = screen_items
+        self._screen_combo.connect("notify::selected", self._on_screen_changed)
+        page.add(session)
+        return page
 
-        density_combo = Gtk.ComboBoxText()
-        density_combo.append("comfortable", "Comfortable")
-        density_combo.append("compact", "Compact")
-        density_combo.set_active_id(self.settings.row_density)
-        density_combo.connect("changed", self._on_chrome_combo("row_density"))
-        self._density_combo = density_combo
-        self._add_setting_row(chrome_box, "Row density", density_combo, "Compact still shrinks the look's icon size.")
+    def _add_background_row(self, group: Adw.PreferencesGroup) -> None:
+        footer = " Recommended: this makes the launcher open noticeably faster."
+        autostart_status = self.autostart_pref.status()
+        if autostart_status.can_start:
+            desc = "Start automatically with your desktop session so it's ready when you need it." + footer
+            add_switch_row(group, "Run in background", desc, autostart_status.is_enabled, self._on_autostart_toggled)
+            return
+        desc = "Keep running in the background after first use so it stays ready" + footer
+        add_switch_row(group, "Run in background", desc, self.settings.keep_alive, self._on_keep_alive_toggled)
 
+    def _add_tray_icon_row(self, group: Adw.PreferencesGroup) -> None:
+        self._tray_switch = add_switch_row(
+            group,
+            "Show tray icon",
+            "StatusNotifierItem tray while the launcher is set to run in the background.",
+            self.settings.show_tray_icon,
+            self._on_tray_toggled,
+        )
+        self._tray_switch.set_sensitive(self.settings.is_persistent())
+
+    def _build_appearance_page(self) -> Adw.PreferencesPage:
         from ulauncher.modes.launcher.chrome_size import (
             ICON_SIZE_MAX,
             ICON_SIZE_MIN,
@@ -303,234 +305,318 @@ class PreferencesView(BaseView):
             clamp_results_max_height,
         )
 
-        width_adjust = Gtk.Adjustment(
-            value=clamp_popup_width(self.settings.base_width),
-            lower=POPUP_WIDTH_MIN,
-            upper=POPUP_WIDTH_MAX,
-            step_increment=POPUP_WIDTH_STEP,
-            page_increment=POPUP_WIDTH_PAGE,
-        )
-        width_spin = Gtk.SpinButton(adjustment=width_adjust)
-        width_spin.connect("value-changed", self._on_width_changed)
-        self._width_spin = width_spin
-        self._add_setting_row(
-            chrome_box,
-            "Popup width",
-            width_spin,
-            "Width in pixels. Not part of a look. 400-1200, default 600.",
-        )
+        page = Adw.PreferencesPage(title="Appearance", icon_name="preferences-desktop-appearance-symbolic")
+        look_group = Adw.PreferencesGroup(title="Look", description=look_prefs_search_text())
+        look_id = getattr(self.settings, "look_id", "spotlight")
+        current = next((look for look in LOOKS if look["id"] == look_id), LOOKS[0])
+        self._look_combo = add_combo_row(look_group, "Launcher look", current["description"], LOOKS, current["id"])
+        self._look_combo.connect("notify::selected", self._on_look_selected)
 
-        height_adjust = Gtk.Adjustment(
-            value=clamp_results_max_height(self.settings.results_max_height),
-            lower=RESULTS_HEIGHT_MIN,
-            upper=RESULTS_HEIGHT_MAX,
-            step_increment=RESULTS_HEIGHT_STEP,
-            page_increment=RESULTS_HEIGHT_PAGE,
+        self._position_combo = add_combo_row(
+            look_group,
+            "Position",
+            "Center stays put and grows down. Top matches Pop!_OS and KRunner",
+            list(POSITION_ITEMS),
+            self.settings.popup_position,
         )
-        height_spin = Gtk.SpinButton(adjustment=height_adjust)
-        height_spin.connect("value-changed", self._on_int_setting("results_max_height"))
-        self._height_spin = height_spin
-        self._add_setting_row(chrome_box, "Results max height", height_spin, "Scroll after this height.")
-
-        max_adjust = Gtk.Adjustment(
-            value=clamp_max_results(self.settings.max_per_category),
-            lower=MAX_RESULTS_MIN,
-            upper=MAX_RESULTS_MAX,
-            step_increment=MAX_RESULTS_STEP,
-            page_increment=MAX_RESULTS_PAGE,
+        self._density_combo = add_combo_row(
+            look_group, "Row density", "", list(DENSITY_ITEMS), self.settings.row_density
         )
-        max_spin = Gtk.SpinButton(adjustment=max_adjust)
-        max_spin.connect("value-changed", self._on_int_setting("max_per_category"))
-        self._max_spin = max_spin
-        self._add_setting_row(chrome_box, "Max results per category", max_spin, "Cap for each provider group.")
-
-        icon_adjust = Gtk.Adjustment(
-            value=clamp_icon_size(self.settings.icon_size),
-            lower=ICON_SIZE_MIN,
-            upper=ICON_SIZE_MAX,
-            step_increment=ICON_SIZE_STEP,
-            page_increment=ICON_SIZE_PAGE,
+        self._order_combo = add_combo_row(
+            look_group,
+            "Result order",
+            "Windows first matches the Pop!_OS launcher",
+            list(ORDER_ITEMS),
+            self.settings.result_order,
         )
-        icon_spin = Gtk.SpinButton(adjustment=icon_adjust)
-        icon_spin.connect("value-changed", self._on_int_setting("icon_size"))
-        self._icon_spin = icon_spin
-        self._add_setting_row(chrome_box, "Result icon size", icon_spin, "Pixels. Compact density still shrinks this.")
-
-        self._chrome_switches: dict[str, Gtk.Switch] = {}
-        for attr, title, description in (
-            ("show_search_icon", "Search icon", "Magnifying glass in the entry."),
-            ("show_section_headers", "Section headers", "Category labels above result groups."),
-            ("show_result_icons", "Result icons", "Show icons on result rows."),
-            ("show_descriptions", "Result descriptions", "Show the second line on result rows."),
-            ("show_result_numbers", "Number hints", "Show 1-9 and activate with Alt+digit."),
-        ):
-            switch = Gtk.Switch(active=bool(getattr(self.settings, attr)))
-            switch.connect("notify::active", self._on_bool_setting(attr))
-            self._chrome_switches[attr] = switch
-            self._add_setting_row(chrome_box, title, switch, description)
-
-        reset_btn = Gtk.Button(label="Reset")
-        reset_btn.connect("clicked", self._on_reset_look_clicked)
-        self._add_setting_row(
-            chrome_box,
+        add_button_row(
+            look_group,
             "Reset look",
-            reset_btn,
-            "Restore this look's position, density, headers, icons, descriptions, number hints, icon size, and order.",
+            (
+                "Restore this look's position, density, headers, icons, descriptions, number hints, "
+                "icon size, and result order"
+            ),
+            "Reset",
+            self._on_reset_look_clicked,
         )
+        page.add(look_group)
 
-    def _on_chrome_combo(self, attr: str) -> Any:
-        def on_changed(combo: Gtk.ComboBoxText) -> None:
-            if self._updating_chrome:
-                return
-            value = combo.get_active_id()
-            if value:
-                self.settings.save({attr: value})
+        size_group = Adw.PreferencesGroup(title="Size")
+        self._width_spin = add_spin_row(
+            size_group,
+            "Popup width",
+            "Width in pixels",
+            Gtk.Adjustment(
+                value=clamp_popup_width(self.settings.base_width),
+                lower=POPUP_WIDTH_MIN,
+                upper=POPUP_WIDTH_MAX,
+                step_increment=POPUP_WIDTH_STEP,
+                page_increment=POPUP_WIDTH_PAGE,
+            ),
+            self._on_width_changed,
+        )
+        self._height_spin = add_spin_row(
+            size_group,
+            "Results max height",
+            "Scroll after this height",
+            Gtk.Adjustment(
+                value=clamp_results_max_height(self.settings.results_max_height),
+                lower=RESULTS_HEIGHT_MIN,
+                upper=RESULTS_HEIGHT_MAX,
+                step_increment=RESULTS_HEIGHT_STEP,
+                page_increment=RESULTS_HEIGHT_PAGE,
+            ),
+            self._int_spin("results_max_height"),
+        )
+        self._max_spin = add_spin_row(
+            size_group,
+            "Max results per category",
+            "",
+            Gtk.Adjustment(
+                value=clamp_max_results(self.settings.max_per_category),
+                lower=MAX_RESULTS_MIN,
+                upper=MAX_RESULTS_MAX,
+                step_increment=MAX_RESULTS_STEP,
+                page_increment=MAX_RESULTS_PAGE,
+            ),
+            self._int_spin("max_per_category"),
+        )
+        self._icon_spin = add_spin_row(
+            size_group,
+            "Result icon size",
+            "Pixels. Compact density still shrinks this",
+            Gtk.Adjustment(
+                value=clamp_icon_size(self.settings.icon_size),
+                lower=ICON_SIZE_MIN,
+                upper=ICON_SIZE_MAX,
+                step_increment=ICON_SIZE_STEP,
+                page_increment=ICON_SIZE_PAGE,
+            ),
+            self._int_spin("icon_size"),
+        )
+        page.add(size_group)
 
-        return on_changed
+        chrome_group = Adw.PreferencesGroup(title="Chrome")
+        for attr, title, description in (
+            ("show_search_icon", "Search icon", "Magnifying glass in the entry. Hiding it still keeps the query inset"),
+            ("show_section_headers", "Section headers", "Category labels above result groups"),
+            ("show_result_icons", "Result icons", ""),
+            ("show_descriptions", "Result descriptions", ""),
+            ("show_result_numbers", "Number hints", "Show 1-9 and activate with Alt+digit"),
+        ):
+            switch = add_switch_row(
+                chrome_group, title, description, bool(getattr(self.settings, attr)), self._bool_toggle(attr)
+            )
+            self._chrome_switches[attr] = switch
+        page.add(chrome_group)
+        return page
 
-    def _on_int_setting(self, attr: str) -> Any:
-        def on_changed(spin: Gtk.SpinButton) -> None:
-            if self._updating_chrome:
-                return
-            self.settings.save({attr: spin.get_value_as_int()})
+    def _build_features_page(self) -> Adw.PreferencesPage:
+        page = Adw.PreferencesPage(title="Features", icon_name="preferences-system-symbolic")
+        providers = Adw.PreferencesGroup(
+            title="Search providers",
+            description="Turn individual result types on or off",
+        )
+        self._feature_switch(
+            providers,
+            "enable_application_mode",
+            "Applications",
+            "Installed apps ranked by match quality and usage. open firefox, open up firefox, start up firefox, "
+            "fire up firefox, execute firefox, chrome browser, find firefox, search for firefox, and find windows "
+            "firefox still find the app. open source stays a name",
+        )
+        self._app_actions_switch = self._feature_switch(
+            providers,
+            "enable_app_actions",
+            "Application actions",
+            "New window and desktop-file actions for the best app match. Applications must stay enabled",
+        )
+        self._app_actions_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_application_mode))
+        for attr, title, description in _PROVIDER_SWITCHES:
+            self._feature_switch(providers, attr, title, description)
+        self._command_switch = self._feature_switch(
+            providers,
+            "enable_command_run",
+            "Command runner",
+            "Run a PATH or file command with the ! prefix, including ~/.local/bin, Flatpak exports, ~/go/bin, and "
+            "home-relative names such as scripts/deploy. This is not a shell so pipes and redirection stay literal "
+            "arguments. Prefix modes must stay enabled",
+        )
+        self._command_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_prefix_modes))
+        page.add(providers)
 
-        return on_changed
+        extras = Adw.PreferencesGroup(title="Behavior")
+        self._feature_switch(
+            extras,
+            "enable_prefix_modes",
+            "Prefix modes",
+            "= calculator, @ web, # settings, $ windows, . files, ! command. Use a space after # . and $ so "
+            "#ff0000, .bashrc, and $HOME stay normal searches",
+        )
+        self._feature_switch(
+            extras,
+            "enable_empty_suggestions",
+            "Empty-state suggestions",
+            "Show windows and frequent apps before you type",
+        )
+        page.add(extras)
 
-    def _on_reset_look_clicked(self, _: Gtk.Button) -> None:
-        from ulauncher.modes.launcher.looks import apply_look_chrome
+        desktop = Adw.PreferencesGroup(title="Desktop")
+        recent_adjustment = Gtk.Adjustment(value=self.settings.max_recent_apps, lower=0, upper=20, step_increment=1)
+        add_spin_row(
+            desktop,
+            "Number of frequent apps to show",
+            "Pinned near the top of empty-state and app results.",
+            recent_adjustment,
+            self._on_recent_apps_changed,
+        )
+        raise_switch = add_switch_row(
+            desktop,
+            "Switch to application if already running",
+            "Focus a running application instead of launching a duplicate. Works only on X11.",
+            self.settings.raise_if_started,
+            self._on_raise_toggled,
+        )
+        raise_switch.set_sensitive(IS_X11)
+        add_switch_row(
+            desktop,
+            "Include foreign desktop apps",
+            "Show applications hidden for your desktop environment by ignoring desktop filters.",
+            self.settings.disable_desktop_filters,
+            self._on_filters_toggled,
+        )
+        layer_switch = add_switch_row(
+            desktop,
+            "Enable Layer Shell",
+            "Position on Wayland with Layer Shell when the compositor supports it.",
+            self.settings.layer_shell,
+            self._on_layer_toggled,
+        )
+        layer_switch.set_sensitive(not IS_X11)
+        add_entry_row(
+            desktop,
+            "Terminal command",
+            "Override the terminal binary for desktop entries that request a terminal. Leave blank for the default.",
+            self.settings.terminal_command,
+            self._on_terminal_changed,
+        )
+        add_entry_row(
+            desktop,
+            "Jump keys",
+            "Characters used to jump directly to a result. Number hints (Alt+1-9) are the look chrome equivalent.",
+            self.settings.jump_keys,
+            self._on_jump_keys_changed,
+        )
+        page.add(desktop)
+        return page
 
-        apply_look_chrome(self.settings, self.settings.look_id)
+    def _build_web_search_page(self) -> Adw.PreferencesPage:
+        page = Adw.PreferencesPage(title="Web Search", icon_name="web-browser-symbolic")
+        group = Adw.PreferencesGroup(
+            title="Web Search",
+            description=(
+                "Web search appears when nothing else matches, or immediately with the @ prefix. "
+                f"{engine_prefs_search_text()}."
+            ),
+        )
+        self._feature_switch(
+            group,
+            "show_web_search",
+            "Show web search fallback",
+            "When nothing local matches. The @ prefix still searches the web",
+        )
+        self._engine_combo = add_combo_row(group, "Search engine", "", SEARCH_ENGINES, self.settings.web_search_engine)
+        page.add(group)
+        return page
+
+    def _build_about_page(self) -> Adw.PreferencesPage:
+        page = Adw.PreferencesPage(title="About", icon_name="dialog-information-symbolic")
+        group = Adw.PreferencesGroup(title="About")
+        group.add(
+            Adw.ActionRow(
+                title="GoshLauncher",
+                subtitle="A compact GTK4/Adwaita launcher with interchangeable looks.",
+            )
+        )
+        group.add(Adw.ActionRow(title="Looks", subtitle=look_about_subtitle()))
+        group.add(
+            Adw.ActionRow(
+                title="Toolkit",
+                subtitle="GTK 4 and libadwaita 1.1+ (Ubuntu 22.04). Looks follow Spotlight-goshos.",
+            )
+        )
+        group.add(
+            Adw.ActionRow(
+                title="Version",
+                subtitle=f"{version} (Extension API v{api_version})",
+            )
+        )
+        page.add(group)
+        return page
+
+    def _bind_settings_follow(self) -> None:
+        self._prefs_signals = JsonSettingsSignals(self.settings)
+        bind_settings_changed(self._prefs_signals, "look_id", self._look_combo, self._follow_look_combo)
+        bind_settings_combo(self._position_combo, self._prefs_signals, "popup_position", list(POSITION_ITEMS))
+        bind_settings_combo(self._density_combo, self._prefs_signals, "row_density", list(DENSITY_ITEMS))
+        bind_settings_combo(self._order_combo, self._prefs_signals, "result_order", list(ORDER_ITEMS))
+        bind_settings_combo(self._engine_combo, self._prefs_signals, "web_search_engine", SEARCH_ENGINES)
+        bind_settings_changed(
+            self._prefs_signals, "enable_application_mode", self._app_actions_switch, self._sync_dependent_switches
+        )
+        bind_settings_changed(
+            self._prefs_signals, "enable_prefix_modes", self._command_switch, self._sync_dependent_switches
+        )
+        for attr, switch in self._chrome_switches.items():
+            bind_settings_changed(self._prefs_signals, attr, switch, self._sync_chrome_widgets)
+        for attr, spin in (
+            ("base_width", self._width_spin),
+            ("results_max_height", self._height_spin),
+            ("max_per_category", self._max_spin),
+            ("icon_size", self._icon_spin),
+        ):
+            bind_settings_changed(self._prefs_signals, attr, spin, self._sync_chrome_widgets)
+        for attr, switch in self._feature_switches.items():
+            bind_settings_changed(self._prefs_signals, attr, switch, self._sync_feature_switches)
+        bind_settings_changed(self._prefs_signals, "hotkey_show_app", self._hotkey_label, self._refresh_hotkey_label)
+
+    def _follow_look_combo(self) -> None:
+        self._updating_chrome = True
+        try:
+            self._select_combo(self._look_combo, LOOKS, self.settings.look_id)
+            look = next((item for item in LOOKS if item["id"] == self.settings.look_id), LOOKS[0])
+            self._look_combo.set_subtitle(look["description"])
+        finally:
+            self._updating_chrome = False
         self._sync_chrome_widgets()
 
     def _sync_chrome_widgets(self) -> None:
         self._updating_chrome = True
         try:
-            if hasattr(self, "_position_combo"):
-                self._position_combo.set_active_id(self.settings.popup_position)
-            if hasattr(self, "_density_combo"):
-                self._density_combo.set_active_id(self.settings.row_density)
-            if hasattr(self, "_order_combo"):
-                self._order_combo.set_active_id(self.settings.result_order)
-            if hasattr(self, "_height_spin"):
-                self._height_spin.set_value(self.settings.results_max_height)
-            if hasattr(self, "_max_spin"):
-                self._max_spin.set_value(self.settings.max_per_category)
-            if hasattr(self, "_icon_spin"):
-                self._icon_spin.set_value(self.settings.icon_size)
+            self._select_combo(self._position_combo, list(POSITION_ITEMS), self.settings.popup_position)
+            self._select_combo(self._density_combo, list(DENSITY_ITEMS), self.settings.row_density)
+            self._select_combo(self._order_combo, list(ORDER_ITEMS), self.settings.result_order)
             from ulauncher.modes.launcher.chrome_size import clamp_popup_width
 
-            width = clamp_popup_width(self.settings.base_width)
-            if hasattr(self, "_width_spin"):
-                self._width_spin.set_value(width)
-            for attr, switch in getattr(self, "_chrome_switches", {}).items():
-                switch.set_active(bool(getattr(self.settings, attr)))
+            self._height_spin.set_value(self.settings.results_max_height)
+            self._max_spin.set_value(self.settings.max_per_category)
+            self._icon_spin.set_value(self.settings.icon_size)
+            self._width_spin.set_value(clamp_popup_width(self.settings.base_width))
+            for attr, switch in self._chrome_switches.items():
+                desired = bool(getattr(self.settings, attr))
+                if switch.get_active() != desired:
+                    switch.set_active(desired)
         finally:
             self._updating_chrome = False
-
-    def unbind_settings(self) -> None:
-        box = getattr(self, "_prefs_signals", None)
-        if box is not None:
-            box.disconnect_all()
-
-    def _bind_settings_follow(self) -> None:
-        from ulauncher.modes.launcher.prefs_combo import (
-            DENSITY_ITEMS,
-            ORDER_ITEMS,
-            POSITION_ITEMS,
-            JsonSettingsSignals,
-            bind_settings_changed,
-        )
-        from ulauncher.modes.launcher.web import SEARCH_ENGINES
-
-        self._prefs_signals = JsonSettingsSignals(self.settings)
-        if hasattr(self, "_look_combo"):
-            bind_settings_changed(self._prefs_signals, "look_id", self._look_combo, self._follow_look_combo)
-        if hasattr(self, "_position_combo"):
-            bind_settings_changed(
-                self._prefs_signals,
-                "popup_position",
-                self._position_combo,
-                lambda: self._follow_combo(self._position_combo, list(POSITION_ITEMS), self.settings.popup_position),
-            )
-        if hasattr(self, "_density_combo"):
-            bind_settings_changed(
-                self._prefs_signals,
-                "row_density",
-                self._density_combo,
-                lambda: self._follow_combo(self._density_combo, list(DENSITY_ITEMS), self.settings.row_density),
-            )
-        if hasattr(self, "_order_combo"):
-            bind_settings_changed(
-                self._prefs_signals,
-                "result_order",
-                self._order_combo,
-                lambda: self._follow_combo(self._order_combo, list(ORDER_ITEMS), self.settings.result_order),
-            )
-        if hasattr(self, "_engine_combo"):
-            bind_settings_changed(
-                self._prefs_signals,
-                "web_search_engine",
-                self._engine_combo,
-                lambda: self._follow_combo(self._engine_combo, SEARCH_ENGINES, self.settings.web_search_engine),
-            )
-        if hasattr(self, "_app_actions_switch"):
-            bind_settings_changed(
-                self._prefs_signals,
-                "enable_application_mode",
-                self._app_actions_switch,
-                self._sync_dependent_switches,
-            )
-        if hasattr(self, "_command_switch"):
-            bind_settings_changed(
-                self._prefs_signals, "enable_prefix_modes", self._command_switch, self._sync_dependent_switches
-            )
-        for attr, switch in getattr(self, "_chrome_switches", {}).items():
-            bind_settings_changed(self._prefs_signals, attr, switch, self._sync_chrome_widgets)
-        for attr, spin in (
-            ("base_width", getattr(self, "_width_spin", None)),
-            ("results_max_height", getattr(self, "_height_spin", None)),
-            ("max_per_category", getattr(self, "_max_spin", None)),
-            ("icon_size", getattr(self, "_icon_spin", None)),
-        ):
-            if spin is not None:
-                bind_settings_changed(self._prefs_signals, attr, spin, self._sync_chrome_widgets)
-        for attr, switch in getattr(self, "_feature_switches", {}).items():
-            bind_settings_changed(self._prefs_signals, attr, switch, self._sync_feature_switches)
-        if hasattr(self, "_hotkey_label"):
-            bind_settings_changed(
-                self._prefs_signals, "hotkey_show_app", self._hotkey_label, self._refresh_hotkey_label
-            )
-
-    def _follow_combo(self, combo: Gtk.ComboBoxText, items: list, current_id: str | None) -> None:
-        self._updating_chrome = True
-        try:
-            self._select_combo_id(combo, items, current_id)
-        finally:
-            self._updating_chrome = False
-
-    def _follow_look_combo(self) -> None:
-        from ulauncher.modes.launcher.looks import LOOKS
-
-        self._updating_chrome = True
-        try:
-            if hasattr(self, "_look_combo"):
-                self._select_combo_id(self._look_combo, LOOKS, self.settings.look_id)
-        finally:
-            self._updating_chrome = False
-        self._sync_chrome_widgets()
 
     def _sync_dependent_switches(self) -> None:
-        from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
-
-        if hasattr(self, "_app_actions_switch"):
-            self._app_actions_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_application_mode))
-        if hasattr(self, "_command_switch"):
-            self._command_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_prefix_modes))
+        self._app_actions_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_application_mode))
+        self._command_switch.set_sensitive(dependent_row_sensitive(self.settings.enable_prefix_modes))
 
     def _sync_feature_switches(self) -> None:
         self._updating_chrome = True
         try:
-            for attr, switch in getattr(self, "_feature_switches", {}).items():
+            for attr, switch in self._feature_switches.items():
                 desired = bool(getattr(self.settings, attr))
                 if switch.get_active() != desired:
                     switch.set_active(desired)
@@ -538,237 +624,46 @@ class PreferencesView(BaseView):
             self._updating_chrome = False
         self._sync_dependent_switches()
 
-    def _add_applications_section(self, parent: Gtk.Box) -> None:
-        """Add applications settings section"""
-        applications_box = self._create_section_container(parent, "Applications")
-
-        # Enable application mode
-        app_mode_switch = Gtk.Switch(active=self.settings.enable_application_mode)
-        app_mode_switch.connect("notify::active", self._on_app_mode_toggled)
-        self._app_mode_switch = app_mode_switch
-        self._feature_switches["enable_application_mode"] = app_mode_switch
-        desc = "Include desktop applications alongside shortcuts and extensions in search results."
-        self._add_setting_row(applications_box, "Include applications in search", app_mode_switch, desc)
-
-        # Raise if started
-        raise_switch = Gtk.Switch(active=self.settings.raise_if_started, sensitive=IS_X11)
-        raise_switch.connect("notify::active", self._on_raise_toggled)
-        desc = "Focus an already running application instead of launching a duplicate instance. Works only on X11."
-
-        self._add_setting_row(applications_box, "Switch to application if already running", raise_switch, desc)
-
-        # Top apps
-        recent_adjustment = Gtk.Adjustment(value=self.settings.max_recent_apps, lower=0, upper=20, step_increment=1)
-        recent_spin = Gtk.SpinButton(adjustment=recent_adjustment)
-        recent_spin.connect("value-changed", self._on_recent_apps_changed)
-        desc = "Control how many frequently used applications remain pinned near the top of the results."
-        self._add_setting_row(applications_box, "Number of frequent apps to show", recent_spin, desc)
-
-    def _add_launcher_section(self, parent: Gtk.Box) -> None:
-        """Spotlight-goshos provider toggles, prefixes, web engine, and empty-state."""
-        launcher_box = self._create_section_container(parent, "Launcher features")
-
-        prefix_switch = Gtk.Switch(active=self.settings.enable_prefix_modes)
-        prefix_switch.connect("notify::active", self._on_prefix_modes_toggled)
-        self._prefix_switch = prefix_switch
-        self._feature_switches["enable_prefix_modes"] = prefix_switch
-        self._add_setting_row(
-            launcher_box,
-            "Prefix modes",
-            prefix_switch,
-            "Jump to one provider with = calc, @ web, # settings, $ windows, . recents, ! command. "
-            "#ff0000, $HOME, and .bashrc stay normal queries.",
-        )
-
-        empty_switch = Gtk.Switch(active=self.settings.enable_empty_suggestions)
-        empty_switch.connect("notify::active", self._on_bool_setting("enable_empty_suggestions"))
-        self._feature_switches["enable_empty_suggestions"] = empty_switch
-        self._add_setting_row(
-            launcher_box,
-            "Empty-state suggestions",
-            empty_switch,
-            "When the query is empty, show frequent apps and open windows (windows first for Pop!_OS look).",
-        )
-
-        from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
-
-        app_actions_switch = Gtk.Switch(
-            active=self.settings.enable_app_actions,
-            sensitive=dependent_row_sensitive(self.settings.enable_application_mode),
-        )
-        app_actions_switch.connect("notify::active", self._on_bool_setting("enable_app_actions"))
-        self._app_actions_switch = app_actions_switch
-        self._feature_switches["enable_app_actions"] = app_actions_switch
-        self._add_setting_row(
-            launcher_box,
-            "Application actions",
-            app_actions_switch,
-            "New window and desktop-file actions for the best app match. Applications must stay enabled.",
-        )
-
-        for attr, title, description in (
-            (
-                "enable_url_open",
-                "Open URLs",
-                "Detect domains, IPs, and schemes such as https, sftp, mailto, and magnet.",
-            ),
-            (
-                "enable_path_open",
-                "Open paths",
-                "Open ~/…, ./…, and absolute filesystem paths, including Open in Terminal.",
-            ),
-            ("enable_places", "XDG folders", "Match Home, Documents, Downloads, and the other user directories."),
-            ("enable_bookmarks", "GTK bookmarks", "Search ~/.config/gtk-3.0/bookmarks and gtk-4.0/bookmarks."),
-            ("enable_calculator", "Calculator", "Recursive-descent math. Bare 42 is not math unless you type =42."),
-            (
-                "enable_unit_convert",
-                "Unit conversion",
-                "Convert length, mass, temperature, data size, and related units.",
-            ),
-            ("enable_color_hex", "Colors", "Copy hex, rgb, hsl, hwb, and CSS color names."),
-            ("enable_time_date", "Clock", "Copy the local time or date for queries such as time, now, or tomorrow."),
-            ("enable_window_search", "Windows", "Switch, close, or kill open windows, including workspace N."),
-            ("enable_system_actions", "System actions", "Lock, suspend, restart, power off, log out, and screenshots."),
-            ("enable_settings_search", "Settings panels", "Open GNOME Settings panels such as Wi-Fi or Displays."),
-            ("enable_recent_files", "Recent files", "Search recently-used.xbel entries."),
-            (
-                "show_web_search",
-                "Web search fallback",
-                "Offer a web search when nothing local matches. @ still searches.",
-            ),
-        ):
-            switch = Gtk.Switch(active=bool(getattr(self.settings, attr)))
-            switch.connect("notify::active", self._on_bool_setting(attr))
-            self._feature_switches[attr] = switch
-            self._add_setting_row(launcher_box, title, switch, description)
-
-        from ulauncher.modes.launcher.prefs_combo import dependent_row_sensitive
-
-        self._command_switch = Gtk.Switch(
-            active=self.settings.enable_command_run,
-            sensitive=dependent_row_sensitive(self.settings.enable_prefix_modes),
-        )
-        self._command_switch.connect("notify::active", self._on_bool_setting("enable_command_run"))
-        self._feature_switches["enable_command_run"] = self._command_switch
-        self._add_setting_row(
-            launcher_box,
-            "Command runner",
-            self._command_switch,
-            "Run argv with the ! prefix. Off by default. Insensitive while prefix modes are off.",
-        )
-
-        engine_combo = Gtk.ComboBoxText()
-        from ulauncher.modes.launcher.web import SEARCH_ENGINES, engine_prefs_search_text
-
-        for engine in SEARCH_ENGINES:
-            engine_combo.append(engine["id"], engine["label"])
-        self._select_combo_id(engine_combo, SEARCH_ENGINES, self.settings.web_search_engine)
-        engine_combo.connect("changed", self._on_web_engine_changed)
-        self._engine_combo = engine_combo
-        self._add_setting_row(
-            launcher_box,
-            "Web search engine",
-            engine_combo,
-            f"Engine used for @ queries and the web fallback. {engine_prefs_search_text()}.",
-        )
-
-        order_combo = Gtk.ComboBoxText()
-        order_combo.append("default", "Apps first")
-        order_combo.append("windows-first", "Windows first (Pop!_OS)")
-        order_combo.set_active_id(self.settings.result_order)
-        order_combo.connect("changed", self._on_result_order_changed)
-        self._order_combo = order_combo
-        self._add_setting_row(
-            launcher_box,
-            "Result order",
-            order_combo,
-            "Pop!_OS look also forces windows-first. Other looks keep apps first unless you override here.",
-        )
-
-    def _on_bool_setting(self, attr: str) -> Any:
-        def on_toggle(switch: Gtk.Switch, _: Any) -> None:
-            if self._updating_chrome:
-                return
-            self.settings.save({attr: switch.get_active()})
-
-        return on_toggle
-
-    def _on_prefix_modes_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        enabled = switch.get_active()
-        self.settings.save({"enable_prefix_modes": enabled})
-        self._sync_dependent_switches()
-
-    def _on_web_engine_changed(self, combo: Gtk.ComboBoxText) -> None:
+    def _on_look_selected(self, combo: Adw.ComboRow, *_args: Any) -> None:
         if self._updating_chrome:
             return
-        engine_id = combo.get_active_id()
-        if engine_id:
-            self.settings.save({"web_search_engine": engine_id})
+        index = int(combo.get_selected())
+        if index < 0 or index >= len(LOOKS):
+            return
+        look = LOOKS[index]
+        combo.set_subtitle(look["description"])
+        from ulauncher.modes.launcher.looks import apply_look_chrome, should_apply_look
 
-    def _on_result_order_changed(self, combo: Gtk.ComboBoxText) -> None:
+        if not should_apply_look(self.settings.look_id, look["id"]):
+            return
+        apply_look_chrome(self.settings, look["id"])
+        self._sync_chrome_widgets()
+
+    def _on_reset_look_clicked(self, _: Gtk.Button) -> None:
+        from ulauncher.modes.launcher.looks import apply_look_chrome
+
+        apply_look_chrome(self.settings, self.settings.look_id)
+        self._sync_chrome_widgets()
+
+    def _on_width_changed(self, spin: Gtk.SpinButton) -> None:
         if self._updating_chrome:
             return
-        order = combo.get_active_id()
-        if order:
-            self.settings.save({"result_order": order})
+        from ulauncher.modes.launcher.chrome_size import POPUP_WIDTH_MAX, POPUP_WIDTH_MIN
 
-    def _add_advanced_section(self, parent: Gtk.Box) -> None:
-        """Add advanced settings section"""
-        advanced_box = self._create_section_container(parent, "Advanced")
+        width = spin.get_value_as_int()
+        if POPUP_WIDTH_MIN <= width <= POPUP_WIDTH_MAX:
+            self.settings.save({"base_width": width})
 
-        # Desktop filters
-        filters_switch = Gtk.Switch(active=self.settings.disable_desktop_filters)
-        filters_switch.connect("notify::active", self._on_filters_toggled)
-        desc = "Show applications that are hidden for your desktop environment by ignoring desktop filters."
-        self._add_setting_row(advanced_box, "Include foreign desktop apps", filters_switch, desc)
+    def _on_screen_changed(self, combo: Adw.ComboRow, *_args: Any) -> None:
+        if self._updating_chrome:
+            return
+        index = int(combo.get_selected())
+        items = self._screen_items
+        if 0 <= index < len(items):
+            self.settings.save({"render_on_screen": items[index]["id"]})
 
-        # Window shadow
-        shadow_adjustment = Gtk.Adjustment(value=self.settings.window_shadow, lower=0, upper=25, step_increment=1)
-        shadow_spin = Gtk.SpinButton(adjustment=shadow_adjustment)
-        shadow_spin.connect("value-changed", self._on_shadow_changed)
-        desc = (
-            "The window shadow size. Set to 0 to disable. "
-            "Shadows are also disabled if we detect your window manager cannot support them."
-        )
-        self._add_setting_row(advanced_box, "Window shadow size", shadow_spin, desc)
-
-        # GTK Layer Shell
-        layer_switch = Gtk.Switch(active=self.settings.layer_shell, sensitive=not IS_X11)
-        layer_switch.connect("notify::active", self._on_layer_toggled)
-        desc = (
-            "Use Layer Shell for positioning on Wayland (when supported). "
-            "Recommended unless your desktop handles Wayland positioning separately (Hyprland)"
-        )
-        self._add_setting_row(advanced_box, "Enable Layer Shell", layer_switch, desc)
-
-        # Jump keys
-        jump_entry = Gtk.Entry(text=self.settings.jump_keys, width_chars=50)
-        jump_entry.connect("changed", self._on_jump_keys_changed)
-        desc = "Configure the characters used for jumping directly to a result with modifier shortcuts."
-        self._add_setting_row(advanced_box, "Jump keys", jump_entry, desc, full_width=True)
-
-        # Terminal command
-        terminal_entry = Gtk.Entry(text=self.settings.terminal_command, width_chars=50)
-        terminal_entry.connect("changed", self._on_terminal_changed)
-        desc = (
-            "Override the terminal binary for desktop entries that request a terminal. Leave blank to use the default."
-        )
-        self._add_setting_row(advanced_box, "Terminal command", terminal_entry, desc, full_width=True)
-
-    def _add_tray_icon_row(self, parent: Gtk.Box) -> None:
-        # Placed next to "Run in background" because the tray icon is only effective while persistent.
-        self._tray_switch = Gtk.Switch(active=self.settings.show_tray_icon, sensitive=self.settings.is_persistent())
-        self._tray_switch.connect("notify::active", self._on_tray_toggled)
-        desc = (
-            "Display a tray icon for quick actions. Only available while Ulauncher is set to "
-            "run in the background. Also requires AppIndicator3 or XApp on X11."
-        )
-        self._add_setting_row(parent, "Show tray icon", self._tray_switch, desc)
-
-    # Event handlers
     def _on_autostart_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         is_enabled = switch.get_active()
-        # Skip if already in sync - notably when set_active() below re-fires this handler.
         if is_enabled == self.autostart_pref.status().is_enabled:
             return
         try:
@@ -780,14 +675,56 @@ class PreferencesView(BaseView):
         self._tray_switch.set_sensitive(is_enabled)
         events.emit("app:toggle_hold", is_enabled)
 
+    def _on_keep_alive_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        is_enabled = switch.get_active()
+        self.settings.save({"keep_alive": is_enabled})
+        self._tray_switch.set_sensitive(is_enabled)
+        events.emit("app:toggle_hold", is_enabled)
+
+    def _on_tray_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        is_enabled = switch.get_active()
+        self.settings.save({"show_tray_icon": is_enabled})
+        events.emit("app:toggle_tray_icon", is_enabled)
+
+    def _on_auto_resume_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        if self._updating_chrome:
+            return
+        self.settings.save({"auto_resume": switch.get_active()})
+
+    def _on_close_focus_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        if self._updating_chrome:
+            return
+        self.settings.save({"close_on_focus_out": switch.get_active()})
+
+    def _on_grab_mouse_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        if self._updating_chrome:
+            return
+        self.settings.save({"grab_mouse_pointer": switch.get_active()})
+
+    def _on_raise_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        self.settings.save({"raise_if_started": switch.get_active()})
+
+    def _on_filters_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        self.settings.save({"disable_desktop_filters": switch.get_active()})
+
+    def _on_layer_toggled(self, switch: Gtk.Switch, _: Any) -> None:
+        self.settings.save({"layer_shell": switch.get_active()})
+
+    def _on_recent_apps_changed(self, spin: Gtk.SpinButton) -> None:
+        self.settings.save({"max_recent_apps": spin.get_value_as_int()})
+
+    def _on_jump_keys_changed(self, entry: Gtk.Entry) -> None:
+        self.settings.save({"jump_keys": entry.get_text()})
+
+    def _on_terminal_changed(self, entry: Gtk.Entry) -> None:
+        self.settings.save({"terminal_command": entry.get_text()})
+
     def _on_hotkey_clicked(self, _: Gtk.Button) -> None:
         HotkeyController.show_dialog()
 
     def _refresh_hotkey_label(self) -> None:
         from ulauncher.modes.launcher.shortcut import shortcut_row_label
 
-        if not hasattr(self, "_hotkey_label"):
-            return
         accel = HotkeyController.current_accelerator()
         self._hotkey_label.set_text(shortcut_row_label([accel] if accel else [], self._hotkey_capturing))
 
@@ -798,19 +735,19 @@ class PreferencesView(BaseView):
             return
         self._hotkey_capturing = True
         self._refresh_hotkey_label()
-        self._hotkey_label.grab_focus()
+        self._shortcut_row.grab_focus()
 
-    def _on_hotkey_capture_focus_out(self) -> None:
+    def _on_hotkey_focus(self, row: Adw.ActionRow, *_args: Any) -> None:
         from ulauncher.modes.launcher.shortcut import next_shortcut_capture_action
 
+        if row.has_focus() or not self._hotkey_capturing:
+            return
         if next_shortcut_capture_action(self._hotkey_capturing, "focus-out") != "cancel":
             return
         self._hotkey_capturing = False
         self._refresh_hotkey_label()
 
     def _on_hotkey_capture_key(self, _controller: Any, keyval: int, _keycode: int, state: int) -> bool:
-        from gi.repository import Gdk
-
         from ulauncher.modes.launcher.shortcut import (
             build_accelerator,
             modifiers_from_mask,
@@ -853,75 +790,3 @@ class PreferencesView(BaseView):
         self._hotkey_capturing = False
         HotkeyController.apply_accelerator(DEFAULT_FALLBACK)
         self._refresh_hotkey_label()
-
-    def _on_look_changed(self, combo: Gtk.ComboBoxText) -> None:
-        if self._updating_chrome:
-            return
-        look_id = combo.get_active_id()
-        from ulauncher.modes.launcher.looks import apply_look_chrome, should_apply_look
-
-        # picking the same look must not rewrite chrome; Reset look does that
-        if not should_apply_look(self.settings.look_id, look_id or ""):
-            return
-        apply_look_chrome(self.settings, look_id)
-        self._sync_chrome_widgets()
-
-    def _on_screen_changed(self, combo: Gtk.ComboBoxText) -> None:
-        screen = combo.get_active_id()
-        if screen:
-            self.settings.save({"render_on_screen": screen})
-
-    def _on_auto_resume_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"auto_resume": switch.get_active()})
-
-    def _on_close_focus_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"close_on_focus_out": switch.get_active()})
-
-    def _on_grab_mouse_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"grab_mouse_pointer": switch.get_active()})
-
-    def _on_app_mode_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"enable_application_mode": switch.get_active()})
-        self._sync_dependent_switches()
-
-    def _on_raise_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"raise_if_started": switch.get_active()})
-
-    def _on_width_changed(self, spin: Gtk.SpinButton) -> None:
-        if self._updating_chrome:
-            return
-        from ulauncher.modes.launcher.chrome_size import POPUP_WIDTH_MAX, POPUP_WIDTH_MIN
-
-        width = spin.get_value_as_int()
-        if POPUP_WIDTH_MIN <= width <= POPUP_WIDTH_MAX:
-            self.settings.save({"base_width": width})
-
-    def _on_recent_apps_changed(self, spin: Gtk.SpinButton) -> None:
-        count = spin.get_value_as_int()
-        self.settings.save({"max_recent_apps": count})
-
-    def _on_shadow_changed(self, spin: Gtk.SpinButton) -> None:
-        self.settings.save({"window_shadow": spin.get_value_as_int()})
-
-    def _on_layer_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"layer_shell": switch.get_active()})
-
-    def _on_tray_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        is_enabled = switch.get_active()
-        self.settings.save({"show_tray_icon": is_enabled})
-        events.emit("app:toggle_tray_icon", is_enabled)
-
-    def _on_filters_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        self.settings.save({"disable_desktop_filters": switch.get_active()})
-
-    def _on_keep_alive_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        is_enabled = switch.get_active()
-        self.settings.save({"keep_alive": is_enabled})
-        self._tray_switch.set_sensitive(is_enabled)
-        events.emit("app:toggle_hold", is_enabled)
-
-    def _on_jump_keys_changed(self, entry: Gtk.Entry) -> None:
-        self.settings.save({"jump_keys": entry.get_text()})
-
-    def _on_terminal_changed(self, entry: Gtk.Entry) -> None:
-        self.settings.save({"terminal_command": entry.get_text()})

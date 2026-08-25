@@ -230,15 +230,25 @@ def look_ids() -> list[str]:
     return [look["id"] for look in LOOKS]
 
 
-def look_prefs_search_text() -> str:
-    # goshos prefs/appearancePage.js: search matches the group description, not combo rows.
-    # Walker / COSMIC / Dark Adwaita are aliases that must appear as those words.
+def look_display_names(*, search_aliases: bool = False) -> list[str]:
     aliases = {
         "omarchy": "Omarchy (Walker)",
         "popos": "Pop!_OS (COSMIC)",
-        "gnome": "GNOME (Dark Adwaita)",
     }
-    names = [aliases.get(look["id"], look["title"]) for look in LOOKS]
+    if search_aliases:
+        aliases["gnome"] = "GNOME (Dark Adwaita)"
+    return [aliases.get(look["id"], look["title"]) for look in LOOKS]
+
+
+def look_about_subtitle() -> str:
+    """goshos prefs/aboutPage.js Looks row — Walker/COSMIC aliases, GNOME stays GNOME."""
+    return ", ".join(look_display_names())
+
+
+def look_prefs_search_text() -> str:
+    # goshos prefs/appearancePage.js: search matches the group description, not combo rows.
+    # Walker / COSMIC / Dark Adwaita are aliases that must appear as those words.
+    names = look_display_names(search_aliases=True)
     listed = ", ".join(names[:-1]) + f", and {names[-1]}"
     return (
         f"{listed}. A look sets colors, position, density, headers, number hints, "
