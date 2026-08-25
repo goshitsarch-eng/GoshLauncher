@@ -68,6 +68,11 @@ enable = [
 extend-ignore-re = [
   # prevent correcting gir to git
   "gir1.2",
+  # goshos word-prefix needles: bui in builder, ome in /home
+  '"bui"',
+  '"ome"',
+  # spoken ordinals 1st/2nd/3rd/4th in calculator.js
+  "st\\|nd\\|rd\\|th",
 ]
 
 [tool.typos.files]
