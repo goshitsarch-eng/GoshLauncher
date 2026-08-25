@@ -139,10 +139,13 @@ class UlauncherCore:
         self._mode = None
         self.query = Query(None, query_str)
 
-        # keyword match
+        # keyword match — skip leftover ShortcutMode/ExtensionMode so `g firefox`
+        # stays Spotlight-goshos search instead of a stock Google shortcut.
         keyword, argument = query_str.split(" ", 1) if " " in query_str else (query_str, None)
 
         for mode, keywords in self._keyword_cache.items():
+            if is_legacy_trigger_mode(mode):
+                continue
             if keyword in keywords and argument is not None:
                 self._mode = mode
                 self.query = Query(keyword, argument)
@@ -187,7 +190,8 @@ class UlauncherCore:
         return hits[:limit]
 
     def _should_merge_legacy(self, _valid_mode: Mode | None) -> bool:
-        # goshos has no keyword-shortcut or extension rows in typed search
+        # goshos has no keyword-shortcut or extension rows in typed search.
+        # set_query also skips those modes so leftover keywords cannot steal the query.
         return False
 
     def _merge_legacy_into_launcher(self, results: list[Result]) -> list[Result]:

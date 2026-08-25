@@ -145,6 +145,23 @@ def test_set_query_does_not_treat_g_as_a_keyword_without_shortcuts(mocker: Mocke
     assert str(core.query) == "g firefox"
 
 
+def test_set_query_does_not_let_shortcut_keywords_steal_goshos_search(mocker: MockerFixture) -> None:
+    class ShortcutMode:
+        def matches_query_str(self, _query_str: str) -> bool:
+            return False
+
+    core = UlauncherCore()
+    launcher = LauncherMode()
+    shortcut_mode = ShortcutMode()
+    mocker.patch("ulauncher.core.get_modes", return_value=[launcher, shortcut_mode])
+    mocker.patch.object(launcher, "handle_query")
+    core._keyword_cache[shortcut_mode]["g"] = KeywordTrigger(name="Google", keyword="g")  # type: ignore[index]
+    core.set_query("g firefox", MagicMock())
+    assert isinstance(core._mode, LauncherMode)
+    assert core.query.keyword is None
+    assert str(core.query) == "g firefox"
+
+
 def test_launcher_paint_skips_legacy_merge_for_keyword_queries(mocker: MockerFixture) -> None:
     class ShortcutMode:
         pass

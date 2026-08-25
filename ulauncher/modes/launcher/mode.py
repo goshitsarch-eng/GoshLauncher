@@ -140,8 +140,8 @@ class LauncherMode(Mode):
         settings = Settings.load()
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []
-        from ulauncher.modes.launcher.apps import app_row_description, app_window_count, home_apps
-        from ulauncher.modes.launcher.windows import cached_windows, ensure_windows
+        from ulauncher.modes.launcher.apps import home_apps
+        from ulauncher.modes.launcher.windows import cached_windows
 
         chrome = chrome_from_settings(settings)
         flags = flags_from_settings(settings)
@@ -151,40 +151,21 @@ class LauncherMode(Mode):
         # max_recent_apps is leftover Ulauncher JSON; goshos caps both empty-state
         # lists with the same max-results as search categories.
         need_windows = bool(flags.get("windows") or flags.get("apps"))
-        open_windows = cached_windows() if need_windows else []
+        open_windows: list[Any] = safe_provider_results(cached_windows) if need_windows else []
         if need_windows:
-            ensure_windows(lambda: _events.emit("app:reload_query"))
+            safe_provider_results(_watch_empty_windows)
         app_rows: list[dict[str, Any]] = []
         if flags.get("apps"):
-            for app in home_apps(limit):
-                app_rows.append(
-                    {
-                        "kind": "app",
-                        "title": app.name,
-                        "description": app_row_description(app_window_count(app, open_windows)),
-                        "icon": app.icon,
-                        "app_id": app.app_id,
-                    }
-                )
+            for app in safe_provider_results(lambda: list(home_apps(limit))):
+                row = _empty_app_row(app, open_windows)
+                if row is not None:
+                    app_rows.append(row)
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
             for win in open_windows[:limit]:
-                if win.sticky or win.desktop < 0:
-                    workspace = "On all workspaces"
-                else:
-                    workspace = f"Workspace {win.desktop + 1}"
-                win_rows.append(
-                    {
-                        "kind": "window",
-                        "title": win.title or win.wm_class,
-                        "description": workspace,
-                        "icon": "focus-windows-symbolic",
-                        "wid": win.wid,
-                        "pid": win.pid,
-                        "wm_class": win.wm_class,
-                        "window_kind": "focus",
-                    }
-                )
+                row = _empty_window_row(win)
+                if row is not None:
+                    win_rows.append(row)
         merged = merge_empty_suggestions(order, win_rows, app_rows, limit)
         return list(self._materialize(merged, chrome, headers=False))
 
@@ -656,6 +637,48 @@ class LauncherMode(Mode):
                 activatable=activatable,
                 actions=actions,
             )
+
+
+def _watch_empty_windows() -> list[Any]:
+    from ulauncher.modes.launcher.windows import ensure_windows
+
+    ensure_windows(lambda: _events.emit("app:reload_query"))
+    return []
+
+
+def _empty_app_row(app: Any, open_windows: Sequence[Any]) -> dict[str, Any] | None:
+    from ulauncher.modes.launcher.apps import app_row_description, app_window_count
+
+    try:
+        return {
+            "kind": "app",
+            "title": app.name,
+            "description": app_row_description(app_window_count(app, open_windows)),
+            "icon": app.icon,
+            "app_id": app.app_id,
+        }
+    except Exception:
+        return None
+
+
+def _empty_window_row(win: Any) -> dict[str, Any] | None:
+    try:
+        if win.sticky or win.desktop < 0:
+            workspace = "On all workspaces"
+        else:
+            workspace = f"Workspace {win.desktop + 1}"
+        return {
+            "kind": "window",
+            "title": win.title or win.wm_class,
+            "description": workspace,
+            "icon": "focus-windows-symbolic",
+            "wid": win.wid,
+            "pid": win.pid,
+            "wm_class": win.wm_class,
+            "window_kind": "focus",
+        }
+    except Exception:
+        return None
 
 
 def _row_from_uri(hit: dict[str, Any], score: int, kind: str | None = None) -> dict[str, Any] | None:

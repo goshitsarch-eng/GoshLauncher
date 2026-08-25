@@ -265,6 +265,82 @@ def test_empty_suggestions_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> N
     assert list(LauncherMode().get_home_results(6)) == []
 
 
+def test_empty_state_isolates_windows_from_frequent_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "spotlight"
+    settings.applied_look = "spotlight"
+    settings.result_order = "default"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+
+    def boom_apps(_limit: int) -> list:
+        msg = "desktop list failed"
+        raise RuntimeError(msg)
+
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")],
+        [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.home_apps", boom_apps)
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["window"]
+
+    def boom_windows() -> list:
+        msg = "window list failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.apps.home_apps",
+        lambda limit: [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")][:limit],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", boom_windows)
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["app"]
+
+
+def test_empty_state_skips_one_vanished_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    class Vanished:
+        wid = "0xbad"
+        wm_class = "gone"
+        desktop = 0
+        pid = 1
+        sticky = False
+
+        @property
+        def title(self) -> str:
+            msg = "window closed"
+            raise RuntimeError(msg)
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Notes", icon="notes", app_id="notes.desktop")],
+        [
+            Vanished(),
+            WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11),
+        ],
+    )
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["window", "app"]
+    assert [row.name for row in results] == ["Mozilla Firefox", "Notes"]
+
+
 def test_settings_row_copy_matches_goshos() -> None:
     results = _handle("# wifi")
     settings_row = next(row for row in results if getattr(row, "kind", "") == "settings")
