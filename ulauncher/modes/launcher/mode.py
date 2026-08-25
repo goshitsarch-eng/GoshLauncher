@@ -754,6 +754,8 @@ def _empty_from_window_hit(hit: Mapping[str, Any]) -> dict[str, Any] | None:
             "atspi_ref": hit.get("atspi_ref") or "",
             "window_title": hit.get("window_title") or title,
             "window_kind": "focus",
+            "id": hit.get("id") or hit.get("wid") or "",
+            "payload": hit.get("payload") or hit.get("wid") or "",
         }
     except Exception:
         return None

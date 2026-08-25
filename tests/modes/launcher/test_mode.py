@@ -217,6 +217,8 @@ def test_empty_state_puts_windows_first_for_popos(monkeypatch: pytest.MonkeyPatc
     assert window.icon == "firefox"
     assert window.payload.get("app_id") == "firefox"
     assert window.payload.get("window_title") == "Mozilla Firefox"
+    assert window.payload.get("id") == "0x1"
+    assert window.payload.get("wid") == "0x1"
     assert app.description == "Switch to application"
 
 
