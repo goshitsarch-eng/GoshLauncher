@@ -64,6 +64,10 @@ venv:
 	fi
 	echo -e "$(BOLD)[+] Setting up virtual environment...$(RESET)"
 	$(BASE_PYTHON) -m venv --clear --system-site-packages .venv
+	# Ubuntu 22.04 CI uses python3-pip 22.0.2 + setuptools 59.6 via --system-site-packages.
+	# pygobject-stubs is sdist-only with a PEP 517 backend-path that that pip reports as
+	# project name "unknown", so the ==2.12.0 pin never matches. Bootstrap a venv pip first.
+	.venv/bin/python -m pip install --ignore-installed --upgrade $(if $(QUIET),-q) pip "setuptools>=65" wheel
 	PYGOBJECT_STUB_CONFIG=Gtk4,Gdk4,Soup2 .venv/bin/python -m pip install --ignore-installed --no-warn-conflicts --upgrade $(if $(QUIET),-q) -r requirements.txt
 	# Keep a copy of the requirements used for this environment so make targets can
 	# tell when the local venv needs to be refreshed.

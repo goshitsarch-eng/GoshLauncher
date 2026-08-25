@@ -83,6 +83,19 @@ def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     assert 'export PATH="/usr/sbin:/usr/bin:/sbin:/bin"' in makefile
 
 
+def test_venv_bootstraps_pip_before_pygobject_stubs() -> None:
+    makefile = (ROOT / "makefile").read_text()
+    venv = makefile[makefile.index("venv:") : makefile.index("-r requirements.txt")]
+    assert "pip install --ignore-installed --upgrade" in venv
+    assert "setuptools>=65" in venv
+    pins = [
+        line.split("#", 1)[0].strip()
+        for line in (ROOT / "requirements.txt").read_text().splitlines()
+        if line.split("#", 1)[0].strip()
+    ]
+    assert "pygobject-stubs==2.12.0" in pins
+
+
 def test_prerelease_banner_uses_goshlauncher() -> None:
     from ulauncher.cli.commands.start import _boxed_warning
 
