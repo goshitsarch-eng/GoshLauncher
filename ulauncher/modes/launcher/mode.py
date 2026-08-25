@@ -625,7 +625,6 @@ class LauncherMode(Mode):
         from ulauncher.modes.launcher.section_titles import section_title
 
         last_kind = ""
-        compact = chrome.get("density") == "compact"
         show_icons = chrome.get("show_result_icons", True)
         show_descriptions = chrome.get("show_descriptions", True)
         for row in rows:
@@ -651,7 +650,6 @@ class LauncherMode(Mode):
                 name=str(row["title"]),
                 description="" if not show_descriptions else str(row.get("description") or ""),
                 icon=icon,
-                compact=compact,
                 kind=kind,
                 payload=payload,
                 highlightable=True,

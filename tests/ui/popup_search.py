@@ -56,6 +56,20 @@ class SearchPopup:
     def css_classes(self) -> list[str]:
         return list(self.win.theme_root.get_css_classes())
 
+    def icon_pixel_sizes(self) -> list[int]:
+        return [
+            int(widget.item_icon.get_pixel_size())
+            for widget in self.win.results_view._widgets
+            if widget.item_icon is not None
+        ]
+
+    def pump_idle(self, times: int = 32) -> None:
+        from tests.ui.look_paint import pump
+
+        self.launcher.flush_lookups()
+        pump(times)
+        self.launcher.flush_lookups()
+
     def type_query(self, text: str) -> list[str]:
         from gi.repository import GLib
 

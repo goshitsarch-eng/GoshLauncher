@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from gi.repository import Gtk, Pango
 
@@ -51,6 +51,7 @@ class ResultsView(Gtk.ScrolledWindow):
         self._settings = settings
         self._apply_css = apply_css
         self._activate_result = activate_result
+        self._chrome: dict[str, Any] | None = None
         self._widgets: list[ResultWidget] = []
         self._painting = False
         self._hover_suppressed_until_us = 0
@@ -74,15 +75,21 @@ class ResultsView(Gtk.ScrolledWindow):
     def set_max_height(self, height: int) -> None:
         self.set_max_content_height(height)
 
+    def set_chrome(self, chrome: dict[str, Any] | None) -> None:
+        """Look chrome for new rows. None falls back to Settings.load() in ResultWidget."""
+        self._chrome = chrome
+
     def render(self, update: ResultsUpdate) -> None:
-        if str(update["query"]) != self._query:
+        # goshos keepSelection: prefs and async paints of the same query keep the highlight
+        same_query = str(update["query"]) == self._query
+        if not same_query:
             self._query = str(update["query"])
             self._user_selected = False
 
         if update["append"] and self._widgets:
             self._append_results(update)
         else:
-            self._replace_results(update)
+            self._replace_results(update, keep_selection=same_query)
 
     def get_active_result(self) -> Result | None:
         selected = self._selected
@@ -145,10 +152,10 @@ class ResultsView(Gtk.ScrolledWindow):
     def _selectable_indices(self) -> list[int]:
         return self._highlightable_indices()
 
-    def _replace_results(self, update: ResultsUpdate) -> None:
+    def _replace_results(self, update: ResultsUpdate, *, keep_selection: bool) -> None:
         self._painting = True
         try:
-            previous_pick = self.get_active_result() if self._user_selected else None
+            previous_pick = self.get_active_result() if keep_selection else None
             gtk4.remove_all_children(self._box)
             self._widgets = []
             self._index = 0
@@ -200,7 +207,13 @@ class ResultsView(Gtk.ScrolledWindow):
             if jump_index >= 0:
                 jump_i += 1
             widget = ResultWidget(
-                result, start_index + offset, query, self.select, self._select_and_activate, jump_index
+                result,
+                start_index + offset,
+                query,
+                self.select,
+                self._select_and_activate,
+                jump_index,
+                chrome=self._chrome,
             )
             self._widgets.append(widget)
             self._box.append(widget)
@@ -214,8 +227,11 @@ class ResultsView(Gtk.ScrolledWindow):
         if previous_pick:
             key = result_selection_key(previous_pick, self._index)
             index = paint_selection_index(key, rows)
-            if index >= 0 and row_matches_previous(key, rows[index]):
-                self.select(index)
+            if index >= 0:
+                if not row_matches_previous(key, rows[index]):
+                    self._user_selected = False
+                # applySelection(skipScroll) — do not mark this as a user arrow
+                self._select(index)
                 return
             self._user_selected = False
         self._select(self._index_for_name(selected_name))

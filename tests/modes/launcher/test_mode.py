@@ -281,6 +281,20 @@ def test_clock_and_units_copy_prompt_enter() -> None:
     assert "calculator" in _kinds(_handle("half of 80"))
 
 
+def test_compact_density_still_shows_descriptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "krunner"
+    settings.applied_look = "krunner"
+    settings.row_density = "compact"
+    settings.show_descriptions = True
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    calc = next(row for row in _handle("2+2") if getattr(row, "kind", "") == "calculator")
+    assert calc.description
+    assert calc.compact is False
+
+
 def test_path_query_returns_path_results() -> None:
     results = _handle("/tmp")
     assert "path" in _kinds(results)

@@ -141,6 +141,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._sync_search_entry()
 
         self.results_view = ResultsView(self.settings, self.apply_css, self._activate_clicked)
+        self.results_view.set_chrome(self._chrome)
 
         gtk4.pack_start(self.theme_root, self.prompt, False, True, 0)
         gtk4.pack_start(self.theme_root, self.results_view, False, True, 0)
@@ -258,6 +259,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.settings = Settings.load(force=True)
         ensure_look_chrome(self.settings)
         self._chrome = chrome_from_settings(self.settings)
+        self.results_view.set_chrome(self._chrome)
         self._apply_look_classes()
         self._sync_search_entry()
         self.apply_theme()
@@ -281,6 +283,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.restyle_from_settings()
         else:
             self._chrome = chrome_from_settings(self.settings)
+            self.results_view.set_chrome(self._chrome)
             if ACTION_SEARCH_ICON in action_set:
                 self._apply_look_classes()
                 self._sync_search_entry()

@@ -100,6 +100,13 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     assert popup.win.results_view.selected_index == 2
     assert popup.press(Gdk.KEY_Home)
     assert popup.win.results_view.selected_index == 1
+    assert popup.press(Gdk.KEY_Page_Down)
+    assert popup.win.results_view.selected_index == 2
+    assert popup.press(Gdk.KEY_p, Gdk.ModifierType.CONTROL_MASK)
+    assert popup.win.results_view.selected_index == 1
+    popup.app.preferences_shown = False
+    assert popup.press(Gdk.KEY_comma, Gdk.ModifierType.CONTROL_MASK)
+    assert popup.app.preferences_shown is True
     assert popup.press(Gdk.KEY_1, Gdk.ModifierType.ALT_MASK)
     assert popup.app.activated is None
     assert popup.press(Gdk.KEY_2, Gdk.ModifierType.ALT_MASK)
@@ -257,6 +264,16 @@ def test_more_goshos_queries(popup: SearchPopup) -> None:
     assert "units" in popup.type_query("32 f to c")
     assert "calculator" in popup.type_query("half of 80")
     assert "place" in popup.type_query("open my documents")
+    assert "calculator" in popup.type_query("2pi")
+    assert "calculator" in popup.type_query("what is 2+2")
+    assert "clock" in popup.type_query("yesterday")
+    assert "color" in popup.type_query("red")
+    color = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "color")
+    assert color.name == "#ff0000"
+    assert "url" in popup.type_query("sftp://nas.example/share")
+    assert "url" in popup.type_query("smb://nas/Public")
+    assert "url" in popup.type_query("::1")
+    assert "system" in popup.type_query("lock now")
 
 
 def test_command_prefix_when_enabled() -> None:
@@ -292,6 +309,14 @@ def test_krunner_look_applies_compact_density() -> None:
         assert "gosh-no-search-icon" not in classes
         assert "calculator" in probe.type_query("2+2")
         assert probe.number_hints()[:1] == ["1"]
+        sizes = probe.icon_pixel_sizes()
+        assert sizes
+        assert sizes[0] == 16
+        calc = next(
+            widget for widget in probe.win.results_view._widgets if getattr(widget.result, "kind", "") == "calculator"
+        )
+        assert calc.result.description
+        assert calc.result.compact is False
     finally:
         probe.close()
 
@@ -438,3 +463,108 @@ def test_typed_app_offers_new_window_when_running() -> None:
         assert "Windows" in probe.header_names()
     finally:
         probe.close()
+
+
+def test_touch_tap_activates_live_calculator_row(popup: SearchPopup) -> None:
+    from types import SimpleNamespace
+
+    from ulauncher.modes.launcher.result_pointer import TOUCH_TAP_SLOP
+
+    kinds = popup.type_query("2+2")
+    assert "calculator" in kinds
+    popup.app.activated = None
+    calc = next(
+        widget for widget in popup.win.results_view._widgets if getattr(widget.result, "kind", "") == "calculator"
+    )
+
+    def event(kind: str, y: float) -> SimpleNamespace:
+        return SimpleNamespace(
+            get_event_type=lambda: SimpleNamespace(value_nick=kind),
+            get_position=lambda: (0.0, y),
+        )
+
+    calc.on_touch_event(None, event("touch-begin", 10.0))
+    calc.on_touch_event(None, event("touch-end", 12.0))
+    chosen, alt = popup.app.activated
+    assert alt is False
+    assert chosen.kind == "calculator"
+
+    popup.app.activated = None
+    calc.on_touch_event(None, event("touch-begin", 10.0))
+    calc.on_touch_event(None, event("touch-update", 10.0 + TOUCH_TAP_SLOP + 4))
+    calc.on_touch_event(None, event("touch-end", 10.0 + TOUCH_TAP_SLOP + 4))
+    assert popup.app.activated is None
+
+
+def test_ime_preedit_does_not_activate(popup: SearchPopup) -> None:
+    from unittest.mock import patch
+
+    from gi.repository import Gdk
+
+    kinds = popup.type_query("2+2")
+    assert "calculator" in kinds
+    popup.app.activated = None
+    with patch("ulauncher.ui.ulauncher_window._read_entry_preedit", return_value="あ"):
+        assert popup.press(Gdk.KEY_Return) is False
+    assert popup.app.activated is None
+
+
+def test_live_prefs_keep_selected_row(popup: SearchPopup) -> None:
+    from ulauncher.modes.launcher.prefs_live import live_pref_actions
+
+    kinds = popup.type_query("2+2")
+    assert "calculator" in kinds
+    assert "Calculator" in popup.header_names()
+    chosen = popup.win.results_view.get_active_result()
+    assert chosen is not None
+    assert chosen.kind == "calculator"
+    name = chosen.name
+    popup.settings.show_section_headers = False
+    popup.win.apply_live_prefs(live_pref_actions(["show_section_headers"]))
+    popup.app.query_changed(popup.win.prompt_input.get_text())
+    popup.pump_idle()
+    assert "calculator" in popup.kinds()
+    assert popup.header_names() == []
+    active = popup.win.results_view.get_active_result()
+    assert active is not None
+    assert active.kind == "calculator"
+    assert active.name == name
+
+
+def test_popos_compact_icons_stay_larger_than_krunner() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    popos = Settings()
+    popos.look_id = "popos"
+    popos.applied_look = "popos"
+    popos.row_density = "compact"
+    popos.icon_size = 36
+    try:
+        pop_probe = open_search_popup(settings=popos)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        assert "calculator" in pop_probe.type_query("2+2")
+        pop_sizes = pop_probe.icon_pixel_sizes()
+        assert pop_sizes
+        pop_size = pop_sizes[0]
+    finally:
+        pop_probe.close()
+
+    krunner = Settings()
+    krunner.look_id = "krunner"
+    krunner.applied_look = ""
+    try:
+        run_probe = open_search_popup(settings=krunner)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        assert "calculator" in run_probe.type_query("2+2")
+        run_sizes = run_probe.icon_pixel_sizes()
+        assert run_sizes
+        run_size = run_sizes[0]
+    finally:
+        run_probe.close()
+    assert pop_size > run_size
+    assert run_size == 16
+    assert pop_size == 29

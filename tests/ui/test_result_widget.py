@@ -123,3 +123,11 @@ class TestResultWidget:
         assert widget.item_container.get_margin_bottom() == 0
         assert widget.text_container.get_margin_start() == 0
         assert widget.text_container.get_margin_end() == 0
+
+    def test_passed_chrome_sets_compact_icon_pixel_size(self) -> None:
+        from ulauncher.modes.launcher.looks import icon_size_for_look
+
+        chrome = {"show_numbers": False, "show_result_icons": True, "density": "compact", "icon_size": 40}
+        widget = ResultWidget(Result(icon="image-missing"), 0, Query("", None), noop, noop, chrome=chrome)
+        assert widget.item_icon is not None
+        assert widget.item_icon.get_pixel_size() == icon_size_for_look(chrome, "compact") == 32

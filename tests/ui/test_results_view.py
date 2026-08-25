@@ -238,6 +238,17 @@ class TestResultsViewStreaming:
         assert view._user_selected is False
         assert view._index == 0
 
+    def test_same_query_keeps_default_highlight_without_user_select(self, view: ResultsView) -> None:
+        view.render(self._update(["keep", "later"]))
+        assert view.get_active_result() is not None
+        assert view.get_active_result().name == "keep"
+        assert view._user_selected is False
+        view.render(self._update(["keep", "later", "extra"]))
+        assert view.get_active_result() is not None
+        assert view.get_active_result().name == "keep"
+        assert view._user_selected is False
+        assert view._index == 0
+
     def test_render_keeps_every_provider_row(self, view: ResultsView) -> None:
         names = [f"row-{index}" for index in range(40)]
         view.render(self._update(names))
