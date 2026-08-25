@@ -514,7 +514,7 @@ class LauncherMode(Mode):
         if "system" in providers:
             from ulauncher.modes.launcher.system_actions import match_system_actions
 
-            for hit in safe_provider_results(lambda: match_system_actions(q))[:cap]:
+            for hit in safe_provider_results(lambda: match_system_actions(q, cap)):
                 add(
                     "system",
                     {
@@ -531,10 +531,11 @@ class LauncherMode(Mode):
             from ulauncher.modes.launcher.settings_panels import (
                 match_settings_panels,
                 settings_argv,
+                settings_panel_available,
                 settings_result_meta,
             )
 
-            for hit in safe_provider_results(lambda: match_settings_panels(q))[:cap]:
+            for hit in safe_provider_results(lambda: match_settings_panels(q, cap, settings_panel_available)):
                 meta = settings_result_meta(hit, settings_argv(hit["id"]))
                 add(
                     "settings",

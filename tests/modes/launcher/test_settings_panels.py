@@ -23,6 +23,9 @@ def test_wellbeing_hidden_when_desktop_missing() -> None:
     shown = match_settings_panels("wellbeing", is_available=lambda _panel_id: True)
     assert shown
     assert shown[0]["id"] == "wellbeing"
+    unfiltered = match_settings_panels("wellbeing")
+    assert unfiltered
+    assert unfiltered[0]["id"] == "wellbeing"
 
 
 def test_settings_result_is_not_activatable_without_launcher() -> None:
@@ -116,3 +119,9 @@ def test_goshos_settings_aliases() -> None:
     assert not any(panel["id"] == "wifi" for panel in match_settings_panels("o", 20))
     assert not any(panel["id"] == "wifi" for panel in match_settings_panels("pot"))
     assert not any(panel["id"] == "wifi" for panel in match_settings_panels("ifi"))
+
+
+def test_empty_settings_query_slices_unfiltered_catalog() -> None:
+    rows = match_settings_panels("", 5)
+    assert [panel["id"] for panel in rows] == GOSHOS_SETTINGS_PANEL_IDS[:5]
+    assert len(match_settings_panels("", 8)) == 8

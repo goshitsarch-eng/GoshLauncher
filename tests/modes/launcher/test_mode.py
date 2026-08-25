@@ -80,6 +80,44 @@ def test_hash_wifi_is_settings_not_color() -> None:
     assert "color" not in kinds
 
 
+def test_hash_prefix_honors_max_per_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.max_per_category = 8
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    rows = [row for row in _handle("#") if getattr(row, "kind", "") == "settings"]
+    assert len(rows) == 8
+
+
+def test_settings_and_system_search_pass_max_per_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.settings_panels import settings_panel_available
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.max_per_category = 8
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    seen: dict[str, object] = {}
+    wifi = {"id": "wifi", "title": "Wi-Fi", "icon": "network-wireless-symbolic", "keywords": []}
+
+    def fake_settings(_query: str, limit: int = 6, is_available: object = None) -> list:
+        seen["settings_limit"] = limit
+        seen["settings_available"] = is_available
+        return [wifi]
+
+    def fake_system(_query: str, limit: int = 6, **_kwargs: object) -> list:
+        seen["system_limit"] = limit
+        return [{"id": "lock", "title": "Lock Screen", "icon": "system-lock-screen-symbolic"}]
+
+    monkeypatch.setattr("ulauncher.modes.launcher.settings_panels.match_settings_panels", fake_settings)
+    monkeypatch.setattr("ulauncher.modes.launcher.system_actions.match_system_actions", fake_system)
+    _handle("#")
+    assert seen["settings_limit"] == 8
+    assert seen["settings_available"] is settings_panel_available
+    _handle("lock the screen")
+    assert seen["system_limit"] == 8
+
+
 def test_hex_color_without_space() -> None:
     kinds = _kinds(_handle("#ff0000"))
     assert "color" in kinds

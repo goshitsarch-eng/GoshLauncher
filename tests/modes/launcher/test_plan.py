@@ -57,6 +57,9 @@ def test_at_prefix_is_web_only() -> None:
     planned = plan_search("@ cats", _flags())
     assert planned["mode"] == "web"
     assert planned["providers"] == ["web"]
+    empty = plan_search("@", _flags())
+    assert empty["query"] == ""
+    assert empty["providers"] == ["web"]
 
 
 def test_command_prefix_respects_flag() -> None:

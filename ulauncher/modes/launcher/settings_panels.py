@@ -193,27 +193,29 @@ def settings_panel_available(panel_id: str, has_desktop: Callable[[str], bool] |
 def match_settings_panels(
     query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None
 ) -> list[SettingsPanel]:
-    available = is_available or settings_panel_available
+    # goshos matchSettingsPanels: omitted isAvailable lists the whole catalog,
+    # including wellbeing. Live search passes settings_panel_available.
+    catalog = (
+        SETTINGS_PANELS
+        if is_available is None
+        else [panel for panel in SETTINGS_PANELS if is_available(panel["id"])]
+    )
     lower = query.lower()
     normalized = lower.replace("-", "").replace("_", "").replace(" ", "")
+    if not normalized:
+        return catalog[:limit]
     matches: list[SettingsPanel] = []
-    for panel in SETTINGS_PANELS:
-        if not available(panel["id"]):
-            continue
+    for panel in catalog:
         title_lower = panel["title"].lower()
         normalized_title = title_lower.replace("-", "").replace("_", "").replace(" ", "")
         normalized_id = panel["id"].replace("-", "").replace("_", "")
-        hit = False
-        if (
-            not normalized
-            or normalized_title.startswith(normalized)
+        hit = (
+            normalized_title.startswith(normalized)
             or normalized_id.startswith(normalized)
             or title_lower.startswith(lower)
             or word_prefix_match(title_lower, lower)
-        ):
-            hit = True
-        else:
-            hit = any(keyword_matches_query(keyword, lower) for keyword in panel["keywords"])
+            or any(keyword_matches_query(keyword, lower) for keyword in panel["keywords"])
+        )
         if hit:
             matches.append(panel)
         if len(matches) >= limit:

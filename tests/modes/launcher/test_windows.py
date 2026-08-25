@@ -234,6 +234,26 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     assert pick_window_list(native_one, [], [], compositor_two) == compositor_two
 
 
+def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
+    payload = {
+        1: {"title": "Firefox", "wm-class": "firefox"},
+        2: {"title": "Panel", "wm-class": "gnome-shell", "is-skip-taskbar": True},
+        3: {"title": "Dock", "wm-class": "dock", "window-type": "dock"},
+        4: {"title": "Dialog", "wm-class": "app", "window-type": "dialog"},
+        5: {"title": "Closed", "wm-class": "x", "workspace": None},
+        6: {"title": "Stand-in", "wm-class": "y", "workspace": {}},
+        7: {"title": "First ws", "wm-class": "z", "workspace": 0},
+        8: {"title": "Enum", "wm-class": "e", "window-type": 2},
+    }
+    assert [row.title for row in windows_from_introspect_payload(payload)] == [
+        "Firefox",
+        "Dialog",
+        "Stand-in",
+        "First ws",
+        "Enum",
+    ]
+
+
 def test_hypr_sway_niri_window_payloads() -> None:
     hypr = windows_from_hypr_clients(
         [

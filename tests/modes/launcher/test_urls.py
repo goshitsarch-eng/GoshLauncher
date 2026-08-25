@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ulauncher.modes.launcher.paths import canonicalize_file_uri
-from ulauncher.modes.launcher.urls import FILE_EXTS, is_file_url_query, match_url
+from ulauncher.modes.launcher.urls import FILE_EXTS, is_file_url_query, is_unsafe_launch_uri, match_url
 
 # Exact denylist from spotlight-goshos urlMatch.js (Version 2026.08.20).
 GOSHOS_FILE_EXTS = frozenset(
@@ -126,6 +126,18 @@ def test_javascript_scheme_is_rejected() -> None:
     assert match_url("vbscript:alert(1)") is None
     assert match_url("java\u200bscript:alert(1)") is None
     assert match_url("data:text/html,hi") is None
+
+
+def test_is_unsafe_launch_uri_matches_goshos() -> None:
+    assert is_unsafe_launch_uri("javascript:alert(1)")
+    assert is_unsafe_launch_uri("DATA:text/html,hi")
+    assert not is_unsafe_launch_uri("https://example.com")
+    assert is_unsafe_launch_uri("\u200bdata:text/html,hi")
+    assert is_unsafe_launch_uri("java\u200bscript:alert(1)")
+    assert is_unsafe_launch_uri("\0vbscript:msgbox(1)")
+    assert is_unsafe_launch_uri("  javascript:alert(1)")
+    assert not is_unsafe_launch_uri("file:///home/u/data")
+    assert not is_unsafe_launch_uri("mailto:a@b.c")
 
 
 def test_trailing_fqdn_dot_and_private_hosts() -> None:

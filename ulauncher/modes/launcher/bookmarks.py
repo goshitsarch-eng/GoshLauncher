@@ -13,6 +13,7 @@ from ulauncher.modes.launcher.paths import (
     file_uri_from_absolute,
     path_from_file_uri,
 )
+from ulauncher.modes.launcher.urls import is_unsafe_launch_uri
 from ulauncher.modes.launcher.word_match import path_matches_query, text_matches_query
 
 BOOKMARK_FILES = (
@@ -35,6 +36,8 @@ _bookmark_lookup = _BookmarkLookup()
 def normalize_bookmark_uri(uri: str, home: str | None = None) -> str:
     uri = uri.strip()
     if not uri:
+        return ""
+    if is_unsafe_launch_uri(uri):
         return ""
     if uri.startswith("/"):
         return canonicalize_file_uri(file_uri_from_absolute(uri))

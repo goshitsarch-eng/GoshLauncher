@@ -242,6 +242,17 @@ INTROSPECT_PATH = "/org/gnome/Shell/Introspect"
 INTROSPECT_IFACE = "org.gnome.Shell.Introspect"
 
 
+def _introspect_window_type(props: Mapping[str, Any]) -> str:
+    raw = props.get("window-type", props.get("type"))
+    if isinstance(raw, list):
+        names = [str(item) for item in raw if item]
+        return ewmh_window_type(names)
+    if isinstance(raw, str) and raw:
+        return ewmh_window_type([raw])
+    # Missing or numeric Mutter enums stay normal so untyped windows still list.
+    return ewmh_window_type([])
+
+
 def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
     """Map Mutter Introspect GetWindows onto WindowInfo (Wayland has no EWMH list)."""
     if not isinstance(payload, dict):
@@ -251,6 +262,10 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
         if not isinstance(props, dict):
             continue
         if props.get("is-hidden") or props.get("hidden"):
+            continue
+        skip_taskbar = bool(props.get("is-skip-taskbar") or props.get("skip-taskbar"))
+        has_workspace = props["workspace"] if "workspace" in props else True
+        if not should_list_window(has_workspace, skip_taskbar, _introspect_window_type(props)):
             continue
         title = str(props.get("title") or "")
         app_id = str(props.get("app-id") or props.get("gtk-app-id") or "")

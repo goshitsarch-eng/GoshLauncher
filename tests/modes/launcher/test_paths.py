@@ -135,6 +135,8 @@ def test_path_rows_omit_terminal_when_missing() -> None:
 
 def test_bookmark_uri_canonicalizes_and_rejects_unsafe() -> None:
     assert normalize_bookmark_uri("javascript:alert(1)") == ""
+    assert normalize_bookmark_uri("\u200bjavascript:alert(1)") == ""
+    assert normalize_bookmark_uri("DATA:text/html,hi") == ""
     uri = normalize_bookmark_uri("/tmp/My Files")
     assert uri.startswith("file://")
     assert " " not in uri
