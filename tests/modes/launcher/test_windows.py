@@ -489,7 +489,7 @@ def test_hypr_sway_niri_window_payloads() -> None:
             {"address": "", "title": "No id", "class": "x"},
         ]
     )
-    assert len(hypr) == 1
+    assert [row.title for row in hypr] == ["Firefox", "Hidden"]
     assert hypr[0].wid == "hypr:0xabc"
     assert hypr[0].desktop == 1
     assert hypr[0].app_id == "firefox"
@@ -997,6 +997,29 @@ def test_kwin_dump_lists_and_activates_plasma_windows() -> None:
     assert window_matches(sticky[0], "sticky")
     assert "desktop: desktopOf(c)" in KWIN_LIST_SCRIPT
     assert "pid: Number(c.pid || 0)" in KWIN_LIST_SCRIPT
+
+
+def test_compositor_skip_taskbar_counts_for_apps_not_search() -> None:
+    hypr = windows_from_hypr_clients(
+        [
+            {"address": "0x1", "title": "Firefox", "class": "firefox", "mapped": True},
+            {"address": "0xhid", "title": "Hidden", "class": "firefox", "hidden": True},
+            {"address": "0xunmapped", "title": "Gone", "class": "x", "mapped": False},
+        ]
+    )
+    assert [row.title for row in hypr] == ["Firefox", "Hidden"]
+    assert hypr[0].skip_taskbar is False
+    assert hypr[1].skip_taskbar is True
+    assert not window_is_searchable(hypr[1])
+    assert "skipTaskbar: Boolean(c.skipTaskbar)" in KWIN_LIST_SCRIPT
+    assert "c.skipTaskbar || c.desktopWindow" not in KWIN_LIST_SCRIPT
+    hidden = windows_from_kwin_dump([{"id": "{panel}", "title": "Panel", "app_id": "plasmashell", "skipTaskbar": True}])
+    assert hidden[0].skip_taskbar is True
+    assert not window_is_searchable(hidden[0])
+    assert (
+        windows_from_kwin_dump([{"id": "{desk}", "title": "Desktop", "app_id": "plasmashell", "desktopWindow": True}])
+        == []
+    )
 
 
 def test_qtile_windows_list_and_activate() -> None:

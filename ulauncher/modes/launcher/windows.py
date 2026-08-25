@@ -627,7 +627,7 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
     for item in payload:
         if not isinstance(item, dict):
             continue
-        if item.get("hidden") or item.get("mapped") is False:
+        if item.get("mapped") is False:
             continue
         address = str(item.get("address") or "")
         if not address:
@@ -658,6 +658,7 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
                 sticky=bool(item.get("pinned")),
                 user_time=user_time,
                 app_id=klass,
+                skip_taskbar=bool(item.get("hidden")),
             )
         )
     return windows
@@ -942,14 +943,15 @@ KWIN_LIST_SCRIPT = (
     "var clients = workspace.windowList();"
     "for (var i = 0; i < clients.length; i++) {"
     "var c = clients[i];"
-    "if (!c || c.skipTaskbar || c.desktopWindow) continue;"
+    "if (!c || c.desktopWindow) continue;"
     "output_result(JSON.stringify({"
     "id: String(c.internalId),"
     "title: String(c.caption || ''),"
     "app_id: String(c.resourceClass || ''),"
     "desktop: desktopOf(c),"
     "onAllDesktops: Boolean(c.onAllDesktops),"
-    "pid: Number(c.pid || 0)"
+    "pid: Number(c.pid || 0),"
+    "skipTaskbar: Boolean(c.skipTaskbar)"
     "}));"
     "}"
 )
@@ -1066,6 +1068,8 @@ def windows_from_kwin_dump(payload: Any) -> list[WindowInfo]:
         app_id = str(item.get("app_id") or item.get("resourceClass") or "")
         if not ident or (not title and not app_id):
             continue
+        if item.get("desktopWindow") or item.get("desktop_window"):
+            continue
         desktop, sticky, pid = _kwin_placement(item)
         windows.append(
             WindowInfo(
@@ -1076,6 +1080,7 @@ def windows_from_kwin_dump(payload: Any) -> list[WindowInfo]:
                 pid=pid,
                 sticky=sticky,
                 app_id=app_id,
+                skip_taskbar=bool(item.get("skipTaskbar") or item.get("skip_taskbar")),
             )
         )
     return windows
