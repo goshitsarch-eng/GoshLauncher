@@ -43,3 +43,10 @@ class TestAppResult:
         single = AppResult.from_id("singleapp.desktop")
         assert single is not None
         assert single.single_window is True
+
+    def test_from_id_swallows_invalid_desktop_encoding(self, mocker: MockerFixture) -> None:
+        mocker.patch(
+            "ulauncher.modes.apps.app_result.GioUnix.DesktopAppInfo.new",
+            side_effect=RuntimeError("invalid desktop encoding"),
+        )
+        assert AppResult.from_id("broken.desktop") is None
