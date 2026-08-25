@@ -418,6 +418,43 @@ def test_empty_state_skips_one_vanished_window(monkeypatch: pytest.MonkeyPatch) 
     assert [row.name for row in results] == ["Mozilla Firefox", "Notes"]
 
 
+def test_typed_search_skips_one_vanished_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    class Vanished:
+        wid = "0xbad"
+        wm_class = "gone"
+        desktop = 0
+        pid = 1
+        sticky = False
+
+        @property
+        def title(self) -> str:
+            message = "window closed"
+            raise RuntimeError(message)
+
+    settings = Settings()
+    settings.enable_window_search = True
+    settings.enable_application_mode = False
+    settings.enable_calculator = False
+    settings.enable_unit_convert = False
+    settings.enable_color_hex = False
+    settings.enable_time_date = False
+    settings.show_web_search = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.cached_windows",
+        lambda: [
+            Vanished(),
+            WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11),
+        ],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    results = _handle("firefox")
+    assert [row.name for row in results if getattr(row, "kind", "") == "window"] == ["Mozilla Firefox"]
+
+
 def test_empty_state_hides_skip_taskbar_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     from ulauncher.modes.launcher.windows import WindowInfo
     from ulauncher.utils.settings import Settings

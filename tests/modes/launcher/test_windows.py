@@ -1612,6 +1612,26 @@ def test_match_windows_hides_skip_taskbar() -> None:
     assert match_windows("dock", windows=[dock]) == []
 
 
+def test_match_windows_skips_holes_and_vanished_windows() -> None:
+    class Vanished:
+        wid = "0xbad"
+        wm_class = "gone"
+        desktop = 0
+        pid = 1
+        sticky = False
+
+        @property
+        def title(self) -> str:
+            message = "window closed"
+            raise RuntimeError(message)
+
+    listed = WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox", desktop=0, pid=11)
+    mixed: list = [None, Vanished(), listed]
+    rows = match_windows("firefox", windows=mixed)
+    assert [row["wid"] for row in rows] == ["0x1"]
+    assert match_windows("", windows=mixed)[0]["wid"] == "0x1"
+
+
 def test_windows_cache_ttl_and_freshness() -> None:
     from ulauncher.modes.launcher.windows import invalidate_windows, store_window_snapshot, windows_cache_is_fresh
 

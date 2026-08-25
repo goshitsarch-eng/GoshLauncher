@@ -142,7 +142,7 @@ class LauncherMode(Mode):
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []
         from ulauncher.modes.launcher.apps import home_apps
-        from ulauncher.modes.launcher.windows import cached_windows, window_is_searchable
+        from ulauncher.modes.launcher.windows import cached_windows
 
         chrome = chrome_from_settings(settings)
         flags = flags_from_settings(settings)
@@ -165,26 +165,18 @@ class LauncherMode(Mode):
                     app_rows.append(row)
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
+            # goshos runEmptySuggestions: searchWindows('', maxResults)
             icon_apps: Sequence[Any] = app_source
-            scanned_all = False
-            for win in open_windows:
-                if not window_is_searchable(win):
-                    continue
-                row = _empty_window_row(win, icon_apps)
-                # WindowTracker maps every window; frequent empty-state apps are only a cache.
-                if row is not None and row.get("icon") == "focus-windows-symbolic" and not scanned_all:
-                    from ulauncher.modes.launcher.apps import iter_apps
+            win_rows = _empty_window_hits(open_windows, icon_apps, limit)
+            if any(row.get("icon") == "focus-windows-symbolic" for row in win_rows):
+                from ulauncher.modes.launcher.apps import iter_apps
 
-                    try:
-                        icon_apps = list(iter_apps())
-                    except Exception:
-                        logger.debug("Desktop apps unavailable for empty-state window icons", exc_info=True)
-                    scanned_all = True
-                    row = _empty_window_row(win, icon_apps)
-                if row is not None:
-                    win_rows.append(row)
-                if len(win_rows) >= limit:
-                    break
+                try:
+                    icon_apps = list(iter_apps())
+                except Exception:
+                    logger.debug("Desktop apps unavailable for empty-state window icons", exc_info=True)
+                else:
+                    win_rows = _empty_window_hits(open_windows, icon_apps, limit)
         merged = merge_empty_suggestions(order, win_rows, app_rows, limit)
         return list(self._materialize(merged, chrome, headers=False))
 
@@ -729,26 +721,38 @@ def _empty_app_row(app: Any, open_windows: Sequence[Any]) -> dict[str, Any] | No
         return None
 
 
-def _empty_window_row(win: Any, apps: Sequence[Any] | None = None) -> dict[str, Any] | None:
-    try:
-        from ulauncher.modes.launcher.apps import window_app_icon, window_app_id
-        from ulauncher.modes.launcher.windows import window_workspace_label
+def _empty_window_hits(open_windows: Sequence[Any], icon_apps: Sequence[Any], limit: int) -> list[dict[str, Any]]:
+    from ulauncher.modes.launcher.windows import match_windows
 
-        workspace = window_workspace_label(win.desktop, win.sticky)
-        title = win.title or win.wm_class
+    rows: list[dict[str, Any]] = []
+    for hit in safe_provider_results(lambda: match_windows("", limit, windows=list(open_windows), apps=icon_apps)):
+        row = _empty_from_window_hit(hit)
+        if row is not None:
+            rows.append(row)
+    return rows
+
+
+def _empty_from_window_hit(hit: Mapping[str, Any]) -> dict[str, Any] | None:
+    raw_kind = hit.get("kind") or "focus"
+    if raw_kind == "workspace" or raw_kind in {"close", "quit", "kill"}:
+        return None
+    try:
+        title = str(hit.get("title") or "")
+        if not title:
+            return None
         return {
             "kind": "window",
             "title": title,
-            "description": workspace,
-            "icon": window_app_icon(win, apps),
-            "wid": win.wid,
-            "pid": win.pid,
-            "wm_class": win.wm_class,
-            "app_id": window_app_id(win, apps),
-            "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
-            "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
-            "atspi_ref": getattr(win, "atspi_ref", "") or "",
-            "window_title": title,
+            "description": hit.get("description") or "",
+            "icon": hit.get("icon") or "focus-windows-symbolic",
+            "wid": hit.get("wid") or "",
+            "pid": hit.get("pid") or 0,
+            "wm_class": hit.get("wm_class") or "",
+            "app_id": hit.get("app_id") or "",
+            "gtk_unique_bus_name": hit.get("gtk_unique_bus_name") or "",
+            "gtk_application_object_path": hit.get("gtk_application_object_path") or "",
+            "atspi_ref": hit.get("atspi_ref") or "",
+            "window_title": hit.get("window_title") or title,
             "window_kind": "focus",
         }
     except Exception:

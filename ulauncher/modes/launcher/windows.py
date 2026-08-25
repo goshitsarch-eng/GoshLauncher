@@ -2061,32 +2061,38 @@ def match_windows(
         else:
             icon_apps = ()
     for win in windows if windows is not None else cached_windows():
-        if not window_is_searchable(win):
+        if not win:
             continue
-        target = rest if intent != "focus" else query
-        if not window_matches(win, target):
+        try:
+            if not window_is_searchable(win):
+                continue
+            target = rest if intent != "focus" else query
+            if not window_matches(win, target):
+                continue
+            name = win.title or win.wm_class
+            title = name if intent == "focus" else window_close_title(intent, name)
+            description = _workspace_label(win)
+            window_rows.append(
+                {
+                    "kind": intent,
+                    "title": title,
+                    "description": description,
+                    "icon": _window_row_icon(win, icon_apps),
+                    "payload": win.wid,
+                    "wid": win.wid,
+                    "pid": win.pid,
+                    "wm_class": win.wm_class,
+                    "app_id": _window_row_app_id(win, icon_apps),
+                    "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
+                    "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
+                    "atspi_ref": getattr(win, "atspi_ref", "") or "",
+                    "window_title": name,
+                    "id": window_result_id(win.wid, title, win.wm_class, description),
+                }
+            )
+        except Exception:  # noqa: S112
+            # mutter can drop a window between list and read
             continue
-        name = win.title or win.wm_class
-        title = name if intent == "focus" else window_close_title(intent, name)
-        description = _workspace_label(win)
-        window_rows.append(
-            {
-                "kind": intent,
-                "title": title,
-                "description": description,
-                "icon": _window_row_icon(win, icon_apps),
-                "payload": win.wid,
-                "wid": win.wid,
-                "pid": win.pid,
-                "wm_class": win.wm_class,
-                "app_id": _window_row_app_id(win, icon_apps),
-                "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
-                "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
-                "atspi_ref": getattr(win, "atspi_ref", "") or "",
-                "window_title": name,
-                "id": window_result_id(win.wid, title, win.wm_class, description),
-            }
-        )
     return take_window_results(switch_row, window_rows, limit)
 
 
