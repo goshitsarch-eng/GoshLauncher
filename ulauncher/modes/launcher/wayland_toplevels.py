@@ -48,6 +48,16 @@ def pack_wayland_string(text: str) -> bytes:
     return struct.pack("<I", len(data)) + data + (b"\x00" * pad)
 
 
+def pack_wayland_array(data: bytes) -> bytes:
+    pad = (4 - (len(data) % 4)) % 4
+    return struct.pack("<I", len(data)) + data + (b"\x00" * pad)
+
+
+def pack_wayland_uint32_array(values: list[int]) -> bytes:
+    packed = b"".join(struct.pack("<I", int(value)) for value in values)
+    return pack_wayland_array(packed)
+
+
 def unpack_wayland_string(payload: bytes, offset: int = 0) -> tuple[str, int]:
     length = struct.unpack_from("<I", payload, offset)[0]
     start = offset + 4
@@ -58,6 +68,28 @@ def unpack_wayland_string(payload: bytes, offset: int = 0) -> tuple[str, int]:
     text = payload[start : end - 1].decode("utf-8", "replace")
     padded = (length + 3) & ~3
     return text, offset + 4 + padded
+
+
+def unpack_wayland_array(payload: bytes, offset: int = 0) -> tuple[bytes, int]:
+    length = struct.unpack_from("<I", payload, offset)[0]
+    start = offset + 4
+    end = start + length
+    if end > len(payload):
+        msg = "wayland array overruns the message"
+        raise ValueError(msg)
+    padded = (length + 3) & ~3
+    return payload[start:end], offset + 4 + padded
+
+
+def unpack_wayland_uint32_array(payload: bytes, offset: int = 0) -> tuple[list[int], int]:
+    data, next_off = unpack_wayland_array(payload, offset)
+    if len(data) % 4:
+        msg = "wayland uint32 array is not aligned"
+        raise ValueError(msg)
+    count = len(data) // 4
+    if count == 0:
+        return [], next_off
+    return list(struct.unpack_from(f"<{count}I", data, 0)), next_off
 
 
 def pop_wayland_message(buf: bytes) -> tuple[tuple[int, int, bytes] | None, bytes]:

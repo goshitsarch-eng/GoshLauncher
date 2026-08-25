@@ -615,6 +615,10 @@ def test_wayland_workspace_switch_prefers_compositor_ipc() -> None:
     steps = workspace_switch_steps(2, x11=False)
     assert steps[0]["kind"] == "kwin"
     assert steps[0]["desktop"] == 3
+    ext_i = next(i for i, step in enumerate(steps) if step["kind"] == "ext-workspace")
+    wmctrl_i = next(i for i, step in enumerate(steps) if step.get("argv") == ["wmctrl", "-s", "2"])
+    assert steps[ext_i]["index"] == 2
+    assert ext_i < wmctrl_i
 
 
 def test_x11_workspace_switch_uses_wmctrl_before_kwin() -> None:
@@ -648,6 +652,41 @@ def test_x11_workspace_switch_falls_back_to_ewmh() -> None:
     )
     assert used == "ewmh"
     assert desktops == [0]
+
+
+def test_wayland_workspace_switch_uses_ext_workspace_before_wmctrl() -> None:
+    ran: list[list[str]] = []
+
+    def run(argv: list[str]) -> bool:
+        ran.append(argv)
+        return True
+
+    used = switch_workspace(
+        1,
+        x11=False,
+        which=lambda name: name if name == "wmctrl" else None,
+        run=run,
+        kwin=lambda _desktop: False,
+        ewmh=lambda _index: False,
+        ext_workspace=lambda index: index == 1,
+    )
+    assert used == "ext-workspace"
+    assert ran == []
+    used = switch_workspace(
+        1,
+        x11=False,
+        which=lambda name: name if name == "wmctrl" else None,
+        run=run,
+        kwin=lambda _desktop: False,
+        ewmh=lambda _index: False,
+        ext_workspace=lambda _index: False,
+    )
+    assert used == "wmctrl"
+    assert ran == [["wmctrl", "-s", "1"]]
+    x_steps = workspace_switch_steps(1, x11=True)
+    x_wmctrl = next(i for i, step in enumerate(x_steps) if step.get("argv") == ["wmctrl", "-s", "1"])
+    x_ext = next(i for i, step in enumerate(x_steps) if step["kind"] == "ext-workspace")
+    assert x_wmctrl < x_ext
 
 
 def test_lswt_csv_lists_ext_foreign_toplevels() -> None:

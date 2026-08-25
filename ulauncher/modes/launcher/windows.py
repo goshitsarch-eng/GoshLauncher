@@ -1423,6 +1423,7 @@ def workspace_switch_steps(index: int, *, x11: bool = False) -> list[dict[str, A
         {"kind": "argv", "argv": ["hyprctl", "dispatch", "workspace", str(number)]},
         {"kind": "argv", "argv": ["niri", "msg", "action", "focus-workspace", str(number)]},
         {"kind": "argv", "argv": ["qtile", "cmd-obj", "-o", "group", str(number), "-f", "toscreen"]},
+        {"kind": "ext-workspace", "index": index},
     ]
     x11_steps: list[dict[str, Any]] = [
         {"kind": "argv", "argv": ["wmctrl", "-s", str(index)]},
@@ -1441,12 +1442,14 @@ def switch_workspace(
     run: Callable[[list[str]], bool] | None = None,
     kwin: Callable[[int], bool] | None = None,
     ewmh: Callable[[int], bool] | None = None,
+    ext_workspace: Callable[[int], bool] | None = None,
 ) -> str | None:
     use_x11 = session_has_x11_window_control() if x11 is None else x11
     which_fn = which or shutil.which
     run_fn = run or _run_workspace_argv
     kwin_fn = kwin or _kwin_set_current_desktop
     ewmh_fn = ewmh or _ewmh_set_current_desktop
+    ext_fn = ext_workspace or _ext_workspace_activate
     for step in workspace_switch_steps(index, x11=use_x11):
         kind = step["kind"]
         if kind == "argv":
@@ -1456,10 +1459,19 @@ def switch_workspace(
         elif kind == "kwin":
             if kwin_fn(int(step["desktop"])):
                 return "kwin"
+        elif kind == "ext-workspace":
+            if ext_fn(int(step["index"])):
+                return "ext-workspace"
         elif kind == "ewmh":
             if ewmh_fn(int(step["index"])):
                 return "ewmh"
     return None
+
+
+def _ext_workspace_activate(index: int) -> bool:
+    from ulauncher.modes.launcher.wayland_workspaces import activate_ext_workspace
+
+    return activate_ext_workspace(index)
 
 
 def _run_workspace_argv(argv: list[str]) -> bool:
