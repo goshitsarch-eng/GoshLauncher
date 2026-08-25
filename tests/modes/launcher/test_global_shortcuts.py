@@ -50,4 +50,4 @@ def test_bind_shortcuts_entries_use_preferred_trigger() -> None:
     entries = bind_shortcuts_entries("CTRL+SPACE")
     assert entries[0][0] == SHORTCUT_ID
     assert entries[0][1]["preferred_trigger"] == "CTRL+SPACE"
-    assert entries[0][1]["description"] == "Show Ulauncher"
+    assert entries[0][1]["description"] == "Show GoshLauncher"

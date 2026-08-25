@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Collection, cast
 
 from gi.repository import Gdk, Gtk
 
-from ulauncher import paths
+from ulauncher import app_display_name, paths
 from ulauncher.internals.results_update import ResultsUpdate
 from ulauncher.modes.launcher.looks import chrome_from_settings, ensure_look_chrome
 from ulauncher.ui import gtk4
@@ -60,7 +60,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     settings: Settings
 
     def __init__(self, **kwargs: Any) -> None:  # noqa: PLR0915
-        logger.info("Opening Ulauncher window")
+        logger.info("Opening %s window", app_display_name)
         self.settings = Settings.load(force=True)
         ensure_look_chrome(self.settings)
         self._chrome = chrome_from_settings(self.settings)
@@ -88,7 +88,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             decorated=False,
             deletable=False,
             resizable=False,
-            title="GoshLauncher",
+            title=app_display_name,
             **kwargs,
         )
         gtk4.add_css_class(self, "gosh-popup")
@@ -426,10 +426,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
         show_numbers = bool(self._chrome.get("show_numbers"))
 
-        use_arrow_key_aliases = len(self.settings.arrow_key_aliases) == 4  # noqa: PLR2004
-        arrow_key_aliases = [*self.settings.arrow_key_aliases] if use_arrow_key_aliases else [None] * 4
+        aliases_raw = self.settings.arrow_key_aliases or ""
+        use_arrow_key_aliases = len(aliases_raw) == 4  # noqa: PLR2004
+        arrow_key_aliases = [*aliases_raw] if use_arrow_key_aliases else [None] * 4
         left_alias, down_alias, up_alias, right_alias = arrow_key_aliases
-        if not use_arrow_key_aliases:
+        if aliases_raw and not use_arrow_key_aliases:
             logger.warning(
                 "Invalid value for arrow_key_aliases: %s, expected four letters", self.settings.arrow_key_aliases
             )
@@ -925,7 +926,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.get_app().query_changed(self.prompt_input.get_text())
 
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
-        logger.info("Closing Ulauncher window")
+        logger.info("Closing %s window", app_display_name)
         from ulauncher.modes.launcher.popup_gate import run_isolated_teardown
 
         self._cancel_live_layout()

@@ -143,7 +143,7 @@ class TestCLIHelp:
         start_summary = cli._get_commands()["start"].summary
 
         app_group_index = help_text.index("App commands:")
-        show_index = help_text.index("Show the Ulauncher window (default command)")
+        show_index = help_text.index("Show the GoshLauncher window (default command)")
         help_index = help_text.index("Show help")
         extension_group_index = help_text.index("Extension commands:")
         extensions_index = help_text.index("List installed extensions")

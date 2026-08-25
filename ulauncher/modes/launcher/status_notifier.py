@@ -11,6 +11,8 @@ import logging
 import os
 from typing import Any, Callable
 
+from ulauncher import app_display_name, show_launcher_label
+
 logger = logging.getLogger(__name__)
 
 SNI_IFACE = "org.kde.StatusNotifierItem"
@@ -166,7 +168,7 @@ def sni_method_action(method_name: str) -> str | None:
 
 def menu_entries() -> list[tuple[int, dict[str, Any]]]:
     return [
-        (MENU_SHOW, {"label": "Show Ulauncher", "enabled": True, "visible": True}),
+        (MENU_SHOW, {"label": show_launcher_label, "enabled": True, "visible": True}),
         (MENU_PREFERENCES, {"label": "Preferences", "enabled": True, "visible": True}),
         (MENU_ABOUT, {"label": "About", "enabled": True, "visible": True}),
         (MENU_SEPARATOR, {"type": "separator", "visible": True}),
@@ -194,7 +196,7 @@ def filter_menu_props(props: dict[str, Any], names: list[str]) -> dict[str, Any]
 
 def menu_props_for_id(item_id: int) -> dict[str, Any] | None:
     if item_id == 0:
-        return {"children-display": "submenu", "label": "Ulauncher"}
+        return {"children-display": "submenu", "label": app_display_name}
     for mid, props in menu_entries():
         if mid == item_id:
             return dict(props)
@@ -302,7 +304,7 @@ def sni_property_variant(
     if name in {"OverlayIconName", "AttentionIconName", "AttentionMovieName"}:
         return _variant("s", "")
     if name == "ToolTip":
-        return _variant("(sa(iiay)ss)", (icon_name, [], title, "Show Ulauncher"))
+        return _variant("(sa(iiay)ss)", (icon_name, [], title, show_launcher_label))
     if name == "ItemIsMenu":
         return _variant("b", False)
     if name == "Menu":
@@ -351,7 +353,7 @@ class StatusNotifierItem:
         *,
         icon_name: str = "ulauncher-indicator-symbolic",
         icon_theme_path: str = "",
-        title: str = "Ulauncher",
+        title: str = app_display_name,
         item_id: str = "ulauncher",
     ) -> None:
         self._on_action = on_action

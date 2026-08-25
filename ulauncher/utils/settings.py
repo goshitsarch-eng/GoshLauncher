@@ -9,6 +9,8 @@ _settings_file = f"{paths.CONFIG}/settings.json"
 
 
 class Settings(JsonConf):
+    # Leftover Ulauncher JSON. Goshos navigates with arrows / Ctrl+j k n p, not hjkl
+    # without Ctrl. These four letters only apply together with Control.
     arrow_key_aliases: str = "hjkl"
     auto_resume: bool = False
     base_width: int = 600
@@ -17,16 +19,20 @@ class Settings(JsonConf):
     enable_application_mode: bool = True
     grab_mouse_pointer: bool = True
     hotkey_show_app: str = ""  # Note that this is no longer used, other than for migrating to the DE wrapper
+    # Leftover Ulauncher JSON. Goshos activates rows 1-9 with Alt when number hints are on.
     jump_keys: str = "1234567890abcdefghijklmnopqrstuvwxyz"
     keep_alive: bool = True
     layer_shell: bool = True
+    # Leftover Ulauncher JSON. Empty-state length uses max_per_category like goshos.
     max_recent_apps: int = 6
     raise_if_started: bool = False
     render_on_screen: str = "mouse-pointer-monitor"
     show_tray_icon: bool = True
     terminal_command: str = ""
+    # Leftover Ulauncher JSON. Popup colors come from look_id / gosh-looks.css, not this.
     theme_name: str = "light"
     tray_icon_name: str = "ulauncher-indicator-symbolic"
+    # Leftover Ulauncher JSON. Look CSS owns the popup shadow; this is not applied.
     window_shadow: int = 5
     # Spotlight-goshos launcher providers and chrome
     look_id: str = "spotlight"
@@ -75,7 +81,7 @@ class Settings(JsonConf):
         super().__setitem__(normalized, value)
 
     def get_jump_keys(self) -> list[str]:
-        # convert to list and filter out duplicates
+        # Leftover Ulauncher JSON helper. Nothing in the GTK4 popup reads this.
         return list(dict.fromkeys(list(self.jump_keys)))
 
     def is_persistent(self) -> bool:

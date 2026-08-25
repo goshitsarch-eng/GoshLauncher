@@ -98,6 +98,37 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     assert chosen.name == "Firefox"
 
 
+def test_places_system_path_and_spoken_math(popup: SearchPopup) -> None:
+    assert "place" in popup.type_query("docs")
+    assert "system" in popup.type_query("lock the screen")
+    assert "path" in popup.type_query("/tmp")
+    assert "calculator" in popup.type_query("two plus two")
+    assert "settings" in popup.type_query("wifi")
+
+
+def test_dollar_and_dot_prefixes_need_a_space() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    windows = [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)]
+    try:
+        probe = open_search_popup(home_windows=windows)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.type_query("$ firefox")
+        assert kinds == ["window"]
+        home_kinds = probe.type_query("$HOME")
+        assert "window" not in home_kinds
+        bashrc = probe.type_query(".bashrc")
+        assert "file" not in bashrc
+        notes = probe.type_query(". notes")
+        assert "url" not in notes
+        assert "calculator" not in notes
+        assert "web" not in notes
+    finally:
+        probe.close()
+
+
 def test_empty_state_windows_first_on_popos() -> None:
     if not display_available():
         pytest.skip("no Gdk display")

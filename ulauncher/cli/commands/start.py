@@ -14,7 +14,7 @@ def run(_: CLIArguments) -> int:
 
     init_helpers.init_x11_threads()
 
-    from ulauncher import api_version, version
+    from ulauncher import api_version, app_display_name, version
     from ulauncher.ui.app import UlauncherApp  # noqa: TID251
     from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME, DISTRO, IS_X11_COMPATIBLE, XDG_SESSION_TYPE
     from ulauncher.utils.migrate import v5_to_v6
@@ -44,7 +44,7 @@ def run(_: CLIArguments) -> int:
             "\n\n"
         )
 
-    logger.info("Ulauncher version %s", version)
+    logger.info("%s version %s", app_display_name, version)
     logger.info("Extension API version %s", api_version)
     logger.info("GTK %s.%s.%s", *gtk_version)
     logger.info("PyGObject+ %i.%i.%i", *UlauncherApp.get_pygobject_version())

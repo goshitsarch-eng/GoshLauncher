@@ -2,7 +2,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ulauncher import app_display_name, show_launcher_label
+from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
+
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_product_name_and_show_label() -> None:
+    assert app_display_name == "GoshLauncher"
+    assert show_launcher_label == "Show GoshLauncher"
+    assert DEFAULT_FALLBACK == "<Control>space"
+    app_src = (ROOT / "ulauncher" / "ui" / "app.py").read_text()
+    assert "DEFAULT_FALLBACK" in app_src
+    assert 'or "<Control>space"' not in app_src
+    tray_src = (ROOT / "ulauncher" / "ui" / "helpers" / "tray_icon.py").read_text()
+    assert "show_launcher_label" in tray_src
+    assert "Show Ulauncher" not in tray_src
 
 
 def test_desktop_file_is_gtk4_goshlauncher() -> None:
@@ -22,6 +37,7 @@ def test_debian_depends_on_gtk4_and_adwaita() -> None:
     assert "gir1.2-adw-1" in control
     assert "GTK 4 + libadwaita" in control
     assert "Ctrl+Space" in control
+    assert "https://github.com/goshitsarch-eng/GoshLauncher" in control
 
 
 def test_setup_excludes_tests_from_install() -> None:

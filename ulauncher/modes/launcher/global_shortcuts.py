@@ -13,6 +13,8 @@ import re
 import secrets
 from typing import Any, Callable
 
+from ulauncher import show_launcher_label
+
 logger = logging.getLogger(__name__)
 
 PORTAL_BUS = "org.freedesktop.portal.Desktop"
@@ -69,12 +71,12 @@ def portal_request_path(unique_name: str, handle_token: str) -> str:
     return f"/org/freedesktop/portal/desktop/request/{portal_sender_token(unique_name)}/{handle_token}"
 
 
-def bind_shortcuts_entries(trigger: str, description: str = "Show Ulauncher") -> list[tuple[str, dict[str, str]]]:
+def bind_shortcuts_entries(trigger: str, description: str | None = None) -> list[tuple[str, dict[str, str]]]:
     return [
         (
             SHORTCUT_ID,
             {
-                "description": description,
+                "description": description or show_launcher_label,
                 "preferred_trigger": trigger,
             },
         )

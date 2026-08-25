@@ -10,7 +10,7 @@ import gi
 from gi.repository import Adw, Gtk
 
 import ulauncher
-from ulauncher import app_id, first_run, paths
+from ulauncher import app_display_name, app_id, first_run, paths
 from ulauncher.core import UlauncherCore
 from ulauncher.gi import Gio, GLib
 from ulauncher.internals.results_update import ResultsUpdate
@@ -162,9 +162,10 @@ class UlauncherApp(Adw.Application):
         if settings.show_tray_icon and self._persistent:
             self.toggle_tray_icon(True)
 
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
         from ulauncher.ui.helpers.hotkey_controller import HotkeyController
 
-        hotkey = settings.hotkey_show_app or "<Control>space"
+        hotkey = settings.hotkey_show_app or DEFAULT_FALLBACK
         # Portal sessions die with the process, so this must run on every startup.
         portal_bound = HotkeyController.bind_session_hotkey(hotkey, self.toggle_window)
 
@@ -172,11 +173,14 @@ class UlauncherApp(Adw.Application):
             if HotkeyController.is_supported():
                 if HotkeyController.setup_default(hotkey):
                     display_name = Gtk.accelerator_get_label(*Gtk.accelerator_parse(hotkey))
-                    body = f'Ulauncher has added a global keyboard shortcut: "{display_name}" to your desktop settings'
+                    body = (
+                        f"{app_display_name} has added a global keyboard shortcut: "
+                        f'"{display_name}" to your desktop settings'
+                    )
                     self.show_notification("de_hotkey_auto_created", "Global shortcut created", body)
             elif not portal_bound:
                 body = (
-                    "Ulauncher doesn't support setting global keyboard shortcuts for your desktop. "
+                    f"{app_display_name} doesn't support setting global keyboard shortcuts for your desktop. "
                     "There are more details on this in the preferences view (click here to open)."
                 )
                 self.show_notification(
@@ -333,7 +337,7 @@ class UlauncherApp(Adw.Application):
         # or it would be broken in several ways (runtime status, start, install, preferences event)
         # and the cli would send dbus messages to the preferences (would break `ulauncher preview`)
         if not self._persistent and not self.windows:
-            logger.error("You have to start Ulauncher before you can open preferences.")
+            logger.error("You have to start %s before you can open preferences.", app_display_name)
             self.quit()
             return
 

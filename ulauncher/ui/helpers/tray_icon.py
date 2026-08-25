@@ -11,7 +11,7 @@ from typing import Any, Callable, Literal
 import gi
 from gi.repository import GObject, Gtk
 
-from ulauncher import paths
+from ulauncher import app_display_name, paths, show_launcher_label
 from ulauncher.modes.launcher.status_notifier import StatusNotifierItem, preferred_tray_backend
 from ulauncher.ui import gtk4
 from ulauncher.utils.environment import IS_X11_COMPATIBLE
@@ -84,7 +84,7 @@ class TrayIcon(GObject.Object):
         backend = preferred_tray_backend(tray_icon_lib, gtk_has_menu)
         if backend in {"XApp", "AyatanaIndicator"} and gtk_has_menu:
             menu = Gtk.Menu()
-            show_menu_item = _create_menu_item("Show Ulauncher", lambda *_: events.emit("app:show_launcher"))
+            show_menu_item = _create_menu_item(show_launcher_label, lambda *_: events.emit("app:show_launcher"))
             menu.append(show_menu_item)
             menu.append(_create_menu_item("Preferences", lambda *_: events.emit("app:show_preferences")))
             menu.append(_create_menu_item("About", lambda *_: events.emit("app:show_preferences", "about")))
@@ -111,7 +111,7 @@ class TrayIcon(GObject.Object):
                 icon_name = _icon
                 icon_dir = icon_asset_path
                 break
-            logger.warning("Could not find Ulauncher icon %s", _icon)
+            logger.warning("Could not find %s icon %s", app_display_name, _icon)
 
         if backend == "XApp":
             if icon_dir:
@@ -145,6 +145,7 @@ class TrayIcon(GObject.Object):
                 _emit_tray_action,
                 icon_name=icon_name,
                 icon_theme_path=icon_dir,
+                title=app_display_name,
             )
 
     def supports_appindicator(self) -> bool:
