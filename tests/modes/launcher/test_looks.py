@@ -162,6 +162,15 @@ def test_search_icon_style_class_and_compact_icon_size() -> None:
     assert icon_size_for_look(get_look("popos")["look"], "comfortable") > icon_size_for_look(
         get_look("krunner")["look"], "comfortable"
     )
+    assert icon_size_for_look(get_look("popos")["look"], "compact") > icon_size_for_look(
+        get_look("krunner")["look"], "compact"
+    )
+    assert icon_size_for_look(get_look("synapse")["look"], "comfortable") > icon_size_for_look(
+        get_look("powertoys")["look"], "comfortable"
+    )
+    assert icon_size_for_look(get_look("raycast")["look"], "comfortable") > icon_size_for_look(
+        get_look("albert")["look"], "comfortable"
+    )
 
 
 def test_look_prefs_search_text_finds_walker_cosmic_and_titles() -> None:
