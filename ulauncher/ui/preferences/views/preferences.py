@@ -26,6 +26,7 @@ from ulauncher.ui.preferences.adw_rows import (
     add_entry_row,
     add_spin_row,
     add_switch_row,
+    plain_action_row,
 )
 from ulauncher.ui.preferences.page_names import GOSHOS_PAGE_IDS
 from ulauncher.utils.environment import IS_X11
@@ -190,10 +191,7 @@ class PreferencesView:
             description="Set the shortcut to open GoshLauncher",
         )
 
-        shortcut_row = Adw.ActionRow(
-            title="Toggle shortcut",
-            subtitle="Click here, then press a key combination",
-        )
+        shortcut_row = plain_action_row("Toggle shortcut", "Click here, then press a key combination")
         shortcut_row.set_activatable(True)
         from ulauncher.modes.launcher.shortcut import shortcut_row_label
 
@@ -532,25 +530,16 @@ class PreferencesView:
     def _build_about_page(self) -> Adw.PreferencesPage:
         page = Adw.PreferencesPage(title="About", icon_name="dialog-information-symbolic")
         group = Adw.PreferencesGroup(title="About")
+        group.add(plain_action_row("GoshLauncher", "A compact GTK4/Adwaita launcher with interchangeable looks."))
+        group.add(plain_action_row("Looks", look_about_subtitle()))
         group.add(
-            Adw.ActionRow(
-                title="GoshLauncher",
-                subtitle="A compact GTK4/Adwaita launcher with interchangeable looks.",
+            plain_action_row(
+                "Toolkit",
+                "GTK 4 and libadwaita 1.1+ (Ubuntu 22.04). Looks follow Spotlight-goshos.",
             )
         )
-        group.add(Adw.ActionRow(title="Looks", subtitle=look_about_subtitle()))
-        group.add(
-            Adw.ActionRow(
-                title="Toolkit",
-                subtitle="GTK 4 and libadwaita 1.1+ (Ubuntu 22.04). Looks follow Spotlight-goshos.",
-            )
-        )
-        group.add(
-            Adw.ActionRow(
-                title="Version",
-                subtitle=f"{version} (Extension API v{api_version})",
-            )
-        )
+        about_version = f"{version} (Extension API v{api_version})"
+        group.add(plain_action_row("Version", about_version))
         page.add(group)
         return page
 

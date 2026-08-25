@@ -63,7 +63,14 @@ def bind_settings_changed(settings: Any, key: str, widget: Any, handler: Callabl
     return handler_id
 
 
+def _uses_adw_combo(row: Any) -> bool:
+    # Adw.ComboRow exposes get_selected/set_selected; `.selected` is not a Python attr on GI
+    return callable(getattr(row, "get_selected", None)) and callable(getattr(row, "set_selected", None))
+
+
 def _row_selected(row: Any) -> int:
+    if _uses_adw_combo(row):
+        return int(row.get_selected())
     if hasattr(row, "selected") and not callable(getattr(row, "get_active", None)):
         return int(row.selected)
     get_active = getattr(row, "get_active", None)
@@ -73,6 +80,9 @@ def _row_selected(row: Any) -> int:
 
 
 def _row_set_selected(row: Any, index: int) -> None:
+    if _uses_adw_combo(row):
+        row.set_selected(index)
+        return
     if hasattr(row, "selected") and not callable(getattr(row, "set_active", None)):
         row.selected = index
         return
@@ -94,7 +104,7 @@ def bind_settings_combo(row: Any, settings: Any, key: str, items: Sequence[Any])
         if item_id:
             settings.set_string(key, item_id)
 
-    if hasattr(row, "selected") and not callable(getattr(row, "get_active", None)):
+    if _uses_adw_combo(row) or (hasattr(row, "selected") and not callable(getattr(row, "get_active", None))):
         row.connect("notify::selected", on_selected)
     else:
         row.connect("changed", on_selected)

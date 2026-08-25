@@ -9,6 +9,17 @@ from gi.repository import Adw, Gtk
 from ulauncher.modes.launcher.prefs_combo import combo_selected_index
 
 
+def plain_action_row(title: str, subtitle: str = "") -> Adw.ActionRow:
+    """Subtitles can contain & from goshos copy; do not parse them as Pango markup."""
+    row = Adw.ActionRow(title=title)
+    set_markup = getattr(row, "set_use_markup", None)
+    if callable(set_markup):
+        set_markup(False)
+    if subtitle:
+        row.set_subtitle(subtitle)
+    return row
+
+
 def combo_item_label(item: Any) -> str:
     if isinstance(item, dict):
         if "label" in item:
@@ -31,7 +42,7 @@ def add_switch_row(
     active: bool,
     on_toggle: Callable[..., Any],
 ) -> Gtk.Switch:
-    row = Adw.ActionRow(title=title, subtitle=subtitle)
+    row = plain_action_row(title, subtitle)
     switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=active)
     row.add_suffix(switch)
     row.set_activatable_widget(switch)
@@ -47,7 +58,7 @@ def add_spin_row(
     adjustment: Gtk.Adjustment,
     on_changed: Callable[..., Any],
 ) -> Gtk.SpinButton:
-    row = Adw.ActionRow(title=title, subtitle=subtitle)
+    row = plain_action_row(title, subtitle)
     spin = Gtk.SpinButton(adjustment=adjustment, valign=Gtk.Align.CENTER, numeric=True)
     spin.set_width_chars(5)
     spin.connect("value-changed", on_changed)
@@ -65,6 +76,9 @@ def add_combo_row(
 ) -> Adw.ComboRow:
     model = string_list([combo_item_label(item) for item in items])
     row = Adw.ComboRow(title=title, model=model)
+    set_markup = getattr(row, "set_use_markup", None)
+    if callable(set_markup):
+        set_markup(False)
     if subtitle:
         row.set_subtitle(subtitle)
     index = combo_selected_index(items, current_id)
@@ -81,7 +95,7 @@ def add_button_row(
     button_label: str,
     on_clicked: Callable[..., Any],
 ) -> Gtk.Button:
-    row = Adw.ActionRow(title=title, subtitle=subtitle)
+    row = plain_action_row(title, subtitle)
     button = Gtk.Button(label=button_label, valign=Gtk.Align.CENTER)
     button.connect("clicked", on_clicked)
     row.add_suffix(button)
@@ -96,7 +110,7 @@ def add_entry_row(
     text: str,
     on_changed: Callable[..., Any],
 ) -> Gtk.Entry:
-    row = Adw.ActionRow(title=title, subtitle=subtitle)
+    row = plain_action_row(title, subtitle)
     entry = Gtk.Entry(text=text, valign=Gtk.Align.CENTER, hexpand=True)
     entry.set_width_chars(18)
     entry.connect("changed", on_changed)

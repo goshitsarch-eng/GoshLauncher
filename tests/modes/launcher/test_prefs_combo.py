@@ -108,6 +108,52 @@ def test_bind_settings_combo_follows_and_writes() -> None:
     assert stored["launcher-theme"] == "rofi"
 
 
+def test_bind_settings_combo_uses_adw_get_selected() -> None:
+    stored = {"popup_position": "center"}
+    handlers: dict[str, object] = {}
+
+    class Settings:
+        def get_string(self, key: str) -> str:
+            return stored[key]
+
+        def set_string(self, key: str, value: str) -> None:
+            stored[key] = value
+
+        def connect(self, signal: str, handler: object) -> int:
+            handlers[signal] = handler
+            return 3
+
+        def disconnect(self, _hid: int) -> None:
+            return None
+
+    class AdwRow:
+        def __init__(self) -> None:
+            self._selected = 0
+            self.signals: dict[str, object] = {}
+
+        def get_selected(self) -> int:
+            return self._selected
+
+        def set_selected(self, index: int) -> None:
+            self._selected = index
+
+        def connect(self, signal: str, handler: object) -> int:
+            self.signals[signal] = handler
+            return 1
+
+    from ulauncher.modes.launcher.prefs_combo import POSITION_ITEMS
+
+    row = AdwRow()
+    bind_settings_combo(row, Settings(), "popup_position", list(POSITION_ITEMS))
+    assert row.get_selected() == 0
+    stored["popup_position"] = "top"
+    apply = handlers["changed::popup_position"]
+    assert callable(apply)
+    apply()
+    assert row.get_selected() == 1
+    assert "notify::selected" in row.signals
+
+
 def test_dependent_row_sensitive_matches_features_page() -> None:
     assert dependent_row_sensitive(True) is True
     assert dependent_row_sensitive(False) is False
