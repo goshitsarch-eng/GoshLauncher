@@ -5,6 +5,7 @@ import signal
 import pytest
 
 from ulauncher.modes.launcher.windows import (
+    KWIN_LIST_SCRIPT,
     WindowInfo,
     activate_window,
     application_bus_name,
@@ -443,6 +444,20 @@ def test_hypr_sway_niri_window_payloads() -> None:
     assert hypr[0].wid == "hypr:0xabc"
     assert hypr[0].desktop == 1
     assert hypr[0].app_id == "firefox"
+    special = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xsp",
+                "title": "Scratch",
+                "class": "foot",
+                "workspace": {"id": -98},
+                "mapped": True,
+            }
+        ]
+    )
+    assert special[0].desktop == -1
+    assert window_workspace_label(special[0].desktop) == "Switch to window"
+    assert not window_matches(special[0], "1")
     sway = windows_from_sway_tree(
         {
             "type": "root",
@@ -773,6 +788,17 @@ def test_kwin_dump_lists_and_activates_plasma_windows() -> None:
     assert array_rows[0].app_id == "org.kde.dolphin"
     assert compositor_window_argv("kwin:{aaa}", "focus") == ["kdotool", "windowactivate", "{aaa}"]
     assert compositor_window_argv("kwin:{aaa}", "close") == ["kdotool", "windowclose", "{aaa}"]
+    desk = windows_from_kwin_dump([{"id": "{d2}", "title": "Code", "app_id": "code", "desktop": 2, "pid": 44}])
+    assert desk[0].desktop == 1
+    assert desk[0].pid == 44
+    assert window_matches(desk[0], "workspace 2")
+    sticky = windows_from_kwin_dump(
+        [{"id": "{all}", "title": "Notes", "app_id": "kate", "desktop": -1, "onAllDesktops": True}]
+    )
+    assert sticky[0].sticky is True
+    assert window_matches(sticky[0], "sticky")
+    assert "desktop:desktopOf(c)" in KWIN_LIST_SCRIPT
+    assert "pid:Number(c.pid||0)" in KWIN_LIST_SCRIPT
 
 
 def test_qtile_windows_list_and_activate() -> None:

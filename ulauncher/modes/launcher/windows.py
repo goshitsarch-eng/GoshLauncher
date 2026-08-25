@@ -612,7 +612,7 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
             ws_num = int(ws_id) if isinstance(ws_id, (int, str)) else 1
         except (TypeError, ValueError):
             ws_num = 1
-        desktop = ws_num - 1 if ws_num > 0 else 0
+        desktop = one_based_workspace_desktop(ws_num)
         try:
             pid = int(item.get("pid") or 0)
         except (TypeError, ValueError):
@@ -666,7 +666,7 @@ def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
                 wid=f"niri:{ident}",
                 title=title,
                 wm_class=app_id,
-                desktop=ws_num - 1 if ws_num > 0 else 0,
+                desktop=one_based_workspace_desktop(ws_num),
                 pid=pid,
                 sticky=False,
                 user_time=1 if item.get("is_focused") else 0,
@@ -854,17 +854,57 @@ def windows_from_ext_foreign_handles(items: Any) -> list[WindowInfo]:
 
 
 KWIN_LIST_SCRIPT = (
+    "function desktopOf(c){"
+    "if(c.onAllDesktops)return -1;"
+    "if(typeof c.desktop==='number')return c.desktop;"
+    "var ds=c.desktops;"
+    "if(ds&&ds.length){var d=ds[0];"
+    "if(typeof d==='number')return d;"
+    "if(d&&typeof d.x11DesktopNumber==='number')return d.x11DesktopNumber;}"
+    "return 1;}"
     "var clients = workspace.windowList();"
     "for (var i = 0; i < clients.length; i++) {"
     "var c = clients[i];"
-    "if (!c || c.skipTaskbar || c.skipTaskbar || c.desktopWindow) continue;"
+    "if (!c || c.skipTaskbar || c.desktopWindow) continue;"
     "output_result(JSON.stringify({"
     "id: String(c.internalId),"
     "title: String(c.caption || ''),"
-    "app_id: String(c.resourceClass || '')"
+    "app_id: String(c.resourceClass || ''),"
+    "desktop: desktopOf(c),"
+    "onAllDesktops: Boolean(c.onAllDesktops),"
+    "pid: Number(c.pid || 0)"
     "}));"
     "}"
 )
+
+
+def one_based_workspace_desktop(number: int) -> int:
+    """Map compositor 1-based ids onto WindowInfo.desktop. Unknown/special is -1."""
+    if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+        return -1
+    return number - 1
+
+
+def _kwin_placement(item: Mapping[str, Any]) -> tuple[int, bool, int]:
+    sticky = bool(item.get("onAllDesktops") or item.get("on_all_desktops"))
+    try:
+        pid = int(item.get("pid") or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    raw = item.get("desktop")
+    if sticky:
+        return 0, True, pid
+    if raw is None:
+        return 0, False, pid
+    try:
+        number = int(raw)
+    except (TypeError, ValueError):
+        return 0, False, pid
+    if number < 0:
+        return 0, True, pid
+    if number == 0:
+        return 0, False, pid
+    return number - 1, False, pid
 
 
 def windows_from_kwin_dump(payload: Any) -> list[WindowInfo]:
@@ -903,12 +943,15 @@ def windows_from_kwin_dump(payload: Any) -> list[WindowInfo]:
         app_id = str(item.get("app_id") or item.get("resourceClass") or "")
         if not ident or (not title and not app_id):
             continue
+        desktop, sticky, pid = _kwin_placement(item)
         windows.append(
             WindowInfo(
                 wid=f"kwin:{ident}",
                 title=title or app_id,
                 wm_class=app_id,
-                desktop=0,
+                desktop=desktop,
+                pid=pid,
+                sticky=sticky,
                 app_id=app_id,
             )
         )
