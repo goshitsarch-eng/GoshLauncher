@@ -25,3 +25,11 @@ def test_clipboard_set_text_does_not_raise() -> None:
     if Gdk.Display.get_default() is None:
         pytest.skip("no Gdk display")
     clipboard_set_text("4")
+
+
+def test_accelerator_label_parses_gtk4_control_space() -> None:
+    from ulauncher.ui.gtk4 import accelerator_label
+
+    label = accelerator_label("<Control>space")
+    assert label
+    assert "space" in label.lower()

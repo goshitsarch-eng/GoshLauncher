@@ -66,7 +66,7 @@ class HotkeyDialog(Gtk.Dialog):
     def on_key_press(self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: int) -> bool:
         from ulauncher.modes.launcher.shortcut import build_accelerator, is_modifier_key_name, modifiers_from_mask
 
-        key_name = Gtk.accelerator_name(keyval, 0)
+        key_name = Gtk.accelerator_name(keyval, Gdk.ModifierType(0))
         if is_modifier_key_name(key_name):
             return True
 

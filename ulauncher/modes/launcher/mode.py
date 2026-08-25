@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Iterator, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any, Callable, Iterator
 
 from ulauncher.internals import effects
 from ulauncher.internals.query import Query
@@ -37,7 +38,7 @@ class LauncherMode(Mode):
         self._paint_callback: Callable[[effects.EffectMessage], None] | None = None
         self._paint_planned: dict[str, Any] | None = None
         self._paint_settings: Settings | None = None
-        self._paint_chrome: dict[str, Any] | None = None
+        self._paint_chrome: Mapping[str, Any] | None = None
         self._accept_paint = False
 
     def matches_query_str(self, query_str: str) -> bool:
@@ -279,7 +280,7 @@ class LauncherMode(Mode):
             return
         callback(effects.do_nothing())
 
-    def _results_for_plan(self, planned: dict[str, Any], settings: Settings, chrome: dict[str, Any]) -> list[Result]:
+    def _results_for_plan(self, planned: dict[str, Any], settings: Settings, chrome: Mapping[str, Any]) -> list[Result]:
         rows = list(self._collect(planned, settings))
         show_headers = bool(chrome.get("show_headers")) and planned["mode"] == "all"
         return list(self._materialize(rows, chrome, headers=show_headers))
@@ -602,7 +603,7 @@ class LauncherMode(Mode):
 
         return rows
 
-    def _materialize(self, rows: Sequence[dict[str, Any]], chrome: dict[str, Any], headers: bool) -> Iterator[Result]:
+    def _materialize(self, rows: Sequence[dict[str, Any]], chrome: Mapping[str, Any], headers: bool) -> Iterator[Result]:
         from ulauncher.modes.launcher.section_titles import section_title
 
         last_kind = ""

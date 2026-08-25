@@ -45,7 +45,8 @@ def _event_time_us(controller: Any) -> int:
     getter = getattr(controller, "get_current_event_time", None)
     if not callable(getter):
         return 0
-    time_ms = int(getter() or 0)
+    raw = getter() or 0
+    time_ms = int(raw) if isinstance(raw, (int, float, str)) else 0
     if time_ms <= 0:
         return 0
     return time_ms * 1000
@@ -518,19 +519,17 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self._refocus_entry_soon()
 
     def _widget_rect_in_prompt(self, widget: Gtk.Widget) -> tuple[float, float, float, float]:
-        compute = getattr(widget, "compute_bounds", None)
-        if callable(compute):
-            ok, bounds = compute(self.prompt)
-            if ok and bounds is not None:
-                get_x = getattr(bounds, "get_x", None)
-                if callable(get_x):
-                    return (
-                        float(bounds.get_x()),
-                        float(bounds.get_y()),
-                        float(bounds.get_width()),
-                        float(bounds.get_height()),
-                    )
-                return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
+        ok, bounds = gtk4.widget_bounds(widget, self.prompt)
+        if ok and bounds is not None:
+            get_x = getattr(bounds, "get_x", None)
+            if callable(get_x):
+                return (
+                    float(bounds.get_x()),
+                    float(bounds.get_y()),
+                    float(bounds.get_width()),
+                    float(bounds.get_height()),
+                )
+            return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
         return (0.0, 0.0, 0.0, 0.0)
 
     def _prompt_click_target(self, x: float, y: float) -> str:
@@ -565,16 +564,22 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def _click_outside_card(self, x: float, y: float) -> bool:
         from ulauncher.modes.launcher.click_outside import click_is_outside_card
 
-        compute = getattr(self.theme_root, "compute_bounds", None)
-        if callable(compute):
-            ok, bounds = compute(self)
-            if ok:
+        ok, bounds = gtk4.widget_bounds(self.theme_root, self)
+        if ok and bounds is not None:
+            get_x = getattr(bounds, "get_x", None)
+            if callable(get_x):
                 return click_is_outside_card(
-                    x - bounds.get_x(),
-                    y - bounds.get_y(),
-                    bounds.get_width(),
-                    bounds.get_height(),
+                    x - float(bounds.get_x()),
+                    y - float(bounds.get_y()),
+                    float(bounds.get_width()),
+                    float(bounds.get_height()),
                 )
+            return click_is_outside_card(
+                x - float(bounds.x),
+                y - float(bounds.y),
+                float(bounds.width),
+                float(bounds.height),
+            )
         width = float(self.theme_root.get_width() or 0)
         height = float(self.theme_root.get_height() or 0)
         return click_is_outside_card(x, y, width, height)

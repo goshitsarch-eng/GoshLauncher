@@ -179,20 +179,30 @@ class ResultWidget(Gtk.Box):
     def _row_offset_in_parent(self) -> tuple[float, float]:
         row_height = float(self.get_height())
         parent = self.get_parent()
-        compute = getattr(self, "compute_bounds", None)
-        if parent is None or not callable(compute):
+        if not isinstance(parent, Gtk.Widget):
             return 0.0, row_height
-        ok, bounds = compute(parent)
+        ok, bounds = gtk4.widget_bounds(self, parent)
         if not ok or bounds is None:
             return 0.0, row_height
         get_y = getattr(bounds, "get_y", None)
-        if callable(get_y):
-            return float(get_y()), float(bounds.get_height())
+        get_height = getattr(bounds, "get_height", None)
+        if callable(get_y) and callable(get_height):
+            y = get_y()
+            height = get_height()
+            if isinstance(y, (int, float)) and isinstance(height, (int, float)):
+                return float(y), float(height)
         origin = getattr(bounds, "origin", None)
         size = getattr(bounds, "size", None)
         if origin is not None and size is not None:
-            return float(origin.y), float(size.height)
-        return float(bounds.y), float(bounds.height)
+            y = getattr(origin, "y", None)
+            height = getattr(size, "height", None)
+            if isinstance(y, (int, float)) and isinstance(height, (int, float)):
+                return float(y), float(height)
+        y = getattr(bounds, "y", None)
+        height = getattr(bounds, "height", None)
+        if isinstance(y, (int, float)) and isinstance(height, (int, float)):
+            return float(y), float(height)
+        return 0.0, row_height
 
     def highlight_name(self) -> None:
         if self.result.wrap:

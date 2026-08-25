@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-from typing import Callable
+from collections.abc import Mapping
+from typing import Any, Callable, TypedDict
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 from ulauncher.utils.launch_detached import launch_detached
@@ -13,6 +14,14 @@ from ulauncher.utils.launch_detached import launch_detached
 logger = logging.getLogger(__name__)
 
 STOP_WORDS = re.compile(r"\b(the|a|an|my|please|computer|system|session|machine|pc|of|now)\b", re.IGNORECASE)
+
+
+class SystemAction(TypedDict):
+    id: str
+    title: str
+    icon: str
+    keywords: list[str]
+    commands: list[list[str]]
 
 
 def screenshot_commands() -> list[list[str]]:
@@ -26,7 +35,7 @@ def screenshot_commands() -> list[list[str]]:
     ]
 
 
-SYSTEM_ACTIONS = [
+SYSTEM_ACTIONS: list[SystemAction] = [
     {
         "id": "lock",
         "title": "Lock Screen",
@@ -108,7 +117,7 @@ def normalize_action_query(query: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def action_matches(action: dict, query: str) -> bool:
+def action_matches(action: Mapping[str, Any], query: str) -> bool:
     q = normalize_action_query(query)
     if not q:
         return False
@@ -171,9 +180,9 @@ def action_is_available(action_id: str, can_map: dict[str, str] | None = None) -
     return str(answer).lower() not in {"no", "na"}
 
 
-def match_system_actions(query: str, limit: int = 6, can_map: dict[str, str] | None = None) -> list[dict]:
+def match_system_actions(query: str, limit: int = 6, can_map: dict[str, str] | None = None) -> list[SystemAction]:
     answers = can_map if can_map is not None else probe_logind()
-    results: list[dict] = []
+    results: list[SystemAction] = []
     for action in SYSTEM_ACTIONS:
         if not action_is_available(action["id"], answers):
             continue

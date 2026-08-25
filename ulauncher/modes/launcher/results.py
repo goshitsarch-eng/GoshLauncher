@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from ulauncher.internals.result import Result
 
@@ -15,7 +15,7 @@ class LauncherResult(Result):
     highlightable: bool = True
     searchable: bool = True
     activatable: bool = True
-    actions: dict[str, dict[str, str]] = {"activate": {"name": "Activate"}}
+    actions: dict[str, dict[Literal["name", "icon"], str]] = {"activate": {"name": "Activate"}}
 
 
 class SectionHeader(Result):
@@ -25,4 +25,4 @@ class SectionHeader(Result):
     name: str = ""
     description: str = ""
     icon: str = ""
-    actions: dict[str, dict[str, str]] = {}
+    actions: dict[str, dict[Literal["name", "icon"], str]] = {}

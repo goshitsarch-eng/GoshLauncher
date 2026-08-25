@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from ulauncher.modes.apps.app_mode import AppMode
@@ -173,7 +174,7 @@ def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     return False
 
 
-def app_window_count(app: Any, windows: list[Any] | None = None) -> int:
+def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:
     if windows is None:
         from ulauncher.modes.launcher.windows import list_windows
 

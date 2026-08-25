@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ulauncher.modes.launcher.ui_scale import css_px, stage_px, theme_scale
+
+# Geometry dicts are ints at runtime. Mapping (not dict) so dict[str, int] is assignable.
+WorkArea = Mapping[str, float]
 
 MIN_RESULTS_HEIGHT = 120
 
@@ -36,14 +40,14 @@ def gtk_default_window_size(width: int, height: int) -> tuple[int, int]:
     return width, height if height > 1 else -1
 
 
-def gtk_window_owns_popup_width(desktop_id: str, is_x11_compatible: bool) -> bool:
+def gtk_window_owns_popup_width(desktop_id: str | None, is_x11_compatible: object) -> bool:
     """GNOME Wayland is a fullscreen overlay; the card width is margin insets."""
-    return desktop_id != "GNOME" or is_x11_compatible
+    return desktop_id != "GNOME" or bool(is_x11_compatible)
 
 
 def gnome_wayland_overlay_size(
-    selected: dict[str, float] | None,
-    geometries: list[dict[str, float]] | None = None,
+    selected: WorkArea | None,
+    geometries: Sequence[WorkArea] | None = None,
 ) -> dict[str, int] | None:
     """Fill the chosen monitor. Min-of-all-monitors would shrink a 4K primary next to a 1080p panel."""
     if selected and float(selected.get("width") or 0) > 0 and float(selected.get("height") or 0) > 0:
@@ -58,7 +62,7 @@ def gnome_wayland_overlay_size(
     return None
 
 
-def intersect_rect(first: dict[str, float], second: dict[str, float]) -> dict[str, int] | None:
+def intersect_rect(first: WorkArea, second: WorkArea) -> dict[str, int] | None:
     x = max(first["x"], second["x"])
     y = max(first["y"], second["y"])
     right = min(first["x"] + first["width"], second["x"] + second["width"])
@@ -99,7 +103,7 @@ def desktop_work_area_from_ewmh(values: Any, desktop_index: int = 0) -> dict[str
     return {"x": nums[offset], "y": nums[offset + 1], "width": nums[offset + 2], "height": nums[offset + 3]}
 
 
-def work_area_for_monitor(geometry: dict[str, float], desktop_work_area: dict[str, float] | None) -> dict[str, int]:
+def work_area_for_monitor(geometry: WorkArea, desktop_work_area: WorkArea | None) -> dict[str, int]:
     """goshos getWorkAreaForMonitor: keep panel struts out of the popup origin."""
     geo = {
         "x": int(geometry["x"]),
@@ -137,7 +141,7 @@ def work_area_from_hyprland_monitor(monitor: Any) -> dict[str, int] | None:
     }
 
 
-def hyprland_work_area_for_geometry(monitors: Any, geometry: dict[str, float]) -> dict[str, int] | None:
+def hyprland_work_area_for_geometry(monitors: Any, geometry: WorkArea) -> dict[str, int] | None:
     rows = list(monitors or [])
     if not rows:
         return None
@@ -186,7 +190,7 @@ def _workspace_work_area(output: dict[str, Any]) -> dict[str, int] | None:
     return _ipc_rect(chosen.get("rect"))
 
 
-def work_area_from_sway_tree(tree: Any, geometry: dict[str, float]) -> dict[str, int] | None:
+def work_area_from_sway_tree(tree: Any, geometry: WorkArea) -> dict[str, int] | None:
     if not tree:
         return None
     gx = int(geometry["x"])
@@ -212,8 +216,8 @@ def work_area_from_sway_tree(tree: Any, geometry: dict[str, float]) -> dict[str,
 
 
 def resolve_monitor_work_area(
-    geometry: dict[str, float],
-    desktop_work_area: dict[str, float] | None = None,
+    geometry: WorkArea,
+    desktop_work_area: WorkArea | None = None,
     hyprland_monitors: Any = None,
     sway_tree: Any = None,
 ) -> dict[str, int]:
@@ -226,7 +230,7 @@ def resolve_monitor_work_area(
     return work_area_for_monitor(geometry, desktop_work_area)
 
 
-def offset_from_origin(placed: dict[str, float], origin: dict[str, float]) -> dict[str, int]:
+def offset_from_origin(placed: WorkArea, origin: WorkArea) -> dict[str, int]:
     """Translate a work-area origin into surface-local x/y (overlay, layer-shell, or monitor)."""
     return {"x": int(placed["x"] - origin["x"]), "y": int(placed["y"] - origin["y"])}
 
@@ -237,21 +241,21 @@ def results_max_height_for_work_area(requested: float, space_below: float) -> fl
     return min(requested, space_below)
 
 
-def space_below_origin(work_area: dict[str, float], origin_y: float, empty_height: float) -> float:
+def space_below_origin(work_area: WorkArea, origin_y: float, empty_height: float) -> float:
     return work_area["y"] + work_area["height"] - origin_y - empty_height
 
 
 def lift_origin_for_results(
-    origin: dict[str, float],
-    work_area: dict[str, float],
+    origin: WorkArea,
+    work_area: WorkArea,
     empty_height: float,
     min_results: float,
 ) -> dict[str, float]:
     if min_results <= 0:
-        return origin
+        return dict(origin)
     space = space_below_origin(work_area, origin["y"], empty_height)
     if space >= min_results:
-        return origin
+        return dict(origin)
     needed = empty_height + min_results
     y = work_area["y"] + work_area["height"] - needed
     max_y = work_area["y"] + work_area["height"] - empty_height
@@ -261,7 +265,7 @@ def lift_origin_for_results(
 
 
 def popup_origin(
-    work_area: dict[str, float],
+    work_area: WorkArea,
     popup_width: float,
     popup_height: float,
     position: str,
@@ -286,7 +290,7 @@ def popup_origin(
 
 
 def place_popup(
-    work_area: dict[str, float],
+    work_area: WorkArea,
     popup_width: float,
     empty_height: float,
     position: str,
@@ -341,19 +345,19 @@ def keyboard_overlap_from_box(
     }
 
 
-def work_area_avoiding_keyboard(work_area: dict[str, float], keyboard: Any) -> dict[str, float]:
+def work_area_avoiding_keyboard(work_area: WorkArea, keyboard: Any) -> dict[str, float]:
     if not keyboard or not _get(keyboard, "visible", False) or _get(keyboard, "height", 0) <= 0:
-        return work_area
+        return dict(work_area)
     monitor_index = _get(keyboard, "monitorIndex", -1)
     work_monitor_index = _get(keyboard, "workMonitorIndex", -1)
     if monitor_index >= 0 and work_monitor_index >= 0 and monitor_index != work_monitor_index:
-        return work_area
+        return dict(work_area)
     top = _get(keyboard, "y", 0) + _get(keyboard, "translationY", 0)
     work_bottom = work_area["y"] + work_area["height"]
     if top >= work_bottom:
-        return work_area
+        return dict(work_area)
     if top + _get(keyboard, "height", 0) <= work_area["y"]:
-        return work_area
+        return dict(work_area)
     if top <= work_area["y"]:
         return {"x": work_area["x"], "y": work_area["y"], "width": work_area["width"], "height": 0}
     return {

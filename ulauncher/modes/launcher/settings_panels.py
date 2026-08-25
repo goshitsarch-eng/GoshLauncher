@@ -6,10 +6,19 @@ import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import TypedDict
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 
-SETTINGS_PANELS = [
+
+class SettingsPanel(TypedDict):
+    id: str
+    title: str
+    icon: str
+    keywords: list[str]
+
+
+SETTINGS_PANELS: list[SettingsPanel] = [
     {
         "id": "wifi",
         "title": "Wi-Fi",
@@ -166,11 +175,11 @@ def settings_panel_available(panel_id: str, has_desktop: Callable[[str], bool] |
         return True
 
 
-def match_settings_panels(query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None) -> list[dict]:
+def match_settings_panels(query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None) -> list[SettingsPanel]:
     available = is_available or settings_panel_available
     lower = query.lower()
     normalized = lower.replace("-", "").replace("_", "").replace(" ", "")
-    matches: list[dict] = []
+    matches: list[SettingsPanel] = []
     for panel in SETTINGS_PANELS:
         if not available(panel["id"]):
             continue

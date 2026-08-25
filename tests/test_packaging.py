@@ -83,6 +83,14 @@ def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     assert 'export PATH="/usr/sbin:/usr/bin:/sbin:/bin"' in makefile
 
 
+def test_pyrefly_typechecks_shipped_package() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert 'project-includes = ["ulauncher"]' in pyproject
+    assert 'project-includes = ["ulauncher", "tests"]' not in pyproject
+    assert "implicit-any-type-argument = false" in pyproject
+    assert "invalid-inheritance = false" in pyproject
+
+
 def test_venv_bootstraps_pip_before_pygobject_stubs() -> None:
     makefile = (ROOT / "makefile").read_text()
     venv = makefile[makefile.index("venv:") : makefile.index("-r requirements.txt")]

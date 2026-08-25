@@ -172,7 +172,9 @@ class UlauncherApp(Adw.Application):
         if first_run:
             if HotkeyController.is_supported():
                 if HotkeyController.setup_default(hotkey):
-                    display_name = Gtk.accelerator_get_label(*Gtk.accelerator_parse(hotkey))
+                    from ulauncher.ui import gtk4
+
+                    display_name = gtk4.accelerator_label(hotkey)
                     body = (
                         f"{app_display_name} has added a global keyboard shortcut: "
                         f'"{display_name}" to your desktop settings'
@@ -319,7 +321,7 @@ class UlauncherApp(Adw.Application):
         save_query = bool(self._popup_close_save_query)
         self._popup_close_save_query = False
         if main_window := self.windows.get("main"):
-            main_window.close(save_query=save_query)
+            cast("UlauncherWindow", main_window).close(save_query=save_query)
         else:
             self._popup_close_pending = False
 

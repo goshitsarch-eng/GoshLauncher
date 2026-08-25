@@ -4,10 +4,24 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TypedDict
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 
-PLACE_CATALOG = [
+
+class _PlaceRequired(TypedDict):
+    id: str
+    title: str
+    keywords: list[str]
+    icon: str
+
+
+class PlaceEntry(_PlaceRequired, total=False):
+    env: str
+    xdg: str
+
+
+PLACE_CATALOG: list[PlaceEntry] = [
     {"id": "home", "title": "Home", "keywords": ["home", "~"], "icon": "user-home-symbolic", "env": "HOME"},
     {
         "id": "desktop",
@@ -82,7 +96,7 @@ def _xdg_dirs() -> dict[str, str]:
     return mapping
 
 
-def place_path(place: dict, dirs: dict[str, str] | None = None) -> str:
+def place_path(place: PlaceEntry, dirs: dict[str, str] | None = None) -> str:
     dirs = dirs or _xdg_dirs()
     if place["id"] == "home":
         return dirs.get("HOME") or str(Path.home())

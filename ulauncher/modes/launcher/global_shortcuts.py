@@ -42,7 +42,7 @@ _MOD_MAP = {
 _GTK_MOD_RE = re.compile(r"<([^>]+)>")
 
 
-def should_bind_portal(desktop_id: str) -> bool:
+def should_bind_portal(desktop_id: str | None) -> bool:
     return desktop_id not in NATIVE_HOTKEY_DESKTOPS
 
 
@@ -138,7 +138,7 @@ class GlobalShortcutsPortal:
         unique = ""
         getter = getattr(connection, "get_unique_name", None)
         if callable(getter):
-            unique = getter() or ""
+            unique = str(getter() or "")
         handle_token = new_handle_token()
         session_token = new_handle_token("uls")
         request_path = portal_request_path(unique, handle_token)
@@ -155,7 +155,7 @@ class GlobalShortcutsPortal:
         unique = ""
         getter = getattr(self._connection, "get_unique_name", None)
         if callable(getter):
-            unique = getter() or ""
+            unique = str(getter() or "")
         handle_token = new_handle_token("ulb")
         request_path = portal_request_path(unique, handle_token)
         self._subscribe_request(self._connection, request_path, self._on_bind_response)

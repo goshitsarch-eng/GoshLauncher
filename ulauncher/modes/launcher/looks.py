@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, TypedDict
 
 
@@ -257,10 +258,10 @@ def look_prefs_search_text() -> str:
     )
 
 
-def icon_size_for_look(chrome: LookChrome, density: str) -> int:
+def icon_size_for_look(chrome: Mapping[str, Any], density: str) -> int:
     if density == "compact":
-        return round(chrome["icon_size"] * 0.8)
-    return chrome["icon_size"]
+        return round(int(chrome["icon_size"]) * 0.8)
+    return int(chrome["icon_size"])
 
 
 def search_icon_style_class(show_search_icon: bool) -> str:
@@ -318,7 +319,7 @@ def ensure_look_chrome(settings: Any) -> None:
 
 def chrome_from_settings(settings: Any) -> LookChrome:
     look = get_look(getattr(settings, "look_id", "spotlight"))
-    chrome: LookChrome = dict(look["look"])
+    chrome = look["look"].copy()
     if getattr(settings, "applied_look", "") != look["id"]:
         return chrome
     for chrome_key, settings_key in _CHROME_SETTINGS:

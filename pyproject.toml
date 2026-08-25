@@ -27,7 +27,8 @@ version = {attr = "ulauncher._version.version"}
 python-interpreter-path = ".venv/bin/python"
 python-platform = "linux"
 python-version = "3.8"
-project-includes = ["ulauncher", "tests"]
+# tests/ is GTK mocks and fixtures, not the shipped type surface.
+project-includes = ["ulauncher"]
 min-severity = "info"
 preset = "strict"
 
@@ -35,6 +36,11 @@ preset = "strict"
 bad-param-name-override = false
 missing-override-decorator = false
 implicit-any-lambda = false
+# pygobject-stubs 2.12 with preset=strict: empty {} / [] and GLib.GError's stub base class.
+implicit-any-type-argument = false
+implicit-any-empty-container = false
+implicit-any-attribute = false
+invalid-inheritance = false
 
 # Pylint is not checked in CI or included in `make check` due to being slow.
 # Run occasional manual audit with `make pylint`

@@ -157,7 +157,7 @@ def _window_user_time(ewmh: Any, win: Any) -> int:
         return 0
     try:
         arr = getter("_NET_WM_USER_TIME", win)
-        if arr:
+        if isinstance(arr, (list, tuple)) and arr:
             return int(arr[0])
     except Exception:
         return 0
@@ -212,7 +212,14 @@ def sort_windows_most_recent(
         else:
             tab_index = index
         stamp = get_user_time(win) if callable(get_user_time) else win.user_time
-        return window_recency_value(tab_index, count, int(stamp or 0))
+        if isinstance(stamp, (int, float, str)):
+            try:
+                user_time = int(stamp or 0)
+            except (TypeError, ValueError):
+                user_time = 0
+        else:
+            user_time = 0
+        return window_recency_value(tab_index, count, user_time)
 
     return [win for _index, win in sorted(enumerate(indexed), key=recency, reverse=True)]
 
@@ -297,7 +304,7 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
         workspace = item.get("workspace")
         ws_id = workspace.get("id") if isinstance(workspace, dict) else workspace
         try:
-            ws_num = int(ws_id)
+            ws_num = int(ws_id) if isinstance(ws_id, (int, str)) else 1
         except (TypeError, ValueError):
             ws_num = 1
         desktop = ws_num - 1 if ws_num > 0 else 0
@@ -309,7 +316,7 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
             history = item.get("focusHistoryID")
             if history is None:
                 history = item.get("focusHistoryId")
-            user_time = 10**9 - int(history)
+            user_time = 10**9 - int(history) if isinstance(history, (int, str)) else 0
         except (TypeError, ValueError):
             user_time = 0
         windows.append(

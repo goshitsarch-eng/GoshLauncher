@@ -326,7 +326,8 @@ class UlauncherCore:
                         {**effect_msg, "results": self._merge_legacy_into_launcher(list(effect_msg["results"]))},
                     )
                 self._result_buffer.enqueue(
-                    paint, lambda results, append: self._render_results(results, callback, append)
+                    cast("effects.RenderResults", paint),
+                    lambda results, append: self._render_results(results, callback, append),
                 )
             elif effect_msg["type"] == effects.EffectType.LEGACY_RUN_MANY:
                 # effect_utils.handle has no callback to render with, so route any nested render
