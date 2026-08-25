@@ -45,3 +45,11 @@ def test_live_search_fingerprint_includes_workspace_count() -> None:
     assert same_windows == live_search_fingerprint(windows, 2)
     assert live_search_fingerprint(windows, 3) != same_windows
     assert live_search_fingerprint([], 2) != same_windows
+
+
+def test_live_search_fingerprint_includes_current_desktop() -> None:
+    windows = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x")]
+    same_windows = live_search_fingerprint(windows, 2, 0)
+    assert same_windows == live_search_fingerprint(windows, 2, 0)
+    assert live_search_fingerprint(windows, 2, 1) != same_windows
+    assert live_search_fingerprint(windows, 2, "code") != same_windows

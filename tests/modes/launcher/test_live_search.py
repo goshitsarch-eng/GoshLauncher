@@ -13,6 +13,7 @@ def test_watcher_notifies_when_window_list_changes() -> None:
         list_windows=lambda: list(windows),
         poll_interval=0,
         workspace_count=lambda: 2,
+        current_desktop=lambda: 0,
     )
     watcher.start()
     assert watcher.listening is True
@@ -36,11 +37,30 @@ def test_watcher_notifies_when_workspace_count_changes() -> None:
         list_windows=list,
         poll_interval=0,
         workspace_count=lambda: count["n"],
+        current_desktop=lambda: 0,
     )
     watcher.start()
     watcher.poll()
     assert events == []
     count["n"] = 3
+    watcher.poll()
+    assert events == [1]
+
+
+def test_watcher_notifies_when_current_desktop_changes() -> None:
+    desktop = {"n": 0}
+    events: list[int] = []
+    watcher = LiveSearchWatcher(
+        lambda: events.append(1),
+        list_windows=list,
+        poll_interval=0,
+        workspace_count=lambda: 2,
+        current_desktop=lambda: desktop["n"],
+    )
+    watcher.start()
+    watcher.poll()
+    assert events == []
+    desktop["n"] = 1
     watcher.poll()
     assert events == [1]
 

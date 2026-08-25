@@ -23,6 +23,7 @@ from ulauncher.modes.launcher.wayland_workspaces import (
     EXT_WS_REMOVED,
     activate_ext_workspace,
     collect_ext_workspace_handles,
+    ext_workspace_current_desktop,
     list_ext_workspaces,
     pick_ext_workspace,
 )
@@ -89,6 +90,32 @@ def test_pick_ext_workspace_coords_name_and_order() -> None:
     assert by_order is not None
     assert by_order["object_id"] == 5
     assert pick_ext_workspace(ordered, 9) is None
+
+
+def test_ext_workspace_current_desktop_uses_active_state() -> None:
+    assert (
+        ext_workspace_current_desktop(
+            [
+                {"name": "1", "coordinates": [0], "state": 0, "removed": False},
+                {"name": "2", "coordinates": [1], "state": 1, "removed": False},
+            ]
+        )
+        == 1
+    )
+    assert (
+        ext_workspace_current_desktop([{"name": "Workspace 3", "coordinates": [], "state": 1, "removed": False}]) == 2
+    )
+    assert ext_workspace_current_desktop([{"name": "code", "coordinates": [], "state": 1, "removed": False}]) == "code"
+    assert ext_workspace_current_desktop([{"name": "1", "coordinates": [0], "state": 0, "removed": False}]) is None
+    assert (
+        ext_workspace_current_desktop(
+            [
+                {"name": "gone", "coordinates": [0], "state": 1, "removed": True},
+                {"name": "2", "coordinates": [1], "state": 1, "removed": False},
+            ]
+        )
+        == 1
+    )
 
 
 class _ScriptedWorkspaceDisplay:

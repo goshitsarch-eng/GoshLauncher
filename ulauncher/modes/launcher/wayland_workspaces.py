@@ -40,6 +40,7 @@ EXT_WS_CAPABILITIES = 4
 EXT_WS_REMOVED = 5
 EXT_WS_ACTIVATE = 1
 WS_CAP_ACTIVATE = 1
+WS_STATE_ACTIVE = 1
 
 
 def collect_ext_workspace_handles(
@@ -98,6 +99,42 @@ def pick_ext_workspace(items: Sequence[Mapping[str, Any]], index: int) -> dict[s
             return item
     if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(live):
         return live[index]
+    return None
+
+
+def ext_workspace_current_desktop(items: Sequence[Mapping[str, Any]]) -> int | str | None:
+    """0-based index or name of the ACTIVE workspace. None when none is marked.
+
+    Coordinates match ``pick_ext_workspace`` (already 0-based). Digit names and
+    ``Workspace N`` labels are 1-based, like goshos ``get_workspace_by_index``.
+    """
+    live = [item for item in items if not item.get("removed")]
+    for index, item in enumerate(live):
+        try:
+            state = int(item.get("state") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not state & WS_STATE_ACTIVE:
+            continue
+        coords = item.get("coordinates") or []
+        if isinstance(coords, (list, tuple)) and len(coords) == 1:
+            try:
+                number = int(coords[0])
+            except (TypeError, ValueError):
+                number = -1
+            if number >= 0:
+                return number
+        name = str(item.get("name") or "").strip()
+        lower = name.lower()
+        if lower.isdigit() and int(lower) >= 1:
+            return int(lower) - 1
+        if lower.startswith("workspace "):
+            tail = lower.split(None, 1)[-1]
+            if tail.isdigit() and int(tail) >= 1:
+                return int(tail) - 1
+        if name:
+            return name
+        return index
     return None
 
 

@@ -16,21 +16,27 @@ from ulauncher.modes.launcher.windows import (
     filter_listed_windows,
     gtk_unique_props_from_mapping,
     gtk_unique_props_from_xprop,
+    hypr_current_desktop,
     hypr_workspace_count,
+    i3ipc_current_desktop,
     i3ipc_workspace_count,
     is_unique_gtk_window,
+    listed_current_desktop,
     listed_workspace_count,
     match_windows,
+    niri_current_desktop,
     niri_focus_user_time,
     niri_workspace_count,
     parse_window_close_query,
     parse_window_intent,
+    parse_wmctrl_current_desktop,
     parse_wmctrl_desktops,
     parse_wmctrl_lx,
     parse_workspace_query,
     parse_workspace_switch_query,
     parse_xprop_window,
     pick_window_list,
+    qtile_current_desktop,
     qtile_workspace_count,
     should_force_quit_window,
     should_list_window,
@@ -84,8 +90,14 @@ def test_workspace_query_needs_the_word() -> None:
     assert workspace_index_in_range(3, 3) is False
     desktops = "0  * DG: 1920x1080  VP: 0,0  WA: 0,0 1920x1080  1\n1  - DG: 1920x1080  VP: 0,0  WA: 0,0 1920x1080  2\n"
     assert parse_wmctrl_desktops(desktops) == 2
+    assert parse_wmctrl_current_desktop(desktops) == 0
+    assert (
+        parse_wmctrl_current_desktop("0  - DG: 1x1  VP: 0,0  WA: 0,0 1x1  1\n1  * DG: 1x1  VP: 0,0  WA: 0,0 1x1  2\n")
+        == 1
+    )
     assert parse_wmctrl_desktops("") is None
     assert parse_wmctrl_desktops("Cannot get client list properties.\n") is None
+    assert parse_wmctrl_current_desktop("Cannot get client list properties.\n") is None
 
 
 def test_close_and_kill_intents() -> None:
@@ -697,6 +709,19 @@ def test_compositor_workspace_count_uses_max_index() -> None:
     assert niri_focus_user_time({"focus_timestamp": {"secs": 2, "nanos": 5}}) == 2_000_000_005
     assert niri_focus_user_time({"is_focused": True}) == 1
     assert niri_focus_user_time({}) == 0
+    assert niri_current_desktop([{"id": 8, "idx": 1}, {"id": 9, "idx": 2, "is_focused": True}]) == 1
+    assert niri_current_desktop([{"id": 8, "idx": 1, "is_focused": True}]) == 0
+    assert niri_current_desktop([{"id": 8, "name": "code", "is_focused": True}]) == "code"
+    assert niri_current_desktop([]) is None
+    assert i3ipc_current_desktop([{"name": "1", "num": 1}, {"name": "5", "num": 5, "focused": True}]) == 4
+    assert i3ipc_current_desktop([{"name": "code", "focused": True}]) == "code"
+    assert i3ipc_current_desktop([{"name": "__i3_scratch", "focused": True}]) is None
+    assert hypr_current_desktop({"id": 3, "name": "3"}) == 2
+    assert hypr_current_desktop({"activeworkspace": {"id": 1}}) == 0
+    assert hypr_current_desktop({"id": -98, "name": "special"}) == "special"
+    assert qtile_current_desktop({"1": {"name": "1"}, "5": {"name": "5", "screen": 0}}) == 4
+    assert qtile_current_desktop({"code": {"name": "code", "focused": True}}) == "code"
+    assert qtile_current_desktop({"1": {"name": "1"}, "2": {"name": "2"}}) is None
 
 
 def test_listed_workspace_count_uses_niri_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -728,6 +753,86 @@ def test_listed_workspace_count_uses_qtile_when_ext_is_missing(monkeypatch: pyte
     )
     monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_desktop_count", lambda: 9)
     assert listed_workspace_count() == 4
+    invalidate_workspace_count()
+
+
+def test_listed_current_desktop_prefers_ext_then_wmctrl(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces",
+        lambda: [
+            {"removed": False, "state": 0, "coordinates": [0], "name": "1"},
+            {"removed": False, "state": 1, "coordinates": [1], "name": "2"},
+        ],
+    )
+    assert listed_current_desktop() == 1
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.shutil.which",
+        lambda name: "wmctrl" if name == "wmctrl" else None,
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._text_command",
+        lambda _argv: "0  - DG: 1x1  VP: 0,0  WA: 0,0 1x1  1\n1  * DG: 1x1  VP: 0,0  WA: 0,0 1x1  2\n",
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_current_desktop", lambda: 9)
+    assert listed_current_desktop() == 1
+    invalidate_workspace_count()
+
+
+def test_listed_current_desktop_uses_niri_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setenv("NIRI_SOCKET", "/run/niri.sock")
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.shutil.which", lambda name: name if name == "niri" else None)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._json_command",
+        lambda argv: (
+            [{"id": 8, "idx": 1}, {"id": 9, "idx": 2, "is_focused": True}] if argv[-1] == "workspaces" else None
+        ),
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_current_desktop", lambda: 9)
+    assert listed_current_desktop() == 1
+    invalidate_workspace_count()
+
+
+def test_listed_current_desktop_uses_qtile_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "qtile")
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.shutil.which", lambda name: name if name == "qtile" else None)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._json_command",
+        lambda argv: {"1": {"name": "1"}, "4": {"name": "4", "screen": 0}} if argv[-1] == "groups" else None,
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_current_desktop", lambda: 9)
+    assert listed_current_desktop() == 3
+    invalidate_workspace_count()
+
+
+def test_listed_current_desktop_uses_hypr_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setenv("HYPRLAND_INSTANCE_SIGNATURE", "sig")
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.shutil.which",
+        lambda name: name if name == "hyprctl" else None,
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._json_command",
+        lambda argv: {"id": 3, "name": "3"} if argv[-1] == "activeworkspace" else None,
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_current_desktop", lambda: 9)
+    assert listed_current_desktop() == 2
     invalidate_workspace_count()
 
 

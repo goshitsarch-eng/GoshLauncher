@@ -43,6 +43,10 @@ def windows_fingerprint(windows: list[Any]) -> tuple[tuple[Any, ...], ...]:
     return tuple(rows)
 
 
-def live_search_fingerprint(windows: list[Any], workspace_count: int | None) -> tuple[Any, ...]:
-    """goshos liveSearchWatcher also repaints on notify::n-workspaces."""
-    return (workspace_count, windows_fingerprint(windows))
+def live_search_fingerprint(
+    windows: list[Any],
+    workspace_count: int | None,
+    current_desktop: int | str | None = None,
+) -> tuple[Any, ...]:
+    """goshos liveSearchWatcher also repaints on n-workspaces and active-workspace-changed."""
+    return (workspace_count, current_desktop, windows_fingerprint(windows))

@@ -64,6 +64,15 @@ class _WorkspaceCountSnapshot:
 _workspace_count_snapshot = _WorkspaceCountSnapshot()
 
 
+class _CurrentDesktopSnapshot:
+    value: int | str | None = None
+    loaded = False
+    monotonic: float = 0.0
+
+
+_current_desktop_snapshot = _CurrentDesktopSnapshot()
+
+
 def cached_windows() -> list[WindowInfo]:
     return list(_window_snapshot.windows or [])
 
@@ -98,6 +107,13 @@ def invalidate_workspace_count() -> None:
     _workspace_count_snapshot.value = None
     _workspace_count_snapshot.loaded = False
     _workspace_count_snapshot.monotonic = 0.0
+    invalidate_current_desktop()
+
+
+def invalidate_current_desktop() -> None:
+    _current_desktop_snapshot.value = None
+    _current_desktop_snapshot.loaded = False
+    _current_desktop_snapshot.monotonic = 0.0
 
 
 def _refresh_windows() -> None:
@@ -1422,6 +1438,15 @@ def parse_wmctrl_desktops(text: str) -> int | None:
     return count or None
 
 
+def parse_wmctrl_current_desktop(text: str) -> int | None:
+    """0-based current desktop from the ``*`` marker in `wmctrl -d`."""
+    for line in text.splitlines():
+        match = re.match(r"^(\d+)\s+\*", line)
+        if match:
+            return int(match.group(1))
+    return None
+
+
 def _ewmh_desktop_count() -> int | None:
     try:
         from ulauncher.utils.ewmh import EWMH
@@ -1434,6 +1459,27 @@ def _ewmh_desktop_count() -> int | None:
     except (TypeError, ValueError):
         return None
     return number if number >= 0 else None
+
+
+def _ewmh_current_desktop() -> int | None:
+    try:
+        from ulauncher.utils.ewmh import EWMH
+
+        current = EWMH().getCurrentDesktop()
+    except Exception:
+        return None
+    try:
+        number = int(current)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _desktop_or_name(desktop: int, name: str) -> int | str | None:
+    if desktop >= 0:
+        return desktop
+    text = str(name or "").strip()
+    return text or None
 
 
 def i3ipc_workspace_count(payload: Any) -> int | None:
@@ -1469,22 +1515,24 @@ def hypr_workspace_count(payload: Any) -> int | None:
     return highest or None
 
 
-def qtile_workspace_count(payload: Any) -> int | None:
-    """Highest 1-based Qtile group number. Named-only dumps are unknown."""
+def _qtile_group_items(payload: Any) -> list[Any] | None:
     if isinstance(payload, dict):
         nested = payload.get("groups")
         if nested is None:
             nested = payload.get("items")
         if isinstance(nested, list):
-            items: list[Any] = nested
-        elif isinstance(nested, dict):
-            items = [{"name": name, **(info if isinstance(info, dict) else {})} for name, info in nested.items()]
-        else:
-            items = [{"name": name, **(info if isinstance(info, dict) else {})} for name, info in payload.items()]
-    elif isinstance(payload, list):
-        items = payload
-    else:
-        return None
+            return nested
+        if isinstance(nested, dict):
+            return [{"name": name, **(info if isinstance(info, dict) else {})} for name, info in nested.items()]
+        return [{"name": name, **(info if isinstance(info, dict) else {})} for name, info in payload.items()]
+    if isinstance(payload, list):
+        return payload
+    return None
+
+
+def qtile_workspace_count(payload: Any) -> int | None:
+    """Highest 1-based Qtile group number. Named-only dumps are unknown."""
+    items = _qtile_group_items(payload)
     if not items:
         return None
     highest = 0
@@ -1496,6 +1544,84 @@ def qtile_workspace_count(payload: Any) -> int | None:
         if desktop >= 0:
             highest = max(highest, desktop + 1)
     return highest or None
+
+
+def niri_current_desktop(payload: Any) -> int | str | None:
+    """0-based idx of the focused niri workspace, or its name when idx is missing."""
+    if isinstance(payload, dict):
+        payload = payload.get("workspaces") or payload.get("items") or []
+    if not isinstance(payload, list):
+        return None
+    for item in payload:
+        if not isinstance(item, dict) or not item.get("is_focused"):
+            continue
+        number = _workspace_num(item.get("idx"))
+        name = str(item.get("name") or "")
+        if number is not None and number >= 1:
+            return one_based_workspace_desktop(number)
+        return _desktop_or_name(-1, name)
+    return None
+
+
+def i3ipc_current_desktop(payload: Any) -> int | str | None:
+    """Focused Sway/i3 workspace as a 0-based index, or the name when unnumbered."""
+    if not isinstance(payload, list):
+        return None
+    for item in payload:
+        if not isinstance(item, dict) or not item.get("focused"):
+            continue
+        name = str(item.get("name") or "")
+        if name.startswith("__"):
+            continue
+        desktop = workspace_desktop_from_name(name, item.get("num"))
+        return _desktop_or_name(desktop, name)
+    return None
+
+
+def hypr_current_desktop(payload: Any) -> int | str | None:
+    """Hypr ``activeworkspace`` id as a 0-based index, or the special-workspace name."""
+    item: Any = payload
+    if isinstance(payload, dict):
+        nested = payload.get("activeworkspace")
+        if nested is None:
+            nested = payload.get("workspace")
+        if isinstance(nested, dict):
+            item = nested
+    elif isinstance(payload, list):
+        item = None
+        for row in payload:
+            if isinstance(row, dict) and row.get("focused"):
+                item = row
+                break
+    else:
+        return None
+    if not isinstance(item, dict):
+        return None
+    desktop = _compositor_workspace_desktop(item.get("id"))
+    return _desktop_or_name(desktop, str(item.get("name") or ""))
+
+
+def qtile_current_desktop(payload: Any) -> int | str | None:
+    """Visible Qtile group: focused, then screen 0, then any group on a screen."""
+    items = _qtile_group_items(payload)
+    if not items:
+        return None
+    current = None
+    for item in items:
+        info = item if isinstance(item, dict) else {"name": str(item or "")}
+        if info.get("focused") or info.get("screen") == 0:
+            current = info
+            break
+    if current is None:
+        for item in items:
+            info = item if isinstance(item, dict) else {"name": str(item or "")}
+            if info.get("screen") is not None:
+                current = info
+                break
+    if current is None:
+        return None
+    name = str(current.get("name") or current.get("id") or "")
+    return _desktop_or_name(workspace_desktop_from_name(name), name)
 
 
 def _session_mentions(env: Mapping[str, str], token: str) -> bool:
@@ -1555,6 +1681,67 @@ def listed_workspace_count(now: float | None = None) -> int | None:
     if snap.loaded and stamp - snap.monotonic < WINDOWS_CACHE_TTL_S:
         return snap.value
     snap.value = _probe_workspace_count()
+    snap.loaded = True
+    snap.monotonic = stamp
+    return snap.value
+
+
+def _session_current_desktop(environ: Mapping[str, str] | None = None) -> int | str | None:
+    """Active workspace from the compositor that owns this session's socket."""
+    env = os.environ if environ is None else environ
+    if env.get("NIRI_SOCKET") and shutil.which("niri"):
+        desktop = niri_current_desktop(_json_command(["niri", "msg", "--json", "workspaces"]))
+        if desktop is not None:
+            return desktop
+    if env.get("SWAYSOCK") and shutil.which("swaymsg"):
+        desktop = i3ipc_current_desktop(_json_command(["swaymsg", "-t", "get_workspaces"]))
+        if desktop is not None:
+            return desktop
+    if env.get("I3SOCK") and shutil.which("i3-msg"):
+        desktop = i3ipc_current_desktop(_json_command(["i3-msg", "-t", "get_workspaces"]))
+        if desktop is not None:
+            return desktop
+    if env.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        desktop = hypr_current_desktop(_json_command(["hyprctl", "-j", "activeworkspace"]))
+        if desktop is not None:
+            return desktop
+    if _session_mentions(env, "qtile") and shutil.which("qtile"):
+        payload = _json_command(["qtile", "cmd-obj", "-f", "groups"])
+        if payload is None:
+            payload = _json_command(["qtile", "cmd-obj", "-o", "cmd", "-f", "groups"])
+        desktop = qtile_current_desktop(payload)
+        if desktop is not None:
+            return desktop
+    return None
+
+
+def _probe_current_desktop() -> int | str | None:
+    from ulauncher.modes.launcher.wayland_workspaces import ext_workspace_current_desktop, list_ext_workspaces
+
+    rows = list_ext_workspaces()
+    if rows is not None:
+        return ext_workspace_current_desktop(rows)
+    compositor = _session_current_desktop()
+    if compositor is not None:
+        return compositor
+    if shutil.which("wmctrl"):
+        parsed = parse_wmctrl_current_desktop(_text_command(["wmctrl", "-d"]) or "")
+        if parsed is not None:
+            return parsed
+    return _ewmh_current_desktop()
+
+
+def listed_current_desktop(now: float | None = None) -> int | str | None:
+    """Active desktop, or None when every backend failed.
+
+    goshos liveSearchWatcher repaints on ``active-workspace-changed`` so empty-state
+    window recency can update without a keystroke. Window titles stay the same.
+    """
+    stamp = time.monotonic() if now is None else now
+    snap = _current_desktop_snapshot
+    if snap.loaded and stamp - snap.monotonic < WINDOWS_CACHE_TTL_S:
+        return snap.value
+    snap.value = _probe_current_desktop()
     snap.loaded = True
     snap.monotonic = stamp
     return snap.value

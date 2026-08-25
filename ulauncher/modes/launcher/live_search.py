@@ -25,11 +25,13 @@ class LiveSearchWatcher:
         list_windows: Callable[[], list[Any]] | None = None,
         poll_interval: float = _POLL_SEC,
         workspace_count: Callable[[], int | None] | None = None,
+        current_desktop: Callable[[], int | str | None] | None = None,
     ) -> None:
         self._on_change = on_change
         self._list_windows = list_windows
         self._poll_interval = poll_interval
         self._workspace_count = workspace_count
+        self._current_desktop = current_desktop
         self._listening = False
         self._timer: scheduling.Context | None = None
         self._apps: Any = None
@@ -79,11 +81,15 @@ class LiveSearchWatcher:
 
     def _snapshot(self) -> tuple[Any, ...]:
         count_fn = self._workspace_count
-        if count_fn is None:
-            from ulauncher.modes.launcher.windows import listed_workspace_count
+        desktop_fn = self._current_desktop
+        if count_fn is None or desktop_fn is None:
+            from ulauncher.modes.launcher.windows import listed_current_desktop, listed_workspace_count
 
-            count_fn = listed_workspace_count
-        return live_search_fingerprint(self._current_windows(), count_fn())
+            if count_fn is None:
+                count_fn = listed_workspace_count
+            if desktop_fn is None:
+                desktop_fn = listed_current_desktop
+        return live_search_fingerprint(self._current_windows(), count_fn(), desktop_fn())
 
     def _invalidate_window_state(self) -> None:
         from ulauncher.modes.launcher.windows import invalidate_windows, invalidate_workspace_count
