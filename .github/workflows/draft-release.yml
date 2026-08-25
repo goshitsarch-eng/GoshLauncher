@@ -7,29 +7,28 @@ on:
 
 jobs:
   draft_release:
-    runs-on: ubuntu-latest
-    container: ulauncher/build-image:6.7
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: Install GTK 4, libadwaita, and deb build tools
+        run: |
+          sudo bash scripts/ci-install-gtk4.sh
+          sudo apt-get install -y --no-install-recommends debhelper dh-python python3-all help2man
       - name: Set up virtual environment
         run: make venv
       - name: Check
         run: make check
       - name: Generate release notes
-        # actions/checkout only adds safe.directory to a temporary git config, and the
-        # workspace mount is owned by the host runner user, so git-cliff (libgit2) errors
-        # with "repository path is not owned by current user" without this
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           .venv/bin/git-cliff --current > RELEASE_NOTES.md
       - name: Build release
         run: |
           VERSION=$(make version)
-          echo "Building Ulauncher version: $VERSION"
-          ln -s /var/node_modules preferences-src # use node modules from cache
-          make deb DEB_DISTRO=focal
+          echo "Building GoshLauncher version: $VERSION"
+          make deb DEB_DISTRO=jammy
           # make sure to run make sdist after make deb because make deb overwrites the tarball
           make sdist
 
