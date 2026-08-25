@@ -24,7 +24,7 @@ Depends: ${misc:Depends},
  gir1.2-gdkpixbuf-2.0,
  python3-gi,
  python3-gi-cairo
-Recommends: python3-levenshtein, python3-xlib, gir1.2-ayatanaappindicator3-0.1, xdg-desktop-portal, gir1.2-gtk4-layer-shell-1.0 | libgtk4-layer-shell0
+Recommends: python3-levenshtein, python3-xlib, wmctrl, x11-utils, gir1.2-ayatanaappindicator3-0.1, xdg-desktop-portal, gir1.2-gtk4-layer-shell-1.0 | libgtk4-layer-shell0
 Suggests: git
 Description: GTK 4 + libadwaita application launcher
  GoshLauncher opens with Ctrl+Space and searches URLs, paths, folders,
