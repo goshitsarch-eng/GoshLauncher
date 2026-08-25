@@ -364,18 +364,54 @@ def sample_popup_look(look_id: str) -> dict[str, tuple[int, int, int]]:
     return {"panel": panel_rgb, "selected": selected_rgb}
 
 
-def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
-    """Paint a selected query so GTK4 ``selection`` CSS can be sampled."""
-    from gi.repository import GLib, Gtk
+def _entry_in_prompt(prompt: object) -> object | None:
+    from gi.repository import Gtk
 
     from ulauncher.ui import gtk4
 
-    win, _app, prompt, _selected = build_look_tree(look_id)
-    entry = None
     for child in gtk4.iter_children(prompt):
         if isinstance(child, Gtk.Entry) or (hasattr(child, "has_css_class") and child.has_css_class("input")):
-            entry = child
-            break
+            return child
+    return None
+
+
+def _sample_selected_entry(app: object, entry: object) -> tuple[int, int, int]:
+    from gi.repository import GLib
+
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 2_000_000
+    rgb: tuple[int, int, int] | None = None
+    last_error: Exception | None = None
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        sample_x = 24
+        sample_y = max(int(entry.get_height()) // 2, 4)
+        ok, bounds = entry.compute_bounds(app)
+        if ok and bounds is not None:
+            sample_x = int(bounds.get_x() + max(bounds.get_width() * 0.1, 8))
+            sample_y = int(bounds.get_y() + max(bounds.get_height() / 2, 4))
+        try:
+            sampled = widget_rgb(app, sample_x, sample_y)
+        except RuntimeError as exc:
+            last_error = exc
+            continue
+        rgb = sampled
+        if sampled != (0, 0, 0):
+            return sampled
+    if rgb is not None:
+        return rgb
+    if last_error is not None:
+        raise last_error
+    msg = "entry selection produced no pixels"
+    raise RuntimeError(msg)
+
+
+def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
+    """Paint a selected query so GTK4 ``selection`` CSS can be sampled."""
+    from gi.repository import GLib
+
+    win, app, prompt, _selected = build_look_tree(look_id)
+    entry = _entry_in_prompt(prompt)
     if entry is None:
         win.close()
         pump(8)
@@ -395,17 +431,10 @@ def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
         if mapped["ok"] and entry.get_width() > 40 and entry.get_height() > 8:
             break
     entry.grab_focus()
-    entry.set_text("        ")
+    entry.set_text("MMMMMMMM")
     entry.select_region(0, -1)
-    pump(16)
-    if entry.get_width() <= 40:
+    try:
+        return _sample_selected_entry(app, entry)
+    finally:
         win.close()
         pump(8)
-        msg = f"look {look_id} entry did not allocate ({entry.get_width()}x{entry.get_height()})"
-        raise RuntimeError(msg)
-    sample_x = max(int(entry.get_width()) // 3, 12)
-    sample_y = max(int(entry.get_height()) // 2, 4)
-    rgb = widget_rgb_retry(entry, sample_x, sample_y)
-    win.close()
-    pump(8)
-    return rgb
