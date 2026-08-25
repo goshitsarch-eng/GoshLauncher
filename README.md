@@ -1,47 +1,80 @@
-[![Made in Ukraine](https://img.shields.io/badge/made_in-ukraine-ffd700.svg?labelColor=0057b7)](https://stand-with-ukraine.pp.ua)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-![Test Status](https://github.com/Ulauncher/Ulauncher/actions/workflows/tests.yml/badge.svg)
+# GoshLauncher
 
-**⚠️ This is the branch for the unreleased [v6](https://github.com/Ulauncher/Ulauncher/issues/869) release. If you want the v5 branch version, go [here](https://github.com/Ulauncher/Ulauncher/tree/v5)**
+A GTK 4 + libadwaita application launcher for Linux. Open with **Ctrl+Space**. Search, looks, prefixes, and keyboard navigation follow [Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos).
 
-We are currently working on Ulauncher v6, which is a huge rewrite. Until then we're only supporting the existing functionality in v5. No new features or improvements.
+The installed command is still `ulauncher`.
 
-We are making pre-releases for Ulauncher 6, but the new extension API is not yet 100% set and further major changes may come.
+## Search order
 
-# [Application Launcher for Linux 🐧](https://ulauncher.io)
+Results appear under their own section header (unless you hide headers). Web search is last unless you use `@`.
 
-Ulauncher is a fast application launcher for Linux. It's written in Python using GTK+, and features: App Search (fuzzy matching), Calculator, [Extensions](https://ext.ulauncher.io/), Shortcuts, File browser mode and [Custom Color Themes](https://docs.ulauncher.io/en/stable/themes/themes.html)
+1. **URLs** — `https://…`, `www.…`, bare domains, `host:port`, `localhost`, IPv4/IPv6, `*.local`, plus `sftp://`, `smb://`, `mailto:`, and `magnet:`. Names that look like files (`node.js`, `readme.md`) stay app and file searches. A trailing file-extension denylist keeps those out of URL matching.
+2. **Paths** — `~/…`, `./…`, and absolute paths. Missing paths show “Path not found”. Directories also offer Open in Terminal.
+3. **Folders** — XDG user folders (Home, Desktop, Documents, Downloads, Music, Pictures, Videos, Public, Templates).
+4. **Bookmarks** — GTK 3 and GTK 4 bookmark files, including remote URIs.
+5. **Applications** — Desktop entries by name, GenericName, Keywords, Comment, and id. Usage ranking, variant collapse, parental controls, and optional New window / desktop actions.
+6. **Calculator** — Recursive-descent parser, not `eval`. Bare `42` is not math unless you type `=42`.
+7. **Units** — Length, mass, temperature, volume, data sizes, duration, area, speed, pressure, energy, power, angle.
+8. **Color** — Hash hex, `rgb` / `hsl` / `hwb`, and CSS names. `# wifi` stays the Settings prefix.
+9. **Clock** — `time`, `now`, `date`, `today`, `tomorrow`, `yesterday`, `clock`.
+10. **Windows** — Title, class, workspace number, close / force-quit.
+11. **System actions** — Lock, suspend, restart, power off, log out, switch user, rotation lock, screenshot (when the session exposes them).
+12. **GNOME Settings** — Control Center panels.
+13. **Recent files** — `recently-used.xbel`.
+14. **Web search** — Last-resort fallback, or immediately with `@`.
 
-| App Search | File Browser | Color Themes |
-| ---|---|--- |
-|![screenshot](https://i.imgur.com/8FpJLGG.png?1)|![screenshot](https://i.imgur.com/wJvXSmP.png?1)|![screenshot](https://i.imgur.com/2a4GCW7.png?1)|
+Before you type, the popup can show frequent apps and open windows. Windows-first looks (Pop!_OS) put windows above apps here too.
 
-For more info or download links see [ulauncher.io](https://ulauncher.io)
+## Prefixes
 
-## Run Ulauncher on startup
+Disable prefix modes in Features if you never want them. `!` stays off unless you turn the command runner on.
 
-If your distribution uses [Systemd](https://systemd.io/) and the packages includes [ulauncher.service](ulauncher.service), then you can run `ulauncher` on startup by running:
+| Prefix | Provider |
+|---|---|
+| `=` | Calculator (`=2^8`) |
+| `@` | Web search |
+| `#` | Settings (`# wifi`, not `#ff0000`) |
+| `$` | Windows (`$ term`, not `$HOME`) |
+| `.` | Recent files (`. notes`, not `.bashrc`) |
+| `!` | Argv command (off by default; not a shell) |
+
+## Looks
+
+Seventeen looks. A look owns colors and chrome (position, density, headers, number hints, icons, descriptions, icon size, windows-first). Width is not part of a look. There is no blur.
+
+Spotlight, Omarchy, Pop!_OS, Ulauncher, KRunner, GNOME, Rofi, Raycast, Albert, Wofi, Fuzzel, Anyrun, Tofi, Light, PowerToys, Synapse, Onagre.
+
+## Keyboard
+
+| Action | Input |
+|---|---|
+| Open | `Ctrl+Space` |
+| Traverse | `↑` / `↓`, `Tab`, `Page Up` / `Page Down`, `Ctrl+J` / `Ctrl+K`, `Ctrl+N` / `Ctrl+P` |
+| Activate | Enter, click, or tap |
+| Activate 1–9 | `Alt+1` … `Alt+9` when number hints are on. A pending Checking path slot does not fall through. |
+| Dismiss | `Esc`, `Ctrl+Space`, or click / tap outside |
+
+## Run
+
+From a clone:
+
+```
+make venv
+make run
+```
+
+If the package ships `ulauncher.service`:
 
 ```
 systemctl --user enable --now ulauncher
 ```
 
-If not, then you can open Ulauncher and enable "Launch at Login" in the preferences.
+Preferences: Shortcut, Appearance, Features, Web Search, About (Spotlight-goshos order), then Desktop, Shortcuts, and Extensions for this GTK host. Default size matches Spotlight-goshos (`680×720`).
 
-### Troubleshooting
+## Development
 
-Please read our [Troubleshooting](https://github.com/Ulauncher/Ulauncher/discussions/categories/troubleshooting) discussion category if you run into issues, and also check our other discussions and issues if you still need help after this.
+See [CONTRIBUTING.md](CONTRIBUTING.md). `make check` runs lint and tests. Target Python 3.8+ with GTK 4.6 and libadwaita 1.1+.
 
-### Code Contributions And Development Environment
+## License
 
-Please see our [Code Contributions](CONTRIBUTING.md) documentation.
-
-| Project | Contributor-friendly Issues |
-| ---|--- |
-| Ulauncher App | [![GitHub issues by-label](https://img.shields.io/github/issues/Ulauncher/Ulauncher/contributor-friendly.svg?color=3cf014&label=All%20contributor-friendly&style=for-the-badge)](https://github.com/Ulauncher/Ulauncher/labels/contributor-friendly) <br> [![GitHub issues by-label](https://img.shields.io/github/issues/Ulauncher/Ulauncher/Python.svg?color=5319e7&label=Python&style=for-the-badge)](https://github.com/Ulauncher/Ulauncher/labels/Python) <br> [![GitHub issues by-label](https://img.shields.io/github/issues/Ulauncher/Ulauncher/VueJS.svg?color=a553cc&label=VueJS&style=for-the-badge)](https://github.com/Ulauncher/Ulauncher/labels/VueJS) <br> [![GitHub issues by-label](https://img.shields.io/github/issues/Ulauncher/Ulauncher/Linux.svg?color=0e035e&label=Linux&style=for-the-badge)](https://github.com/Ulauncher/Ulauncher/labels/Linux)|
-| [Frontend for extensions website](https://github.com/Ulauncher/ext.ulauncher.io) <br> Uses ReactJS | [![GitHub issues by-label](https://img.shields.io/github/issues/Ulauncher/ext.ulauncher.io/contributor-friendly.svg?color=3cf014&label=contributor-friendly&style=for-the-badge)](https://github.com/Ulauncher/ext.ulauncher.io/labels/contributor-friendly)|
-| [API for extensions website](https://github.com/Ulauncher/ext-api.ulauncher.io) <br> Uses Python and bottle library | [![GitHub issues by-label](https://img.shields.io/github/issues/Ulauncher/ext-api.ulauncher.io/contributor-friendly.svg?color=3cf014&label=contributor-friendly&style=for-the-badge)](https://github.com/Ulauncher/ext-api.ulauncher.io/labels/contributor-friendly)|
-
-### License
-
-See the [LICENSE](LICENSE) file for license rights and limitations (GNU GPL v3.0).
+GNU GPL v3.0. See [LICENSE](LICENSE).

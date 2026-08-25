@@ -15,6 +15,7 @@ def test_place_icons_are_symbolic() -> None:
     from ulauncher.modes.launcher.places import PLACE_CATALOG
 
     assert PLACE_CATALOG[0]["icon"] == "user-home-symbolic"
+    assert len(PLACE_CATALOG) == 9
     assert all(str(place["icon"]).endswith("-symbolic") for place in PLACE_CATALOG)
 
 
@@ -25,3 +26,6 @@ def test_spoken_open_documents() -> None:
     assert "Documents" in titles
     folder = strip_leading_verb("open the pictures folder")
     assert folder == "pictures"
+    directory = strip_leading_verb("open pictures dir")
+    assert directory == "pictures"
+    assert "Pictures" in [place["title"] for place in match_places(directory)]

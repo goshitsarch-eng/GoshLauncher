@@ -9,6 +9,7 @@ from ulauncher import paths
 from ulauncher.modes.extensions import ext_exceptions
 from ulauncher.modes.extensions.extension_record import ExtensionRecord
 from ulauncher.modes.extensions.extension_service import ext_service
+from ulauncher.ui import gtk4
 from ulauncher.ui.preferences.views import DialogLauncher, get_window_for_widget, styled
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class ExtensionHandlers:
         # Create content area
         content_area = dialog.get_content_area()
         content_box = styled(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10), "progress-content")
-        content_area.pack_start(content_box, True, True, 0)
+        gtk4.pack_start(content_area, content_box, True, True, 0)
 
         header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         header_box.set_halign(Gtk.Align.CENTER)
@@ -45,17 +46,17 @@ class ExtensionHandlers:
         # So people who disabled animations in Gnome thinking it will only apply to the DE's
         # own animations will get static spinners :'(
         spinner = Gtk.Spinner(active=True)
-        header_box.pack_start(spinner, False, False, 0)
+        gtk4.pack_start(header_box, spinner, False, False, 0)
 
         title_label = styled(Gtk.Label(label=title), "title-4")
-        header_box.pack_start(title_label, False, False, 0)
+        gtk4.pack_start(header_box, title_label, False, False, 0)
 
-        content_box.pack_start(header_box, False, False, 0)
+        gtk4.pack_start(content_box, header_box, False, False, 0)
 
         message_label = Gtk.Label(label=message, wrap=True, justify=Gtk.Justification.CENTER, halign=Gtk.Align.CENTER)
-        content_box.pack_start(message_label, False, False, 0)
+        gtk4.pack_start(content_box, message_label, False, False, 0)
 
-        dialog.show_all()
+        gtk4.show_all(dialog)
         return dialog
 
     def add_extension(self, callback: Callable[[ExtensionRecord], None]) -> None:
@@ -73,18 +74,18 @@ class ExtensionHandlers:
         content_area.set_margin_bottom(20)
 
         label = Gtk.Label(label="Enter extension URL:", halign=Gtk.Align.START)
-        content_area.pack_start(label, False, False, 0)
+        gtk4.pack_start(content_area, label, False, False, 0)
 
         entry = Gtk.Entry(placeholder_text="https://github.com/user/repo.git")
-        content_area.pack_start(entry, False, False, 0)
+        gtk4.pack_start(content_area, entry, False, False, 0)
 
         # Handle Enter key press as "submit"
         entry.connect("activate", lambda _entry: dialog.response(Gtk.ResponseType.OK))
 
-        dialog.show_all()
+        gtk4.show_all(dialog)
         entry.grab_focus()
 
-        response = dialog.run()
+        response = gtk4.run_dialog(dialog)
         url = entry.get_text().strip()
         dialog.destroy()
 

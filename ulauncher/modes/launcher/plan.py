@@ -130,6 +130,13 @@ def should_refresh_bookmarks(enable_bookmarks: bool, plan: dict[str, Any]) -> bo
     return plan.get("mode") == "all" and "bookmarks" in plan.get("providers", [])
 
 
+def should_refresh_windows(enable_windows: bool, enable_apps: bool, plan: dict[str, Any]) -> bool:
+    providers = plan.get("providers") or []
+    if enable_windows and "windows" in providers:
+        return True
+    return bool(enable_apps and "apps" in providers)
+
+
 def is_active_search_query(query: str) -> bool:
     return bool(query.strip())
 

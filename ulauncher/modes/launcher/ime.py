@@ -58,6 +58,8 @@ def ime_panel_visible(
 
 
 def _list_windows() -> list[WindowInfo]:
-    from ulauncher.modes.launcher.windows import list_windows
+    from ulauncher.modes.launcher.windows import cached_windows, list_windows, windows_cache_is_fresh
 
+    if windows_cache_is_fresh():
+        return cached_windows()
     return list_windows()

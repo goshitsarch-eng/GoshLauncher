@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from ulauncher import paths
-from ulauncher.ui.helpers.theme import LegacyTheme, _load_legacy_theme, get_themes
+from ulauncher.ui.helpers.theme import LegacyTheme, _load_legacy_theme, get_themes, launcher_popup_css
 
 
 def _write_manifest(dir_path: Path, data: object) -> Path:
@@ -69,3 +69,26 @@ def test_get_themes__unusable_root_manifest__leaves_the_css_themes_alone(user_th
     _write_manifest(user_themes, "{not json")
 
     assert sorted(get_themes()) == ["dark"]
+
+
+def test_css_reset_omits_gtk3_icon_shadow() -> None:
+    from ulauncher.ui.helpers.theme import CSS_RESET, POPUP_CSS_RESET
+
+    assert "-icon-shadow" not in CSS_RESET
+    assert "-icon-shadow" not in POPUP_CSS_RESET
+    assert POPUP_CSS_RESET.strip().startswith(".gosh-popup, .gosh-popup * {")
+
+
+def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:
+    css = launcher_popup_css()
+    assert "window.gosh-popup" in css
+    assert ".gosh-theme-spotlight" in css
+    assert "@define-color bg_color" not in css
+    assert ".prefs-btn" not in css
+    assert "text.placeholder" in css
+
+
+def test_packaged_themes_are_gosh_looks_only() -> None:
+    themes = Path(__file__).resolve().parents[2] / "data" / "themes"
+    names = sorted(path.name for path in themes.iterdir() if path.suffix == ".css")
+    assert names == ["gosh-looks.css"]

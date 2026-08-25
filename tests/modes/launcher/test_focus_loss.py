@@ -70,16 +70,13 @@ def test_gtk_window_focus_action() -> None:
 def test_prompt_click_search_icon_and_padding_refocus() -> None:
     icon = (0.0, 0.0, 20.0, 20.0)
     entry = (24.0, 0.0, 200.0, 20.0)
-    prefs = (230.0, 0.0, 24.0, 24.0)
-    assert prompt_click_target(8.0, 10.0, icon, entry, prefs) == "search-icon"
-    assert prompt_click_target(100.0, 10.0, icon, entry, prefs) == "entry"
-    assert prompt_click_target(240.0, 10.0, icon, entry, prefs) == "prefs"
-    assert prompt_click_target(12.0, 40.0, icon, entry, prefs) == "padding"
+    assert prompt_click_target(8.0, 10.0, icon, entry) == "search-icon"
+    assert prompt_click_target(100.0, 10.0, icon, entry) == "entry"
+    assert prompt_click_target(12.0, 40.0, icon, entry) == "padding"
     assert prompt_click_should_refocus("search-icon") is True
     assert prompt_click_should_refocus("padding") is True
     assert prompt_click_should_refocus("entry") is False
-    assert prompt_click_should_refocus("prefs") is False
-    assert prompt_click_should_drag("padding") is True
+    assert prompt_click_should_drag("padding") is False
     assert prompt_click_should_drag("search-icon") is False
     assert point_in_rect(0.0, 0.0, (0.0, 0.0, 0.0, 0.0)) is False
 

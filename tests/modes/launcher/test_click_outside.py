@@ -68,3 +68,12 @@ def test_overlay_window_style_stays_unfocusable() -> None:
     assert style["can_focus"] is False
     assert style["css_class"] == "goshos-backdrop"
     assert style["defer_close"] is True
+
+
+def test_window_click_outside_closes_soon() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "ulauncher" / "ui" / "ulauncher_window.py").read_text()
+    released = text.split("def on_backdrop_released", 1)[1].split("def ", 1)[0]
+    assert "request_close(save_query=True)" in released
+    assert "self.close(save_query=True)" not in released

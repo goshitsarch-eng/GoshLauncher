@@ -9,6 +9,7 @@ from ulauncher.modes.launcher.looks import (
     ensure_look_chrome,
     get_look,
     icon_size_for_look,
+    look_about_subtitle,
     look_apply_action,
     look_ids,
     look_prefs_search_text,
@@ -23,15 +24,91 @@ def test_applied_look_defaults_empty_so_first_enable_stamps() -> None:
     assert Settings.applied_look == ""
 
 
-def test_seventeen_looks() -> None:
+# Spotlight-goshos themes.js look catalog (id, title, hint, chrome). Width is not a field.
+GOSHOS_LOOKS = (
+    ("spotlight", "Spotlight", "Search apps...", "center", "comfortable", False, True, True, True, True, "default", 28),
+    ("omarchy", "Omarchy", "Search...", "center", "comfortable", False, True, True, True, True, "default", 24),
+    ("popos", "Pop!_OS", "Type to search", "top", "comfortable", True, True, True, True, True, "windows-first", 36),
+    ("ulauncher", "Ulauncher", "Search", "center", "comfortable", False, False, True, True, True, "default", 40),
+    ("krunner", "KRunner", "Search or run", "top", "compact", True, False, True, True, True, "default", 20),
+    ("gnome", "GNOME", "Type to search", "center", "comfortable", False, True, True, True, True, "default", 28),
+    ("rofi", "Rofi", "Filter", "center", "compact", False, False, False, False, False, "default", 22),
+    (
+        "raycast",
+        "Raycast",
+        "Search for apps and commands...",
+        "center",
+        "comfortable",
+        False,
+        False,
+        True,
+        True,
+        True,
+        "default",
+        32,
+    ),
+    ("albert", "Albert", "Enter a query", "center", "comfortable", False, True, True, True, True, "default", 26),
+    ("wofi", "Wofi", "Search", "center", "compact", False, False, False, False, False, "default", 22),
+    ("fuzzel", "Fuzzel", "Type to search", "center", "compact", False, False, False, True, False, "default", 24),
+    ("anyrun", "Anyrun", "Search", "center", "comfortable", False, False, False, True, False, "default", 28),
+    ("tofi", "Tofi", "Run", "top", "compact", False, False, False, False, False, "default", 20),
+    ("light", "Light", "Type to search", "center", "comfortable", False, True, True, True, True, "default", 28),
+    (
+        "powertoys",
+        "PowerToys",
+        "Type here to search",
+        "center",
+        "comfortable",
+        True,
+        False,
+        True,
+        True,
+        True,
+        "default",
+        32,
+    ),
+    ("synapse", "Synapse", "Search...", "center", "comfortable", False, False, True, True, False, "default", 48),
+    ("onagre", "Onagre", "Search", "center", "comfortable", False, False, True, True, False, "default", 30),
+)
+
+
+def test_seventeen_looks_match_goshos_themes() -> None:
     ids = look_ids()
+    assert ids == [row[0] for row in GOSHOS_LOOKS]
     assert len(ids) == 17
-    assert "spotlight" in ids
-    assert "popos" in ids
     assert get_look("missing")["id"] == LOOKS[0]["id"]
-    pop = get_look("popos")
-    assert pop["look"]["result_order"] == "windows-first"
-    assert pop["look"]["show_numbers"] is True
+    for look, expected in zip(LOOKS, GOSHOS_LOOKS):
+        (
+            look_id,
+            title,
+            hint,
+            position,
+            density,
+            numbers,
+            headers,
+            search_icon,
+            result_icons,
+            descriptions,
+            order,
+            icon,
+        ) = expected
+        chrome = look["look"]
+        assert look["id"] == look_id
+        assert look["title"] == title
+        assert look["hint"] == hint
+        assert chrome == {
+            "position": position,
+            "density": density,
+            "show_numbers": numbers,
+            "show_headers": headers,
+            "show_search_icon": search_icon,
+            "show_result_icons": result_icons,
+            "show_descriptions": descriptions,
+            "result_order": order,
+            "icon_size": icon,
+        }
+        assert "width" not in chrome
+        assert "base_width" not in chrome
 
 
 def test_apply_look_chrome_stamps_popos() -> None:
@@ -46,6 +123,11 @@ def test_apply_look_chrome_stamps_popos() -> None:
     assert chrome["position"] == "top"
     assert chrome["show_numbers"] is True
     assert chrome["result_order"] == "windows-first"
+    wide = SimpleNamespace(look_id="spotlight", applied_look="spotlight", base_width=800)
+    payload = apply_look_chrome(wide, "krunner")
+    assert wide.base_width == 800
+    assert "base_width" not in payload
+    assert "width" not in payload
 
 
 def test_look_apply_action_stamps_default_without_rewriting_chrome() -> None:
@@ -92,6 +174,15 @@ def test_look_prefs_search_text_finds_walker_cosmic_and_titles() -> None:
     assert "Width is not part of a look" in text
 
 
+def test_look_about_subtitle_matches_goshos() -> None:
+    text = look_about_subtitle()
+    assert "Walker" in text
+    assert "COSMIC" in text
+    assert "Dark Adwaita" not in text
+    for look in LOOKS:
+        assert look["title"] in text
+
+
 def test_every_look_has_theme_css() -> None:
     from pathlib import Path
 
@@ -101,6 +192,8 @@ def test_every_look_has_theme_css() -> None:
     assert len(ids) == 17
     for look_id in ids:
         assert f".gosh-theme-{look_id}" in text
+    assert "selection-background-color" not in text
+    assert ".input selection {" in text
 
 
 def test_hidden_search_icon_inset_follows_goshos_order() -> None:
@@ -124,9 +217,35 @@ def test_spotlight_shell_is_transparent_like_goshos() -> None:
     app_rule = text.split(".app {", 1)[1].split("}", 1)[0]
     assert "background-color: transparent" in app_rule
     assert "box-shadow: none" in app_rule
-    assert "window," in text
-    assert "window.background" in text
+    assert "window.gosh-popup" in text
+    assert "window.gosh-popup.background" in text
     omarchy = text.split(".gosh-theme-omarchy.app {", 1)[1].split("}", 1)[0]
     assert "#1a1b26" in omarchy
     popos = text.split(".gosh-theme-popos.app {", 1)[1].split("}", 1)[0]
     assert "#242426" in popos
+
+
+def test_look_placeholder_colors_match_goshos_hint_text() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    assert "rgba(245, 245, 247, 0.35)" in text
+    hints = {
+        "omarchy": "#565f89",
+        "popos": "rgba(242, 242, 242, 0.4)",
+        "rofi": "#666666",
+        "raycast": "#6e6e73",
+        "albert": "#7f8c8d",
+        "wofi": "#707880",
+        "fuzzel": "#93a1a1",
+        "anyrun": "#6c7086",
+        "tofi": "#888888",
+        "light": "#9a9996",
+        "powertoys": "#9a9a9a",
+        "synapse": "#a39e93",
+        "onagre": "#78716c",
+    }
+    for look_id, color in hints.items():
+        assert f".gosh-theme-{look_id} .input placeholder" in text
+        assert f".gosh-theme-{look_id} .input text.placeholder {{\n  color: {color};\n}}" in text
+    assert ".prefs-btn" not in text

@@ -6,9 +6,8 @@ from pytest_mock import MockerFixture
 
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
+from ulauncher.ui import gtk4
 from ulauncher.ui.result_widget import ResultWidget
-
-JUMP_KEYS = ["1", "2", "3", "4", "5"]
 
 
 def noop(*_args: object) -> None:
@@ -21,14 +20,14 @@ class TestResultWidget:
         return mocker.patch("ulauncher.ui.result_widget.ResultWidget.scroll_to_focus")
 
     def test_descr(self) -> None:
-        assert len(ResultWidget(Result(), 0, Query("", None), noop, noop, JUMP_KEYS).text_container.get_children()) == 1
+        assert len(gtk4.list_children(ResultWidget(Result(), 0, Query("", None), noop, noop).text_container)) == 1
         res = Result(description="descr")
-        assert len(ResultWidget(res, 0, Query("", None), noop, noop, JUMP_KEYS).text_container.get_children()) == 2
+        assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 2
         res = Result(description="descr", compact=True)
-        assert len(ResultWidget(res, 0, Query("", None), noop, noop, JUMP_KEYS).text_container.get_children()) == 1
+        assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 1
 
     def test_select(self) -> None:
-        result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop, JUMP_KEYS)
+        result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop)
         assert not result_wgt.item_box.has_css_class("selected")
         result_wgt.select()
         assert result_wgt.item_box.has_css_class("selected")
@@ -40,7 +39,7 @@ class TestResultWidget:
             "ulauncher.modes.launcher.looks.chrome_from_settings",
             return_value={"show_numbers": True, "show_result_icons": True, "density": "comfortable", "icon_size": 28},
         )
-        result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop, JUMP_KEYS)
+        result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop)
         assert result_wgt.shortcut_label.get_text() == "1"
         result_wgt.set_index(2)
         assert result_wgt.shortcut_label.get_text() == "3"
@@ -51,10 +50,10 @@ class TestResultWidget:
         from gi.repository import Gtk, Pango
 
         res = Result(name="long name", description="long descr", wrap=True)
-        widget = ResultWidget(res, 0, Query("", None), noop, noop, JUMP_KEYS)
+        widget = ResultWidget(res, 0, Query("", None), noop, noop)
 
-        name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
-        descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
+        name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
+        descr_label = cast("Gtk.Label", gtk4.list_children(widget.text_container)[1])
         for label in (name_label, descr_label):
             assert label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.NONE
@@ -63,10 +62,10 @@ class TestResultWidget:
         from gi.repository import Gtk, Pango
 
         res = Result(name="long name", description="long descr")
-        widget = ResultWidget(res, 0, Query("", None), noop, noop, JUMP_KEYS)
+        widget = ResultWidget(res, 0, Query("", None), noop, noop)
 
-        name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
-        descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
+        name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
+        descr_label = cast("Gtk.Label", gtk4.list_children(widget.text_container)[1])
         for label in (name_label, descr_label):
             assert not label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.END
@@ -75,10 +74,10 @@ class TestResultWidget:
         from gi.repository import Gtk
 
         res = Result(name="wrapped name", wrap=True, highlightable=True)
-        widget = ResultWidget(res, 0, Query("wrap", None), noop, noop, JUMP_KEYS)
+        widget = ResultWidget(res, 0, Query("wrap", None), noop, noop)
 
         # highlighting would split the name over multiple labels, which cannot wrap as one paragraph
-        children = widget.title_box.get_children()
+        children = gtk4.list_children(widget.title_box)
         assert len(children) == 1
         assert cast("Gtk.Label", children[0]).get_text() == "wrapped name"
         assert not any(c.has_css_class("item-highlight") for c in children)
@@ -95,7 +94,6 @@ class TestResultWidget:
             Query("", None),
             noop,
             lambda index, alt: activated.append((index, alt)),
-            JUMP_KEYS,
         )
 
         def event(kind: str, y: float) -> SimpleNamespace:
@@ -117,7 +115,7 @@ class TestResultWidget:
     def test_look_css_owns_row_padding(self) -> None:
         from ulauncher.modes.launcher.result_row import RESULT_CHILD_SPACING
 
-        widget = ResultWidget(Result(), 0, Query("", None), noop, noop, JUMP_KEYS)
+        widget = ResultWidget(Result(), 0, Query("", None), noop, noop)
         assert widget.item_container.get_spacing() == RESULT_CHILD_SPACING
         assert widget.item_container.get_margin_start() == 0
         assert widget.item_container.get_margin_end() == 0
@@ -125,3 +123,11 @@ class TestResultWidget:
         assert widget.item_container.get_margin_bottom() == 0
         assert widget.text_container.get_margin_start() == 0
         assert widget.text_container.get_margin_end() == 0
+
+    def test_passed_chrome_sets_compact_icon_pixel_size(self) -> None:
+        from ulauncher.modes.launcher.looks import icon_size_for_look
+
+        chrome = {"show_numbers": False, "show_result_icons": True, "density": "compact", "icon_size": 40}
+        widget = ResultWidget(Result(icon="image-missing"), 0, Query("", None), noop, noop, chrome=chrome)
+        assert widget.item_icon is not None
+        assert widget.item_icon.get_pixel_size() == icon_size_for_look(chrome, "compact") == 32

@@ -401,8 +401,10 @@ def convert_query(query: str) -> dict[str, str] | None:
     converted = convert_units(float(parsed["value"]), str(parsed["from"]), str(parsed["to"]))
     if not converted:
         return None
+    # goshos unitSearch.js copies converted.title ("6.214 mi"), not the bare number
+    title = f"{format_unit_value(float(converted['value']))} {converted['to_id']}"
     return {
-        "title": f"{format_unit_value(float(converted['value']))} {converted['to_id']}",
+        "title": title,
         "description": f"{format_unit_value(float(parsed['value']))} {converted['from_id']}",
-        "copy_text": format_unit_value(float(converted["value"])),
+        "copy_text": title,
     }

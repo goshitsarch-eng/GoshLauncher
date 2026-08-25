@@ -6,7 +6,7 @@ import sys
 from typing import Any, Callable, Literal, cast
 from typing import get_args as get_literal_args
 
-from ulauncher import version
+from ulauncher import app_display_name, version
 from ulauncher.data import BaseDataClass
 from ulauncher.init_helpers import configure_logging, ensure_runtime_dirs, use_color
 from ulauncher.utils.lru_cache import lru_cache
@@ -42,8 +42,11 @@ class CLICommand(BaseDataClass):
 
 
 CLI_DESCRIPTION = (
-    "Ulauncher is a GTK application launcher with support for extensions, "
-    "shortcuts (scripts), calculator, file browser and custom themes."
+    "GoshLauncher is a GTK 4 + libadwaita launcher. Open with Ctrl+Space. "
+    "Search follows Spotlight-goshos (URLs, paths, folders, bookmarks, apps, calculator, "
+    "units, color, clock, windows, system actions, GNOME Settings, recent files, then web). "
+    "Seventeen looks with chrome. Prefixes: = calc, @ web, # settings, $ windows, . recents, "
+    "! command (off by default)."
 )
 
 
@@ -65,7 +68,12 @@ class CLIArgumentParser(argparse.ArgumentParser):
         # unless you know what you're doing -- Ulauncher's CLI is designed around "verbs" (e.g.
         # `ulauncher show`) implemented as sub-parsers, with flags only at the sub-parser level.
         self.help_option_actions: tuple[argparse.Action, ...] = (
-            self.add_argument("--version", action="version", help="Show version", version=f"Ulauncher {version}"),
+            self.add_argument(
+                "--version",
+                action="version",
+                help="Show version",
+                version=f"{app_display_name} {version}",
+            ),
             self.add_argument("-h", "--help", action="help", help="Show help"),
         )
 
@@ -123,13 +131,13 @@ def get_args() -> CLIArguments:
 def _get_commands() -> dict[CommandName, CLICommand]:
     return {
         "start": CLICommand(
-            summary="Start the Ulauncher background process",
-            description="Start the Ulauncher background process",
+            summary=f"Start the {app_display_name} background process",
+            description=f"Start the {app_display_name} background process",
             group="App",
         ),
         "show": CLICommand(
-            summary="Show the Ulauncher window (default command)",
-            description="Show the Ulauncher window",
+            summary=f"Show the {app_display_name} window (default command)",
+            description=f"Show the {app_display_name} window",
             group="App",
             has_runtime=False,
             arguments=(
@@ -140,8 +148,8 @@ def _get_commands() -> dict[CommandName, CLICommand]:
             ),
         ),
         "toggle": CLICommand(
-            summary="Toggle the Ulauncher window",
-            description="Toggle the Ulauncher window",
+            summary=f"Toggle the {app_display_name} window",
+            description=f"Toggle the {app_display_name} window",
             group="App",
             has_runtime=False,
         ),

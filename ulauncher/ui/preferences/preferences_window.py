@@ -6,91 +6,68 @@ from typing import Any
 from gi.repository import Adw, Gdk, Gtk
 
 from ulauncher import paths
-from ulauncher.ui.gtk4 import add_css_class, add_provider_to_display, load_css_provider
+from ulauncher.ui.gtk4 import add_provider_to_display, load_css_provider
 from ulauncher.ui.helpers.system_theme import SystemThemeWatcher
-from ulauncher.ui.preferences.views import BaseView, styled
-from ulauncher.ui.preferences.views.about import AboutView
+from ulauncher.ui.preferences.adw_rows import wrap_custom_view
+from ulauncher.ui.preferences.page_names import GOSHOS_PAGE_IDS, normalize_prefs_page
 from ulauncher.ui.preferences.views.extensions import ExtensionsView
-from ulauncher.ui.preferences.views.help import HelpView
 from ulauncher.ui.preferences.views.preferences import PreferencesView
 from ulauncher.ui.preferences.views.shortcuts import ShortcutsView
 
-VIEW_CONFIG: list[tuple[str, type[BaseView]]] = [
-    ("Preferences", PreferencesView),
-    ("Shortcuts", ShortcutsView),
-    ("Extensions", ExtensionsView),
-    ("Help", HelpView),
-    ("About", AboutView),
-]
-WINDOW_DEFAULT_WIDTH = 1000
-WINDOW_DEFAULT_HEIGHT = 600
+WINDOW_DEFAULT_WIDTH = 680
+WINDOW_DEFAULT_HEIGHT = 720
+
+_CUSTOM_PAGES = (
+    ("shortcuts", "Shortcuts", "input-keyboard-symbolic", ShortcutsView),
+    ("extensions", "Extensions", "application-x-addon-symbolic", ExtensionsView),
+)
 
 
-class PreferencesWindow(Adw.ApplicationWindow):
-    """Adwaita preferences window with a stack of settings pages."""
+class PreferencesWindow(Adw.PreferencesWindow):
+    """Adwaita preferences window: goshos pages first, then GTK-host extras."""
 
     def __init__(self, **kwargs: Any) -> None:
-        super().__init__(title="Ulauncher Preferences", resizable=True, **kwargs)
-
+        super().__init__(title="Preferences", **kwargs)
         self.set_default_size(WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT)
+        self.set_search_enabled(True)
 
-        self.views: dict[str, BaseView] = {}
+        self.views: dict[str, Any] = {}
+        self._pages: dict[str, Adw.PreferencesPage] = {}
         self._theme_watcher: SystemThemeWatcher | None = None
 
         self._watch_system_theme()
-        self._create_ui()
+        self._create_pages()
         self._setup_keybindings()
+        self._setup_custom_styling()
         self.connect("close-request", self._on_close_request)
 
-    def _create_ui(self) -> None:
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.set_child(main_box)
-
-        self.stack: Gtk.Stack = Gtk.Stack(
-            transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT, transition_duration=200
-        )
-        main_box.append(self.stack)
-        self.stack.set_vexpand(True)
-
-        self._create_headerbar()
-
-        for name, view_class in VIEW_CONFIG:
+    def _create_pages(self) -> None:
+        self._launcher_prefs = PreferencesView()
+        self._pages.update(self._launcher_prefs.pages)
+        self._page_order: list[str] = []
+        for key in GOSHOS_PAGE_IDS:
+            self.add(self._pages[key])
+            self._page_order.append(self._pages[key].get_title() or key)
+        self.add(self._pages["desktop"])
+        self._page_order.append(self._pages["desktop"].get_title() or "desktop")
+        for key, title, icon_name, view_class in _CUSTOM_PAGES:
             view = view_class()
-            self._add_view(view, name)
-
-        self._setup_custom_styling()
-
-    def _create_headerbar(self) -> None:
-        header_bar = Adw.HeaderBar()
-        add_css_class(header_bar, "preferences-header")
-
-        stack_switcher = Gtk.StackSwitcher()
-        stack_switcher.set_stack(self.stack)
-        stack_switcher.set_halign(Gtk.Align.CENTER)
-        stack_switcher.set_hexpand(False)
-        add_css_class(stack_switcher, "preferences-nav")
-
-        header_bar.set_title_widget(stack_switcher)
-        self.set_titlebar(header_bar)
-
-    def _add_view(self, view: BaseView, label_text: str) -> None:
-        view_bg = styled(Gtk.Box(orientation=Gtk.Orientation.VERTICAL), "view-container")
-        view.set_hexpand(True)
-        view.set_vexpand(True)
-        view_bg.append(view)
-        page_name = label_text.lower()
-        self.stack.add_titled(view_bg, page_name, label_text)
-        self.views[page_name] = view
+            page = wrap_custom_view(title, icon_name, view)
+            self._pages[key] = page
+            self.views[key] = view
+            self.add(page)
+            self._page_order.append(title)
 
     def present(self, view: str | None = None) -> None:  # type: ignore[override]
         self.show(view)
         super().present()
 
     def show(self, view: str | None = None) -> None:  # type: ignore[override]
-        if view:
-            page_name = view.lower()
-            if self.stack.get_child_by_name(page_name):
-                self.stack.set_visible_child_name(page_name)
+        key = normalize_prefs_page(view)
+        if key:
+            page = self._pages.get(key)
+            if page is not None:
+                self.set_visible_page(page)
         self.set_visible(True)
 
     def _setup_keybindings(self) -> None:
@@ -101,12 +78,17 @@ class PreferencesWindow(Adw.ApplicationWindow):
     def _on_key_press(
         self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: Gdk.ModifierType
     ) -> bool:
-        page_name = self.stack.get_visible_child_name()
-        if not page_name:
-            return False
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
-        if ctrl and Gdk.keyval_name(keyval) == "s":
-            return self.views[page_name].save_changes()
+        if not ctrl or Gdk.keyval_name(keyval) != "s":
+            return False
+        page = self.get_visible_page()
+        for key, candidate in self._pages.items():
+            if candidate is page:
+                view = self.views.get(key)
+                save = getattr(view, "save_changes", None)
+                if callable(save):
+                    return bool(save())
+                return False
         return False
 
     def _setup_custom_styling(self) -> None:
@@ -125,8 +107,5 @@ class PreferencesWindow(Adw.ApplicationWindow):
     def _on_close_request(self, *_args: Any) -> bool:
         if self._theme_watcher:
             self._theme_watcher.disconnect()
-        view = self.views.get("preferences")
-        unbind = getattr(view, "unbind_settings", None)
-        if callable(unbind):
-            unbind()
+        self._launcher_prefs.unbind_settings()
         return False

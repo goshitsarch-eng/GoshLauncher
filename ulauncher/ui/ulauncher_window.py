@@ -10,14 +10,13 @@ from typing import TYPE_CHECKING, Any, Collection, cast
 
 from gi.repository import Gdk, Gtk
 
-from ulauncher import paths
+from ulauncher import app_display_name, paths
 from ulauncher.internals.results_update import ResultsUpdate
 from ulauncher.modes.launcher.looks import chrome_from_settings, ensure_look_chrome
 from ulauncher.ui import gtk4
 from ulauncher.ui.helpers import layer_shell
 from ulauncher.ui.helpers.monitor import get_monitor, get_monitor_geometries, monitor_work_geometry
-from ulauncher.ui.helpers.theme import Theme
-from ulauncher.ui.load_icon_surface import load_icon_paintable
+from ulauncher.ui.helpers.theme import launcher_popup_css
 from ulauncher.ui.results_view import ResultsView
 from ulauncher.utils import scheduling
 from ulauncher.utils.environment import DESKTOP_ID, IS_X11_COMPATIBLE
@@ -54,12 +53,14 @@ def _event_time_us(controller: Any) -> int:
 
 class UlauncherWindow(Gtk.ApplicationWindow):
     _css_provider: Gtk.CssProvider | None = None
+    _css_on_display = False
+    _styled = False
     is_dragging = False
     layer_shell_enabled = False
     settings: Settings
 
     def __init__(self, **kwargs: Any) -> None:  # noqa: PLR0915
-        logger.info("Opening Ulauncher window")
+        logger.info("Opening %s window", app_display_name)
         self.settings = Settings.load(force=True)
         ensure_look_chrome(self.settings)
         self._chrome = chrome_from_settings(self.settings)
@@ -81,15 +82,18 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             width_request = layout_size.width
             height_request = layout_size.height
 
+        from ulauncher.modes.launcher.popup_position import gtk_default_window_size
+
         super().__init__(
             decorated=False,
             deletable=False,
             resizable=False,
-            title="Ulauncher - Application Launcher",
+            title=app_display_name,
             **kwargs,
         )
-        self.set_default_size(width_request, height_request if height_request > 0 else 1)
-        self.set_opacity(0)
+        gtk4.add_css_class(self, "gosh-popup")
+        default_w, default_h = gtk_default_window_size(width_request, height_request)
+        self.set_default_size(default_w, default_h)
 
         if not IS_X11_COMPATIBLE and DESKTOP_ID != "GNOME" and self.settings.layer_shell and layer_shell.is_supported():
             self.layer_shell_enabled = layer_shell.enable(self)
@@ -118,12 +122,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.prompt_input = Gtk.Entry(hexpand=True)
         # CSS .input padding is the inset; widget margins would ignore look/no-icon rules
 
-        self.prefs_btn = Gtk.Button(name="prefs_btn", width_request=24, height_request=24)
-        self.prefs_btn.set_halign(Gtk.Align.CENTER)
-        self.prefs_btn.set_valign(Gtk.Align.CENTER)
-        self.prefs_btn.set_margin_end(15)
-        self.prefs_btn.set_can_focus(False)
-
         from ulauncher.modes.launcher.focus_loss import popup_chrome_should_focus
         from ulauncher.modes.launcher.search_entry import SEARCH_ICON_NAME, SEARCH_ICON_PX
 
@@ -133,10 +131,10 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.search_icon.set_valign(Gtk.Align.CENTER)
         gtk4.pack_start(self.prompt, self.search_icon, False, False, 0)
         gtk4.pack_start(self.prompt, self.prompt_input, True, True, 0)
-        gtk4.pack_end(self.prompt, self.prefs_btn, False, False, 0)
         self._sync_search_entry()
 
         self.results_view = ResultsView(self.settings, self.apply_css, self._activate_clicked)
+        self.results_view.set_chrome(self._chrome)
 
         gtk4.pack_start(self.theme_root, self.prompt, False, True, 0)
         gtk4.pack_start(self.theme_root, self.results_view, False, True, 0)
@@ -163,10 +161,12 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         keys.connect("key-pressed", self.on_input_key_press)
         self.prompt_input.add_controller(keys)
         self.connect("map", self.on_initial_draw)
-        self.prefs_btn.connect("clicked", lambda *_: self.get_app().show_preferences())
 
+        # Style before the first map so GSK builds a tree (opacity 0 skipped paints).
+        self.apply_styling()
         self._apply_unredirect(True)
         self._show_backdrop()
+        self._sync_gnome_wayland_overlay()
         self.present()
         super().set_visible(True)
 
@@ -174,17 +174,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.set_input(self.query_str)
 
     def apply_styling(self) -> None:
-        if self.get_opacity() == 1:
+        if self._styled:
             return
+        self._styled = True
 
         self._apply_look_classes()
         self._sync_search_entry()
         gtk4.add_css_class(self.prompt, "prompt")
         gtk4.add_css_class(self.results_view, "result-box")
         gtk4.add_css_class(self.prompt_input, "input")
-        gtk4.add_css_class(self.prefs_btn, "prefs-btn")
-        paintable = load_icon_paintable(f"{paths.ASSETS}/icons/gear.svg", 16, self.get_scale_factor())
-        self.prefs_btn.set_child(Gtk.Image.new_from_paintable(paintable))
 
         self.apply_theme()
         self.position_window()
@@ -249,6 +247,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.settings = Settings.load(force=True)
         ensure_look_chrome(self.settings)
         self._chrome = chrome_from_settings(self.settings)
+        self.results_view.set_chrome(self._chrome)
         self._apply_look_classes()
         self._sync_search_entry()
         self.apply_theme()
@@ -272,6 +271,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.restyle_from_settings()
         else:
             self._chrome = chrome_from_settings(self.settings)
+            self.results_view.set_chrome(self._chrome)
             if ACTION_SEARCH_ICON in action_set:
                 self._apply_look_classes()
                 self._sync_search_entry()
@@ -377,6 +377,13 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def _activate_clicked(self, alt: bool) -> None:
         self.activate_result(alt, fallback=False)
 
+    def _activate_numbered(self, index: int) -> None:
+        from ulauncher.modes.launcher.activate import indexed_activatable_result
+
+        chosen = indexed_activatable_result(self.results_view.numbered_results(), index)
+        if chosen:
+            self.get_app().activate_result(chosen, False)
+
     def _apply_move(self, delta: int) -> None:
         if delta <= -999:  # noqa: PLR2004
             self.results_view.go_home()
@@ -409,14 +416,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         alt = bool(state & Gdk.ModifierType.ALT_MASK)
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
         show_numbers = bool(self._chrome.get("show_numbers"))
-
-        use_arrow_key_aliases = len(self.settings.arrow_key_aliases) == 4  # noqa: PLR2004
-        arrow_key_aliases = [*self.settings.arrow_key_aliases] if use_arrow_key_aliases else [None] * 4
-        left_alias, down_alias, up_alias, right_alias = arrow_key_aliases
-        if not use_arrow_key_aliases:
-            logger.warning(
-                "Invalid value for arrow_key_aliases: %s, expected four letters", self.settings.arrow_key_aliases
-            )
 
         entry = self.prompt_input
         preedit = _read_entry_preedit(entry)
@@ -488,24 +487,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if action["type"] == "activate" and self.results_view.has_results:
             self.activate_result(alt)
             return True
-        if action["type"] == "activate-index" and self.results_view.has_results:
-            self.results_view.select_jump(int(action["index"]))
-            self.activate_result(False, fallback=False)
+        if action["type"] == "activate-index":
+            self._activate_numbered(int(action["index"]))
             return True
-
-        if self.results_view.has_results:
-            if ctrl and keyname == left_alias:
-                entry.set_position(max(0, cursor - 1))
-                return True
-            if ctrl and keyname == right_alias:
-                entry.set_position(cursor + 1)
-                return True
-            if ctrl and keyname == up_alias:
-                self.results_view.go_up()
-                return True
-            if ctrl and keyname == down_alias:
-                self.results_view.go_down()
-                return True
         return False
 
     def on_mouse_down(self, gesture: Gtk.GestureClick, _n_press: int, x: float, y: float) -> None:
@@ -547,8 +531,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                         float(bounds.get_height()),
                     )
                 return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
-        alloc = widget.get_allocation()
-        return (float(alloc.x), float(alloc.y), float(alloc.width), float(alloc.height))
+        return (0.0, 0.0, 0.0, 0.0)
 
     def _prompt_click_target(self, x: float, y: float) -> str:
         from ulauncher.modes.launcher.focus_loss import prompt_click_target
@@ -558,7 +541,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             y,
             self._widget_rect_in_prompt(self.search_icon),
             self._widget_rect_in_prompt(self.prompt_input),
-            self._widget_rect_in_prompt(self.prefs_btn),
         )
 
     def _refocus_entry_soon(self) -> None:
@@ -611,7 +593,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         from ulauncher.modes.launcher.click_outside import backdrop_should_close
 
         if self._click_outside_card(x, y) and backdrop_should_close("button-release"):
-            self.close(save_query=True)
+            self.get_app().request_close(save_query=True)
 
     def get_app(self) -> UlauncherApp:
         return cast("UlauncherApp", self.get_application())
@@ -621,17 +603,29 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return self.get_app().query
 
     def apply_css(self, widget: Gtk.Widget) -> None:
-        if not self._css_provider:
-            self._css_provider = Gtk.CssProvider()
-        widget.get_style_context().add_provider(self._css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        for child in gtk4.iter_children(widget):
-            self.apply_css(child)
+        if getattr(self, "_css_on_display", False) or not self._css_provider:
+            return
+        display = widget.get_display() or Gdk.Display.get_default()
+        if not display:
+            return
+        gtk4.add_provider_to_display(self._css_provider)
+        self._css_on_display = True
 
-    def _get_shadow_size(self) -> int:
-        display = self.get_display()
-        if display and hasattr(display, "is_composited") and not display.is_composited():
-            return 0
-        return self.settings.window_shadow
+    def apply_theme(self) -> None:
+        css = launcher_popup_css()
+        if not self._css_provider:
+            self._css_provider = gtk4.load_css_provider(css)
+            display = self.get_display() or Gdk.Display.get_default()
+            if display:
+                gtk4.add_provider_to_display(self._css_provider)
+                self._css_on_display = True
+            else:
+                self.apply_css(self)
+        else:
+            self._css_provider.load_from_data(css.encode())
+            if not getattr(self, "_css_on_display", False):
+                self.apply_css(self)
+        logger.info('Applying look "%s"', getattr(self.settings, "look_id", "spotlight"))
 
     def _sync_shadow_inset(self) -> int:
         from ulauncher.modes.launcher.popup_shadow import look_shadow_inset
@@ -651,28 +645,37 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             box.set_margin_end(inset)
         return inset
 
-    def apply_theme(self) -> None:
-        if not self._css_provider:
-            self._css_provider = Gtk.CssProvider()
-        theme_css = Theme.load(self.settings.theme_name).get_css(self._get_shadow_size())
-        looks_path = Path(paths.ASSETS) / "themes" / "gosh-looks.css"
-        if looks_path.is_file():
-            theme_css += "\n" + looks_path.read_text()
-        self._css_provider.load_from_data(theme_css.encode())
-        self.apply_css(self)
-        logger.info('Applying theme "%s"', self.settings.theme_name)
-
     def get_layout_size(self) -> Gdk.Rectangle | None:
+        from ulauncher.modes.launcher.popup_position import gnome_wayland_overlay_size
+
+        mouse = self.settings.render_on_screen != "default-monitor"
         if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:
-            if not (geometries := get_monitor_geometries()):
+            monitor = get_monitor(mouse)
+            selected = None
+            if monitor is not None:
+                geo = monitor.get_geometry()
+                selected = {"x": geo.x, "y": geo.y, "width": geo.width, "height": geo.height}
+            geometries = [{"x": g.x, "y": g.y, "width": g.width, "height": g.height} for g in get_monitor_geometries()]
+            overlay = gnome_wayland_overlay_size(selected, geometries)
+            if not overlay:
                 return None
             layout_size = Gdk.Rectangle()
-            layout_size.width = min(geometry.width for geometry in geometries)
-            layout_size.height = min(geometry.height for geometry in geometries)
+            layout_size.x = overlay["x"]
+            layout_size.y = overlay["y"]
+            layout_size.width = overlay["width"]
+            layout_size.height = overlay["height"]
             return layout_size
-        if monitor := get_monitor(self.settings.render_on_screen != "default-monitor"):
+        if monitor := get_monitor(mouse):
             return monitor_work_geometry(monitor)
         return None
+
+    def _sync_gnome_wayland_overlay(self) -> None:
+        if DESKTOP_ID != "GNOME" or IS_X11_COMPATIBLE:
+            return
+        monitor = get_monitor(self.settings.render_on_screen != "default-monitor")
+        fullscreen_on = getattr(self, "fullscreen_on_monitor", None)
+        if callable(fullscreen_on) and monitor is not None:
+            fullscreen_on(monitor)
 
     def position_window(self) -> None:
         from ulauncher.modes.launcher.chrome_size import clamp_popup_width, clamp_results_max_height
@@ -682,12 +685,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             gtk_window_owns_popup_width,
             offset_from_origin,
             place_popup,
+            popup_surface_can_move,
+            popup_surface_move,
             popup_width_for_work_area,
             work_area_avoiding_keyboard,
         )
         from ulauncher.modes.launcher.popup_shadow import origin_minus_inset, surface_size_with_inset
         from ulauncher.modes.launcher.ui_scale import gtk_layout_scale
 
+        self._sync_gnome_wayland_overlay()
         if layout_size := self.get_layout_size():
             work = {
                 "x": int(getattr(layout_size, "x", 0) or 0),
@@ -730,8 +736,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self.frame.set_margin_end(max(0, int(work["width"] - pos_x - frame_width)))
             elif self.layer_shell_enabled:
                 layer_shell.set_position(self, pos_x, pos_y)
-            elif hasattr(self, "move"):
-                self.move(origin_minus_inset(placed["x"], inset), origin_minus_inset(placed["y"], inset))
+            else:
+                native = self.get_native()
+                gdk_surface = native.get_surface() if native is not None else None
+                if popup_surface_can_move(gdk_surface):
+                    popup_surface_move(
+                        gdk_surface,
+                        origin_minus_inset(placed["x"], inset),
+                        origin_minus_inset(placed["y"], inset),
+                    )
 
     def _ensure_monitor_watch(self) -> None:
         if getattr(self, "_monitors_watched", False):
@@ -880,7 +893,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.get_app().query_changed(self.prompt_input.get_text())
 
     def close(self, save_query: bool = False) -> None:  # type: ignore[override]
-        logger.info("Closing Ulauncher window")
+        logger.info("Closing %s window", app_display_name)
         from ulauncher.modes.launcher.popup_gate import run_isolated_teardown
 
         self._cancel_live_layout()
@@ -888,7 +901,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._cancel_refocus_idle()
         # hide before host disconnects so a throw cannot leave visible true
         if self.get_visible():
-            self.hide()
+            self.set_visible(False)
         self._destroy_backdrop()
         self._apply_unredirect(False)
         run_isolated_teardown(

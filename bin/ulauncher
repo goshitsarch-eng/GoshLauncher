@@ -34,7 +34,7 @@ while [ "$walked" -lt "$orig_count" ]; do
     --no-extensions)
       print_color 33 "The --no-extensions argument has been removed (see --help for available commands)"; exit 2 ;;
     --no-window-shadow)
-      print_color 33 "The --no-window-shadow argument has been removed (configure via the Window shadow size setting in preferences)"; exit 2 ;;
+      print_color 33 "The --no-window-shadow argument has been removed (look CSS owns popup shadows)"; exit 2 ;;
     --dev)
       print_color 33 "The --dev argument has been removed (use --verbose)"; set -- "$@" --verbose ;;
     --daemon)

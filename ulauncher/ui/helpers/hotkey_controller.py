@@ -5,7 +5,7 @@ import subprocess
 from shutil import which
 from typing import Any, Callable
 
-from ulauncher import app_id
+from ulauncher import app_display_name, app_id, show_launcher_label
 from ulauncher.gi import Gio, GLib
 from ulauncher.modes.launcher.shortcut import (
     hotkey_to_restore_after_failed_grab,
@@ -34,7 +34,7 @@ def _set_hotkey(hotkey: str) -> None:
         spec_path = f"/{spec_schema.replace('.', '/')}s/ulauncher/"
 
         spec = Gio.Settings.new_with_path(spec_schema, spec_path)
-        spec.set_string("name", "Show Ulauncher")
+        spec.set_string("name", show_launcher_label)
         spec.set_string("command", launch_command)
         spec.set_string("binding", hotkey)
 
@@ -68,7 +68,7 @@ def _set_hotkey(hotkey: str) -> None:
         logger.debug("Executing command to add XFCE global shortcut: %s", " ".join(cmd))
         subprocess.run(cmd, check=True)
     else:
-        logger.warning("Ulauncher doesn't support setting hotkey for Desktop environment '%s'", DESKTOP_NAME)
+        logger.warning("%s doesn't support setting hotkey for Desktop environment '%s'", app_display_name, DESKTOP_NAME)
 
 
 class HotkeyController:
@@ -116,14 +116,14 @@ class HotkeyController:
             config = subprocess.check_output(["kreadconfig5", *config_path, '"_launch"'])
             # only proceed if it's not already set up (don't override user prefs)
             if config.decode().strip():
-                logger.debug("Ulauncher Plasma global shortcut already created")
+                logger.debug("%s Plasma global shortcut already created", app_display_name)
                 return False
             if default_hotkey not in {"<Primary>space", "<Control>space"}:
                 # We don't want to convert the hotkey, so instead we just hard code it
                 logger.warning("Ignoring hotkey argument %s and using default '%s'", default_hotkey, hotkey)
             logger.debug("Executing kwriteconfig5 commands to add Plasma global shortcut for '%s'", hotkey)
-            subprocess.run(["kwriteconfig5", *config_path, "_k_friendly_name", "Ulauncher"], check=True)
-            subprocess.run(["kwriteconfig5", *config_path, "_launch", f"{hotkey},none,Ulauncher"], check=True)
+            subprocess.run(["kwriteconfig5", *config_path, "_k_friendly_name", app_display_name], check=True)
+            subprocess.run(["kwriteconfig5", *config_path, "_launch", f"{hotkey},none,{app_display_name}"], check=True)
             plasma_service_controller = SystemdController("plasma-kglobalaccel")
             if plasma_service_controller.status().can_start:
                 plasma_service_controller.restart()

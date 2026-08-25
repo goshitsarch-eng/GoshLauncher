@@ -484,3 +484,84 @@ def test_qtile_windows_list_and_activate() -> None:
     wrapped = windows_from_qtile_windows({"windows": [{"id": 4, "title": "Foot", "wm_class": "foot"}]})
     assert wrapped[0].wid == "qtile:4"
     assert wrapped[0].title == "Foot"
+
+
+def test_match_windows_reads_cached_snapshot() -> None:
+    from ulauncher.modes.launcher.windows import invalidate_windows, match_windows, store_window_snapshot
+
+    invalidate_windows()
+    try:
+        store_window_snapshot([WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox", desktop=0, pid=11)])
+        rows = match_windows("fire", 6)
+        assert rows[0]["title"] == "Mozilla Firefox"
+        assert rows[0]["wid"] == "0x1"
+    finally:
+        invalidate_windows()
+
+
+def test_windows_cache_ttl_and_freshness() -> None:
+    from ulauncher.modes.launcher.windows import invalidate_windows, store_window_snapshot, windows_cache_is_fresh
+
+    invalidate_windows()
+    try:
+        assert windows_cache_is_fresh() is False
+        store_window_snapshot([], now=10.0)
+        assert windows_cache_is_fresh(now=10.2) is True
+        assert windows_cache_is_fresh(now=10.5) is False
+    finally:
+        invalidate_windows()
+
+
+def test_ensure_windows_skips_on_ready_when_cache_is_fresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import (
+        ensure_windows,
+        invalidate_windows,
+        store_window_snapshot,
+        windows_cache_is_fresh,
+    )
+
+    invalidate_windows()
+    idle: list[object] = []
+    monkeypatch.setattr("ulauncher.utils.scheduling.run_when_idle", idle.append)
+    try:
+        store_window_snapshot([WindowInfo(wid="0x1", title="Term", wm_class="foot", desktop=0)])
+        assert windows_cache_is_fresh()
+        fired: list[int] = []
+        ensure_windows(lambda: fired.append(1))
+        assert fired == []
+        assert idle == []
+    finally:
+        invalidate_windows()
+
+
+def test_ensure_windows_schedules_refresh_when_stale(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from ulauncher.modes.launcher.windows import (
+        ensure_windows,
+        invalidate_windows,
+        store_window_snapshot,
+        windows_cache_is_fresh,
+    )
+
+    invalidate_windows()
+    idle: list[object] = []
+    monkeypatch.setattr(
+        "ulauncher.utils.scheduling.run_when_idle",
+        lambda fn: idle.append(fn) or SimpleNamespace(cancel=lambda: None),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.list_windows",
+        lambda: store_window_snapshot([WindowInfo(wid="0x2", title="Code", wm_class="code", desktop=0)]),
+    )
+    try:
+        fired: list[int] = []
+        ensure_windows(lambda: fired.append(1))
+        assert fired == []
+        assert windows_cache_is_fresh() is False
+        assert idle
+        idle[0]()  # type: ignore[operator]
+        assert fired == [1]
+        assert windows_cache_is_fresh()
+    finally:
+        invalidate_windows()

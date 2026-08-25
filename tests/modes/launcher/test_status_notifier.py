@@ -91,7 +91,7 @@ def test_menu_layout_lists_all_entries_under_root() -> None:
     child_ids = [child[0] for child in children]
     assert child_ids == ids
     labels = [child[1].get("label") for child in children if "label" in child[1]]
-    assert "Show Ulauncher" in labels
+    assert "Show GoshLauncher" in labels
     assert "Exit" in labels
 
 
@@ -104,14 +104,14 @@ def test_menu_layout_filters_properties_and_depth() -> None:
     assert shallow[2] == []
     _revision, leaf = dbusmenu_layout(MENU_SHOW, 1, ["label"])
     assert leaf[0] == MENU_SHOW
-    assert leaf[1] == {"label": "Show Ulauncher"}
+    assert leaf[1] == {"label": "Show GoshLauncher"}
     assert leaf[2] == []
 
 
 def test_menu_group_properties_skips_unknown_ids() -> None:
     rows = menu_group_properties([0, MENU_SHOW, 99], ["label"])
     assert rows[0][0] == 0
-    assert rows[1] == (MENU_SHOW, {"label": "Show Ulauncher"})
+    assert rows[1] == (MENU_SHOW, {"label": "Show GoshLauncher"})
     assert all(item_id != 99 for item_id, _props in rows)
     assert filter_menu_props({"label": "a", "enabled": True}, []) == {"label": "a", "enabled": True}
     assert menu_props_for_id(99) is None
@@ -153,7 +153,7 @@ def test_packed_layout_and_sni_properties_have_spec_types() -> None:
         status="Active",
         icon_name="ulauncher",
         icon_theme_path="",
-        title="Ulauncher",
+        title="GoshLauncher",
         item_id="ulauncher",
     )
     assert status is not None
@@ -163,7 +163,7 @@ def test_packed_layout_and_sni_properties_have_spec_types() -> None:
         status="Active",
         icon_name="ulauncher",
         icon_theme_path="",
-        title="Ulauncher",
+        title="GoshLauncher",
         item_id="ulauncher",
     )
     assert menu_path is not None
@@ -173,7 +173,7 @@ def test_packed_layout_and_sni_properties_have_spec_types() -> None:
         status="Active",
         icon_name="ulauncher",
         icon_theme_path="",
-        title="Ulauncher",
+        title="GoshLauncher",
         item_id="ulauncher",
     )
     assert tooltip is not None

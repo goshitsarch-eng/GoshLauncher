@@ -143,7 +143,7 @@ class TestCLIHelp:
         start_summary = cli._get_commands()["start"].summary
 
         app_group_index = help_text.index("App commands:")
-        show_index = help_text.index("Show the Ulauncher window (default command)")
+        show_index = help_text.index("Show the GoshLauncher window (default command)")
         help_index = help_text.index("Show help")
         extension_group_index = help_text.index("Extension commands:")
         extensions_index = help_text.index("List installed extensions")
@@ -155,6 +155,32 @@ class TestCLIHelp:
         assert "\nApp commands:\n  start" in help_text
         assert "\nExtension commands:\n  extensions (e)" in help_text
         assert f"start {start_summary}" in " ".join(help_text.split())
+        assert "file browser" not in help_text
+        assert "custom themes" not in help_text
+        assert "Ctrl+Space" in help_text
+        assert "Spotlight-goshos" in help_text
+
+    def test_man_page_describes_goshos_launcher(self) -> None:
+        from pathlib import Path
+
+        text = Path(__file__).resolve().parents[1] / "ulauncher.1"
+        man = text.read_text()
+        assert "file browser" not in man
+        assert "custom themes" not in man
+        assert "Ctrl+Space" in man
+        assert "Spotlight-goshos" in man
+        assert "Seventeen looks" in man
+
+    def test_readme_describes_goshos_launcher(self) -> None:
+        from pathlib import Path
+
+        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
+        assert "file browser" not in readme.lower()
+        assert "custom color themes" not in readme.lower()
+        assert "Ctrl+Space" in readme
+        assert "Spotlight-goshos" in readme
+        assert "Seventeen looks" in readme
+        assert "GTK 4" in readme
 
     def test_subcommand_help_does_not_repeat_top_level_command_groups(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:

@@ -31,9 +31,31 @@ def empty_popup_height(measured: float, fallback: int = 80) -> int:
     return fallback
 
 
+def gtk_default_window_size(width: int, height: int) -> tuple[int, int]:
+    """GTK 4 treats a default height of 1 as a real 1px window and never builds a GSK tree."""
+    return width, height if height > 1 else -1
+
+
 def gtk_window_owns_popup_width(desktop_id: str, is_x11_compatible: bool) -> bool:
     """GNOME Wayland is a fullscreen overlay; the card width is margin insets."""
     return desktop_id != "GNOME" or is_x11_compatible
+
+
+def gnome_wayland_overlay_size(
+    selected: dict[str, float] | None,
+    geometries: list[dict[str, float]] | None = None,
+) -> dict[str, int] | None:
+    """Fill the chosen monitor. Min-of-all-monitors would shrink a 4K primary next to a 1080p panel."""
+    if selected and float(selected.get("width") or 0) > 0 and float(selected.get("height") or 0) > 0:
+        return {
+            "x": int(selected.get("x") or 0),
+            "y": int(selected.get("y") or 0),
+            "width": int(selected["width"]),
+            "height": int(selected["height"]),
+        }
+    if geometries:
+        return gnome_wayland_overlay_size(geometries[0], None)
+    return None
 
 
 def intersect_rect(first: dict[str, float], second: dict[str, float]) -> dict[str, int] | None:
@@ -340,3 +362,12 @@ def work_area_avoiding_keyboard(work_area: dict[str, float], keyboard: Any) -> d
         "width": work_area["width"],
         "height": top - work_area["y"],
     }
+
+
+def popup_surface_can_move(surface: Any) -> bool:
+    """GTK 4 dropped Gtk.Window.move; GdkX11.X11Surface.move is the X11 stand-in."""
+    return callable(getattr(surface, "move", None))
+
+
+def popup_surface_move(surface: Any, x: int, y: int) -> None:
+    surface.move(x, y)

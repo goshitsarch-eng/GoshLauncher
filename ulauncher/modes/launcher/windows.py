@@ -10,6 +10,7 @@ import re
 import shutil
 import signal
 import subprocess
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -31,6 +32,81 @@ class WindowInfo:
     sticky: bool = False
     user_time: int = 0
     app_id: str = ""
+
+
+WINDOWS_CACHE_TTL_S = 0.4
+
+
+class _WindowSnapshot:
+    windows: list[WindowInfo] | None = None
+    monotonic: float = 0.0
+    loading = False
+    on_ready: Callable[[], None] | None = None
+    pending_idle: Any = None
+
+
+_window_snapshot = _WindowSnapshot()
+
+
+def cached_windows() -> list[WindowInfo]:
+    return list(_window_snapshot.windows or [])
+
+
+def windows_cache_is_fresh(now: float | None = None) -> bool:
+    if _window_snapshot.windows is None:
+        return False
+    stamp = time.monotonic() if now is None else now
+    return stamp - _window_snapshot.monotonic < WINDOWS_CACHE_TTL_S
+
+
+def store_window_snapshot(windows: list[WindowInfo], now: float | None = None) -> list[WindowInfo]:
+    _window_snapshot.windows = list(windows)
+    _window_snapshot.monotonic = time.monotonic() if now is None else now
+    _window_snapshot.loading = False
+    return list(_window_snapshot.windows)
+
+
+def invalidate_windows() -> None:
+    idle = _window_snapshot.pending_idle
+    if idle is not None:
+        idle.cancel()
+    _window_snapshot.windows = None
+    _window_snapshot.monotonic = 0.0
+    _window_snapshot.loading = False
+    _window_snapshot.on_ready = None
+    _window_snapshot.pending_idle = None
+
+
+def _refresh_windows() -> None:
+    _window_snapshot.pending_idle = None
+    list_windows()
+    _window_snapshot.loading = False
+    callback = _window_snapshot.on_ready
+    _window_snapshot.on_ready = None
+    if callback:
+        callback()
+
+
+def ensure_windows(on_ready: Callable[[], None]) -> None:
+    if windows_cache_is_fresh():
+        return
+    _window_snapshot.on_ready = on_ready
+    if _window_snapshot.loading:
+        return
+    _window_snapshot.loading = True
+    from ulauncher.utils import scheduling
+
+    _window_snapshot.pending_idle = scheduling.run_when_idle(_refresh_windows)
+
+
+def flush_windows_lookup() -> None:
+    idle = _window_snapshot.pending_idle
+    if idle is not None:
+        idle.cancel()
+        _window_snapshot.pending_idle = None
+    if not _window_snapshot.loading:
+        return
+    _refresh_windows()
 
 
 def _ewmh_windows() -> list[WindowInfo]:
@@ -672,7 +748,7 @@ def list_windows() -> list[WindowInfo]:
     compositor = _compositor_windows()
     windows = pick_window_list(ewmh, wmctrl, introspect, compositor)
     ranks = tab_ranks_from_introspect_payload(payload)
-    return sort_windows_most_recent(windows, tab_ranks=ranks or None)
+    return store_window_snapshot(sort_windows_most_recent(windows, tab_ranks=ranks or None))
 
 
 def _workspace_label(win: WindowInfo) -> str:
@@ -826,7 +902,7 @@ def take_window_results(
     return results
 
 
-def match_windows(query: str, limit: int = 6) -> list[dict]:
+def match_windows(query: str, limit: int = 6, windows: list[WindowInfo] | None = None) -> list[dict]:
     intent, rest = parse_window_intent(query)
     workspace = parse_workspace_query(query)
     switch_row = None
@@ -841,7 +917,7 @@ def match_windows(query: str, limit: int = 6) -> list[dict]:
             "id": workspace_result_id(workspace + 1),
         }
     window_rows: list[dict] = []
-    for win in list_windows():
+    for win in windows if windows is not None else cached_windows():
         target = rest if intent != "focus" else query
         if not window_matches(win, target):
             continue

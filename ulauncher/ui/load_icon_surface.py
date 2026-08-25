@@ -15,29 +15,54 @@ logger = logging.getLogger(__name__)
 DEFAULT_EXE_ICON = f"{paths.ASSETS}/icons/executable.png"
 
 
+def _paintable_from_named_icon(icon: str, size: int, scale: int) -> Gdk.Paintable | None:
+    from gi.repository import Gdk, Gtk
+
+    display = Gdk.Display.get_default()
+    if display is None:
+        return None
+    theme = Gtk.IconTheme.get_for_display(display)
+    if theme is None:
+        return None
+    return theme.lookup_icon(icon, None, size, scale, Gtk.TextDirection.NONE, 0)
+
+
+def _paintable_from_file(path: str, size: int, scale: int) -> Gdk.Paintable:
+    from gi.repository import Gdk, GdkPixbuf, Gio, Gtk
+
+    from ulauncher.gi import GLib
+
+    gfile = Gio.File.new_for_path(path)
+    if path.lower().endswith(".svg"):
+        return Gtk.IconPaintable.new_for_file(gfile, size, scale)
+    try:
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(path, size, size)
+    except GLib.Error:
+        return Gtk.IconPaintable.new_for_file(gfile, size, scale)
+    if not pixbuf:
+        return Gtk.IconPaintable.new_for_file(gfile, size, scale)
+    return Gdk.Texture.new_for_pixbuf(pixbuf)
+
+
 @lru_cache(maxsize=50)
 def load_icon_paintable(icon: str, size: int, scaling_factor: int = 1) -> Gdk.Paintable:
-    from gi.repository import Gdk, GdkPixbuf
-
     from ulauncher.gi import GLib
 
     real_size = size * scaling_factor
     try:
-        if not icon.startswith("/"):
-            from ulauncher.ui.get_icon_path import get_icon_path
+        if icon.startswith("/"):
+            return _paintable_from_file(icon, real_size, scaling_factor)
+        named = _paintable_from_named_icon(icon, real_size, scaling_factor)
+        if named is not None:
+            return named
+        from ulauncher.ui.get_icon_path import get_icon_path
 
-            icon = get_icon_path(icon, real_size) or DEFAULT_EXE_ICON
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(icon, real_size, real_size)
-        if not pixbuf:
-            msg = f"Could not load icon pixbuf: {icon}"
-            raise RuntimeError(msg)
-        texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-        return texture
+        path = get_icon_path(icon, real_size) or DEFAULT_EXE_ICON
+        return _paintable_from_file(path, real_size, scaling_factor)
     except GLib.Error as e:
         if icon == DEFAULT_EXE_ICON:
             msg = f"Could not load fallback icon: {icon}"
             raise RuntimeError(msg) from e
-
         logger.warning("Could not load specified icon %s (%s). Will use fallback icon", icon, e)
         return load_icon_paintable(DEFAULT_EXE_ICON, size, scaling_factor)
 

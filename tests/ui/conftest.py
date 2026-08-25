@@ -13,7 +13,7 @@ except (ValueError, ImportError):
     GTK4_AVAILABLE = False
 
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:  # noqa: ARG001
     if GTK4_AVAILABLE:
         return
     skip = pytest.mark.skip(reason="GTK 4 is not available")

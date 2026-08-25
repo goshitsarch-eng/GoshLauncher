@@ -295,6 +295,8 @@ deb: sdist
 	cp -r debian dist/ulauncher_deb/
 	cd dist/ulauncher_deb || exit
 	rm -f debian/changelog
+	# This makefile prepends .venv/bin; pybuild must use distro setuptools.
+	export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 	dch --create --no-multimaint --package ulauncher --newversion="${DEB_VERSION}" --distribution ${DEB_DISTRO} "New upstream release"
 	echo ${DPKG_ARGS} | xargs dpkg-buildpackage
 	cd -
@@ -319,7 +321,8 @@ manpage:
 		echo -e "${BOLD}${RED}You need help2man to (re)generate the manpage${RESET}"
 		exit 1
 	fi
-	help2man --section=1 --name="Feature rich application Launcher for Linux" --no-info ./bin/ulauncher > ulauncher.1
+	help2man --section=1 --name="GTK 4 Adwaita launcher matching Spotlight-goshos" --no-info \
+		--version-string="ulauncher ${VERSION}" ./bin/ulauncher > ulauncher.1
 	# help2man renders any heading with a trailing colon as .SS (indented subsection).
 	# Convert those to .SH with uppercased names, which is the man page section convention.
 	sed -i 's/^\.SS "\(.*\):"$$/.SH \U\1/' ulauncher.1

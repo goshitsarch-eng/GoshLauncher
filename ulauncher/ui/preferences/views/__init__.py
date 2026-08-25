@@ -5,6 +5,7 @@ from typing import Any, Callable, TypeVar, cast
 
 from gi.repository import Gtk
 
+from ulauncher.ui import gtk4
 from ulauncher.utils import scheduling
 
 T = TypeVar("T", bound=Gtk.Widget)
@@ -19,15 +20,44 @@ SPINNER_MIN_ANIMATION = 0.25
 
 
 def get_window_for_widget(widget: Gtk.Widget) -> Gtk.Window | None:
-    if (toplevel := widget.get_toplevel()) and isinstance(toplevel, Gtk.Window):
-        return toplevel
+    get_root = getattr(widget, "get_root", None)
+    root = get_root() if callable(get_root) else None
+    if root and isinstance(root, Gtk.Window):
+        return root
     return None
 
 
+def _in_destruction(widget: Any) -> bool:
+    probe = getattr(widget, "in_destruction", None)
+    return bool(probe()) if callable(probe) else False
+
+
+def prefs_view_reload_action(toplevel: Any, widget: Any) -> str:
+    """Return stop/skip/reload for a periodic prefs-view refresh.
+
+    GTK 4 removed Gtk.Window.get_window(). An unmapped widget is not
+    destroyed — Adw.PreferencesWindow hides stack pages that way.
+    """
+    if toplevel is None:
+        return "stop"
+    if _in_destruction(toplevel) or _in_destruction(widget):
+        return "stop"
+    mapped = False
+    get_mapped = getattr(widget, "get_mapped", None)
+    if callable(get_mapped):
+        mapped = bool(get_mapped())
+    native = None
+    get_native = getattr(widget, "get_native", None)
+    if callable(get_native):
+        native = get_native()
+    if mapped or native is not None:
+        return "reload"
+    return "skip"
+
+
 def styled(widget: T, *class_names: str) -> T:
-    style = widget.get_style_context()
     for class_name in class_names:
-        style.add_class(class_name)
+        gtk4.add_css_class(widget, class_name)
     return widget
 
 
@@ -37,12 +67,11 @@ def start_spinner_button_animation(button: Gtk.Button) -> Callable[[], None]:
     Returns a function to stops the animation
     """
     start_time = time()
-    btn_style = button.get_style_context()
-    btn_style.add_class("spinner-button")
+    gtk4.add_css_class(button, "spinner-button")
     button.set_sensitive(False)
 
     def do_stop_animation() -> None:
-        btn_style.remove_class("spinner-button")
+        gtk4.remove_css_class(button, "spinner-button")
         button.set_sensitive(True)
 
     def stop_animation() -> None:
@@ -102,7 +131,7 @@ class DialogLauncher:
             text=text,
             secondary_text=secondary_text,
         )
-        response = cast("Gtk.ResponseType | None", dialog.run())
+        response = cast("Gtk.ResponseType | None", gtk4.run_dialog(dialog))
         dialog.destroy()
         return response
 

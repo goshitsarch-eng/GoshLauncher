@@ -25,16 +25,17 @@ permissions:
 
 jobs:
   compare:
-    runs-on: ubuntu-latest
-    container: ulauncher/build-image:6.7
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # `git worktree add` in `make perf-compare` needs base branch history
 
+      - name: Install GTK 4 and libadwaita
+        run: sudo bash scripts/ci-install-gtk4.sh
+
       - name: Mark workspace as a safe git directory
-        # The container runs as a different user than the one that owns the checkout, so git
-        # refuses to operate on the repo ("dubious ownership") without this opt-in.
+        # Checkout can be owned by a different user than the one that runs later steps.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Materialize base branch locally
@@ -49,7 +50,7 @@ jobs:
         with:
           path: .venv
           # Shared key with tests.yml so the two workflows reuse the same venv cache entry.
-          key: venv-${{ hashFiles('requirements.txt', 'makefile', '.github/workflows/tests.yml') }}
+          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt', 'makefile', '.github/workflows/tests.yml') }}
 
       - name: venv
         run: make venv QUIET=1

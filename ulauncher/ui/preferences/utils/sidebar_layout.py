@@ -5,6 +5,7 @@ from typing import Callable, Sequence
 
 from gi.repository import Gtk, Pango
 
+from ulauncher.ui import gtk4
 from ulauncher.ui.preferences.views import SIDEBAR_WIDTH, DataListBoxRow, styled
 
 
@@ -54,34 +55,34 @@ class SidebarLayout(Gtk.Box):
         self.listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         self.listbox.set_activate_on_single_click(True)
         self.listbox.connect("row-selected", self._on_sidebar_item_selected)
-        scrolled.add(self.listbox)
-        self.sidebar.pack_start(scrolled, True, True, 0)
+        scrolled.set_child(self.listbox)
+        gtk4.pack_start(self.sidebar, scrolled, True, True, 0)
 
         # Add footer actions if provided
         if footer_actions:
             divider = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-            self.sidebar.pack_start(divider, False, False, 0)
+            gtk4.pack_start(self.sidebar, divider, False, False, 0)
 
             footer_listbox = self._create_footer_actions(footer_actions)
-            self.sidebar.pack_start(footer_listbox, False, False, 0)
+            gtk4.pack_start(self.sidebar, footer_listbox, False, False, 0)
 
         self._rows_by_id: dict[str, DataListBoxRow] = {}
         self._empty_placeholder_builder: Callable[[], Gtk.Widget] | None = None
 
-        self.pack_start(self.sidebar, False, False, 0)
+        gtk4.pack_start(self, self.sidebar, False, False, 0)
 
         # Vertical separator
         separator = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        self.pack_start(separator, False, False, 0)
+        gtk4.pack_start(self, separator, False, False, 0)
 
         # Right side - content view
         self.content_view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, halign=Gtk.Align.FILL)
-        self.pack_start(self.content_view, True, True, 0)
+        gtk4.pack_start(self, self.content_view, True, True, 0)
 
     def set_items(self, items: Sequence[SidebarItem], active_item_id: str | None = None) -> None:
         """Render sidebar items inside the layout."""
 
-        existing_children = list(self.listbox.get_children())
+        existing_children = list(gtk4.list_children(self.listbox))
         for child in existing_children:
             self.listbox.remove(child)
 
@@ -89,15 +90,15 @@ class SidebarLayout(Gtk.Box):
         has_items = False
         for item in items:
             row = self._create_sidebar_item_row(item)
-            self.listbox.add(row)
+            self.listbox.append(row)
             self._rows_by_id[item.id] = row
             has_items = True
 
         if not has_items and self._empty_placeholder_builder:
             placeholder_row = self._create_placeholder_row()
-            self.listbox.add(placeholder_row)
+            self.listbox.append(placeholder_row)
 
-        self.listbox.show_all()
+        gtk4.show_all(self.listbox)
 
         if active_item_id:
             self.select_item(active_item_id)
@@ -130,10 +131,10 @@ class SidebarLayout(Gtk.Box):
         for label, icon_name, callback in actions:
             row = self._create_action_row(label, icon_name)
             row.callback = callback  # type: ignore[attr-defined]
-            footer_listbox.add(row)
+            footer_listbox.append(row)
 
         footer_listbox.connect("row-activated", self._on_footer_action_activated)
-        footer_listbox.show_all()
+        gtk4.show_all(footer_listbox)
 
         return footer_listbox
 
@@ -153,15 +154,15 @@ class SidebarLayout(Gtk.Box):
 
         icon = Gtk.Image(icon_name=icon_name)
         icon.set_pixel_size(18)
-        action_box.pack_start(icon, False, False, 0)
+        gtk4.pack_start(action_box, icon, False, False, 0)
 
         label_widget = styled(
             Gtk.Label(label=label, halign=Gtk.Align.START),
             "sidebar-item-name",
         )
-        action_box.pack_start(label_widget, True, True, 0)
+        gtk4.pack_start(action_box, label_widget, True, True, 0)
 
-        row.add(action_box)
+        row.set_child(action_box)
         row.set_margin_bottom(2)
         row.set_margin_top(2)
         return row
@@ -179,7 +180,7 @@ class SidebarLayout(Gtk.Box):
         row.set_can_focus(item.selectable)
 
         content = self._build_sidebar_item_content(item)
-        row.add(content)
+        row.set_child(content)
         return row
 
     def _build_sidebar_item_content(self, item: SidebarItem) -> Gtk.Widget:
@@ -193,7 +194,7 @@ class SidebarLayout(Gtk.Box):
         )
         item.icon.set_valign(Gtk.Align.CENTER)
         item.icon.set_halign(Gtk.Align.CENTER)
-        content.pack_start(item.icon, False, False, 0)
+        gtk4.pack_start(content, item.icon, False, False, 0)
 
         text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
         text_box.set_hexpand(True)
@@ -203,7 +204,7 @@ class SidebarLayout(Gtk.Box):
             ellipsize=Pango.EllipsizeMode.END,
         )
         styled(name_label, "sidebar-item-name")
-        text_box.pack_start(name_label, False, False, 0)
+        gtk4.pack_start(text_box, name_label, False, False, 0)
 
         if item.description:
             description_label = Gtk.Label(
@@ -212,14 +213,14 @@ class SidebarLayout(Gtk.Box):
                 ellipsize=Pango.EllipsizeMode.END,
             )
             styled(description_label, "dim-label", "sidebar-item-description")
-            text_box.pack_start(description_label, False, False, 0)
+            gtk4.pack_start(text_box, description_label, False, False, 0)
             text_box.set_valign(Gtk.Align.START)
             name_label.set_valign(Gtk.Align.START)
         else:
             text_box.set_valign(Gtk.Align.CENTER)
             name_label.set_valign(Gtk.Align.CENTER)
 
-        content.pack_start(text_box, True, True, 0)
+        gtk4.pack_start(content, text_box, True, True, 0)
 
         if item.label:
             label_widget = Gtk.Label(label=item.label)
@@ -231,7 +232,7 @@ class SidebarLayout(Gtk.Box):
             else:
                 class_names.append(item.label)
             styled(label_widget, *class_names)
-            content.pack_start(label_widget, False, False, 0)
+            gtk4.pack_start(content, label_widget, False, False, 0)
 
         return content
 
@@ -241,7 +242,7 @@ class SidebarLayout(Gtk.Box):
         row.set_can_focus(False)
         row.set_activatable(False)
         widget = self._empty_placeholder_builder() if self._empty_placeholder_builder else Gtk.Box()
-        row.add(widget)
+        row.set_child(widget)
         return row
 
     def _on_sidebar_item_selected(self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow | None) -> None:
@@ -254,7 +255,7 @@ class SidebarLayout(Gtk.Box):
 
     def clear_content(self) -> None:
         """Clear the content view."""
-        for child in self.content_view.get_children():
+        for child in gtk4.list_children(self.content_view):
             self.content_view.remove(child)
 
     def set_content(self, widget: Gtk.Widget) -> None:
@@ -264,5 +265,5 @@ class SidebarLayout(Gtk.Box):
             widget: Widget to display in the content area
         """
         self.clear_content()
-        self.content_view.pack_start(widget, True, True, 0)
-        self.content_view.show_all()
+        gtk4.pack_start(self.content_view, widget, True, True, 0)
+        gtk4.show_all(self.content_view)

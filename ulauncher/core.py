@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import logging
 from collections import defaultdict
-from typing import Callable, Iterable
+from typing import Callable, Iterable, cast
 from weakref import WeakKeyDictionary
 
 from ulauncher.internals import effect_utils, effects
@@ -49,6 +49,25 @@ def get_modes() -> list[Mode]:
         ExtensionMode(ext_service),
         get_app_mode(),
     ]
+
+
+def is_legacy_trigger_mode(mode: Mode) -> bool:
+    # LauncherMode is a catch-all, so keyword-less ShortcutMode/ExtensionMode
+    # triggers never win set_query. Merge those two by class name so AppMode
+    # desktop entries stay out (apps are already searched by LauncherMode).
+    return type(mode).__name__ in {"ShortcutMode", "ExtensionMode"}
+
+
+def launcher_has_local_hits(results: Iterable[Result]) -> bool:
+    from ulauncher.modes.launcher.results import SectionHeader
+
+    for result in results:
+        if isinstance(result, SectionHeader):
+            continue
+        if getattr(result, "kind", "") == "web":
+            continue
+        return True
+    return False
 
 
 class UlauncherCore:
@@ -150,10 +169,36 @@ class UlauncherCore:
         sorted_ = sorted(flattened_, key=lambda i: i.search_score(query_str), reverse=True)[:limit]
         return list(filter(lambda searchable: searchable.search_score(query_str) > min_score, sorted_))
 
+    def search_legacy_triggers(self, min_score: int = 50, limit: int = 50) -> list[Result]:
+        self.load_triggers()
+        query_str = self.query.argument or ""
+        if not query_str:
+            return []
+
+        hits: list[Result] = []
+        for mode, triggers in self._trigger_cache.items():
+            if not is_legacy_trigger_mode(mode):
+                continue
+            for trigger in triggers:
+                if trigger.search_score(query_str) > min_score:
+                    hits.append(trigger)
+                    self._mode_map[trigger] = mode
+        hits.sort(key=lambda item: item.search_score(query_str), reverse=True)
+        return hits[:limit]
+
+    def _should_merge_legacy(self, _valid_mode: Mode | None) -> bool:
+        # goshos has no keyword-shortcut or extension rows in typed search
+        return False
+
+    def _merge_legacy_into_launcher(self, results: list[Result]) -> list[Result]:
+        # Typed search is goshos-only. Keyword shortcuts still run when set_query
+        # selects ShortcutMode; they are not mixed into LauncherMode rows.
+        return list(results)
+
     def get_home_results(self) -> Iterable[Result]:
         # LauncherMode owns goshos empty-state (frequent apps + windows).
-        # A zero max_recent_apps must not hide windows, and AppMode must not
-        # refill the list after empty suggestions are turned off.
+        # Both lists share max_per_category; AppMode must not refill the list
+        # after empty suggestions are turned off.
         from ulauncher.modes.launcher.mode import LauncherMode
 
         settings = Settings.load()
@@ -270,8 +315,14 @@ class UlauncherCore:
 
             self._clear_placeholder_timer()
             if effect_msg["type"] == effects.EffectType.RENDER_RESULTS:
+                paint: effects.EffectMessage = effect_msg
+                if not effect_msg.get("append") and self._should_merge_legacy(valid_mode):
+                    paint = cast(
+                        "effects.RenderResults",
+                        {**effect_msg, "results": self._merge_legacy_into_launcher(list(effect_msg["results"]))},
+                    )
                 self._result_buffer.enqueue(
-                    effect_msg, lambda results, append: self._render_results(results, callback, append)
+                    paint, lambda results, append: self._render_results(results, callback, append)
                 )
             elif effect_msg["type"] == effects.EffectType.LEGACY_RUN_MANY:
                 # effect_utils.handle has no callback to render with, so route any nested render

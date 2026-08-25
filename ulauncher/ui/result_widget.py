@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Mapping
 from html import unescape
-from typing import Callable
+from typing import Any
 
 from gi.repository import Gtk, Pango
 
@@ -23,12 +24,12 @@ class ResultWidget(Gtk.Box):
     index: int = 0
     query: Query
     result: Result
-    jump_keys: list[str]
     item_box: Gtk.Box
     item_container: Gtk.Box
     shortcut_label: Gtk.Label
     title_box: Gtk.Box
     text_container: Gtk.Box
+    item_icon: Gtk.Image | None
 
     def __init__(  # noqa: PLR0915
         self,
@@ -37,21 +38,22 @@ class ResultWidget(Gtk.Box):
         query: Query,
         on_select: Callable[[int], None],
         on_activate: Callable[[int, bool], None],
-        jump_keys: list[str],
         jump_index: int = -1,
+        chrome: Mapping[str, Any] | None = None,
     ) -> None:
         self.result = result
         self.query = query
         self._on_select = on_select
         self._on_activate = on_activate
-        self.jump_keys = jump_keys
         self.widget_index = index
+        self.item_icon = None
         text_scaling_factor = get_text_scaling_factor()
         from ulauncher.modes.launcher.looks import chrome_from_settings, icon_size_for_look
         from ulauncher.modes.launcher.result_row import RESULT_CHILD_SPACING
         from ulauncher.utils.settings import Settings
 
-        chrome = chrome_from_settings(Settings.load())
+        if chrome is None:
+            chrome = chrome_from_settings(Settings.load())
         icon_size = icon_size_for_look(chrome, str(chrome.get("density") or "comfortable"))
         self._show_numbers = bool(chrome.get("show_numbers"))
         show_icons = bool(chrome.get("show_result_icons", True))
@@ -89,11 +91,13 @@ class ResultWidget(Gtk.Box):
 
         if should_build_result_icon(show_icons):
             icon = Gtk.Image()
+            icon.set_pixel_size(icon_size)
             icon.set_from_paintable(
                 load_icon_paintable(result.icon or "image-missing", icon_size, self.get_scale_factor())
             )
             gtk4.add_css_class(icon, "item-icon")
             gtk4.pack_start(item_container, icon, False, True, 0)
+            self.item_icon = icon
 
         self.text_container = Gtk.Box(
             width_request=int(350.0 * text_scaling_factor),
@@ -166,11 +170,29 @@ class ResultWidget(Gtk.Box):
         if not isinstance(scrolled, Gtk.ScrolledWindow):
             return
         adjustment = scrolled.get_vadjustment()
-        viewport_height = scrolled.get_allocated_height()
+        viewport_height = scrolled.get_height()
         scroll_y = adjustment.get_value()
-        allocation = self.get_allocation()
+        row_y, row_height = self._row_offset_in_parent()
         # page_size is 0 before the first allocate; writing that offset jumps the list
-        adjustment.set_value(scroll_value_to_show_row(allocation.y, allocation.height, scroll_y, viewport_height))
+        adjustment.set_value(scroll_value_to_show_row(row_y, row_height, scroll_y, viewport_height))
+
+    def _row_offset_in_parent(self) -> tuple[float, float]:
+        row_height = float(self.get_height())
+        parent = self.get_parent()
+        compute = getattr(self, "compute_bounds", None)
+        if parent is None or not callable(compute):
+            return 0.0, row_height
+        ok, bounds = compute(parent)
+        if not ok or bounds is None:
+            return 0.0, row_height
+        get_y = getattr(bounds, "get_y", None)
+        if callable(get_y):
+            return float(get_y()), float(bounds.get_height())
+        origin = getattr(bounds, "origin", None)
+        size = getattr(bounds, "size", None)
+        if origin is not None and size is not None:
+            return float(origin.y), float(size.height)
+        return float(bounds.y), float(bounds.height)
 
     def highlight_name(self) -> None:
         if self.result.wrap:

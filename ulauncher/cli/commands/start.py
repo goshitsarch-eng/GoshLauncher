@@ -8,21 +8,29 @@ from types import TracebackType
 
 from ulauncher.cli import CLIArguments
 
+_BOX_INNER = 77
+
+
+def _boxed_warning(*lines: str) -> str:
+    bar = "═" * _BOX_INNER
+    body = "\n".join(f"║{line[:_BOX_INNER].center(_BOX_INNER)}║" for line in lines)
+    return f"\n\n╔{bar}╗\n{body}\n╚{bar}╝\n\n"
+
 
 def run(_: CLIArguments) -> int:
     from ulauncher import init_helpers
 
     init_helpers.init_x11_threads()
 
-    from ulauncher import api_version, version
+    from ulauncher import api_version, app_display_name, version
     from ulauncher.ui.app import UlauncherApp  # noqa: TID251
     from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME, DISTRO, IS_X11_COMPATIBLE, XDG_SESSION_TYPE
     from ulauncher.utils.migrate import v5_to_v6
     from ulauncher.utils.v5_killer import kill_ulauncher_v5
 
     gtk_version = UlauncherApp.get_gtk_version()
-    if gtk_version < (3, 22, 0):
-        print("Ulauncher requires GTK+ version 3.22 or newer. Please upgrade your GTK version.")  # noqa: T201
+    if gtk_version < (4, 6, 0):
+        print("GoshLauncher requires GTK 4.6 and libadwaita 1.1 or newer.")  # noqa: T201
         return 1
 
     logger = logging.getLogger(__name__)
@@ -35,18 +43,16 @@ def run(_: CLIArguments) -> int:
     logger.info("Desktop: %s (%s) on %s", DESKTOP_NAME, XDG_SESSION_TYPE, DISTRO)
     if "-" in version:
         logger.warning(
-            "\n"
-            "\n╔═════════════════════════════════════════════════════════════════════════════╗"
-            "\n║                  YOU ARE RUNNING A PRE-RELEASE of ULAUNCHER.                ║"
-            "\n║ Please do not report extension API support warnings to extension developers ║"
-            "\n║ We are still in the process of developing and documenting these features    ║"
-            "\n╚═════════════════════════════════════════════════════════════════════════════╝"
-            "\n\n"
+            _boxed_warning(
+                f"YOU ARE RUNNING A PRE-RELEASE of {app_display_name.upper()}.",
+                "Please do not report extension API support warnings to extension developers",
+                "We are still in the process of developing and documenting these features",
+            )
         )
 
-    logger.info("Ulauncher version %s", version)
+    logger.info("%s version %s", app_display_name, version)
     logger.info("Extension API version %s", api_version)
-    logger.info("GTK+ %s.%s.%s", *gtk_version)
+    logger.info("GTK %s.%s.%s", *gtk_version)
     logger.info("PyGObject+ %i.%i.%i", *UlauncherApp.get_pygobject_version())
 
     if XDG_SESSION_TYPE != "X11":
@@ -56,12 +62,10 @@ def run(_: CLIArguments) -> int:
         logger.info("Layer shell: %s", ("Yes" if layer_shell_supported else "No"))
         if not layer_shell_supported and DESKTOP_ID == "PLASMA":
             logger.warning(
-                "\n"
-                "\n╔═════════════════════════════════════════════════════════════════════════════╗"
-                "\n║ Plasma Desktop needs Layer Shell to render Ulauncher correctly on Wayland.  ║"
-                "\n║  See https://github.com/Ulauncher/Ulauncher/discussions/1501 for details.   ║"
-                "\n╚═════════════════════════════════════════════════════════════════════════════╝"
-                "\n\n"
+                _boxed_warning(
+                    f"Plasma Desktop needs Layer Shell to render {app_display_name} correctly on Wayland.",
+                    "See https://github.com/Ulauncher/Ulauncher/discussions/1501 for details.",
+                )
             )
         logger.info("X11 backend: %s", ("Yes" if IS_X11_COMPATIBLE else "No"))
 

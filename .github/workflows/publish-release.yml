@@ -6,10 +6,15 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
-    container: ulauncher/build-image:6.7
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
+      - name: Install GTK 4 and packaging tools
+        run: |
+          sudo bash scripts/ci-install-gtk4.sh
+          sudo apt-get install -y --no-install-recommends \
+            debhelper dh-python python3-all python3-setuptools \
+            devscripts dput gnupg
       - name: Publish to Launchpad
         env:
           LAUNCHPAD_SSH_TAR: ${{ secrets.LAUNCHPAD_SSH_TAR }}

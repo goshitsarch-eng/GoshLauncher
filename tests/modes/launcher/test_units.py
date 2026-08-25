@@ -23,6 +23,25 @@ def test_spoken_and_readme_unit_phrases() -> None:
     assert convert_query("100 km/h to mph") is not None
     assert convert_query("1 stone to kg") is not None
     assert convert_query("180° to rad") is not None
+    there = convert_query("how many miles are there in 10 km")
+    assert there is not None
+    assert "mi" in there["title"]
+    assert there["copy_text"] == there["title"]
+    thirteen = convert_query("thirteen km to mi")
+    assert thirteen is not None
+    assert round(float(thirteen["title"].split()[0]) * 1000) / 1000 == 8.078
+    nmi = convert_query("1 nmi to km")
+    assert nmi is not None
+    assert nmi["title"] == "1.852 km"
+    acre = convert_query("1 acre to m2")
+    assert acre is not None
+    assert round(float(acre["title"].split()[0])) == 4047
+    mib = convert_query("1 gb to mib")
+    assert mib is not None
+    assert "mib" in mib["title"]
+    kph = convert_query("100 kph to mph")
+    assert kph is not None
+    assert round(float(kph["title"].split()[0])) == 62
 
 
 def test_cal_is_not_food_calorie() -> None:

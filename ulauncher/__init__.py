@@ -6,6 +6,8 @@ from ._version import version
 __all__ = ["version"]
 
 app_id = "io.ulauncher.Ulauncher"
+app_display_name = "GoshLauncher"
+show_launcher_label = f"Show {app_display_name}"
 dbus_path = "/" + app_id.replace(".", "/")
 api_version = "3.0"
 first_run = not os.path.exists(paths.CONFIG)  # If there is no config dir, assume it's the first run
