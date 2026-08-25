@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 from pytest_mock import MockerFixture
 
-from ulauncher.core import UlauncherCore, is_legacy_trigger_mode, launcher_has_local_hits
+from ulauncher.core import UlauncherCore, is_legacy_trigger_mode, launcher_has_local_hits, reject_async_paints
 from ulauncher.internals import effects
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import KeywordTrigger, Result
@@ -73,6 +73,17 @@ def test_launcher_has_local_hits_skips_headers_and_web() -> None:
     assert launcher_has_local_hits([LauncherResult(name="Search", kind="web")]) is False
     assert launcher_has_local_hits([SectionHeader(name="Web"), LauncherResult(name="Search", kind="web")]) is False
     assert launcher_has_local_hits([LauncherResult(name="Firefox", kind="app")]) is True
+
+
+def test_reject_async_paints_forwards_to_launcher(mocker: MockerFixture) -> None:
+    launcher = MagicMock()
+
+    class Other:
+        pass
+
+    mocker.patch("ulauncher.core.get_modes", return_value=[launcher, Other()])
+    reject_async_paints()
+    launcher.reject_async_paint.assert_called_once_with()
 
 
 def test_launcher_paint_does_not_merge_shortcut_triggers(mocker: MockerFixture) -> None:

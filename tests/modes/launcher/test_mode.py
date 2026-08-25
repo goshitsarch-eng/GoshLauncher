@@ -22,6 +22,52 @@ def test_matches_any_non_empty_query() -> None:
     assert not mode.matches_query_str("")
 
 
+def test_reject_async_paint_blocks_in_flight_gio(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.async_paint import should_run_async_paint, should_schedule_async_paint
+
+    invalidated: list[str] = []
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.invalidate_path_lookup",
+        lambda: invalidated.append("path"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.commands.invalidate_command_lookup",
+        lambda: invalidated.append("command"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.bookmarks.invalidate_bookmarks",
+        lambda: invalidated.append("bookmarks"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.recents.invalidate_recent_files",
+        lambda: invalidated.append("recents"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.invalidate_windows",
+        lambda: invalidated.append("windows"),
+    )
+    mode = LauncherMode()
+    painted: list[object] = []
+    cancelled: list[str] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "x", "providers": [], "mode": "all"}
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._lookup_idle = SimpleNamespace(cancel=lambda: cancelled.append("cancel"))
+    mode.reject_async_paint()
+    assert mode._accept_paint is False
+    assert cancelled == ["cancel"]
+    assert mode._lookup_idle is None
+    assert should_schedule_async_paint(False, mode._accept_paint) is False
+    assert should_run_async_paint(True, mode._accept_paint) is False
+    mode._run_repaint()
+    assert painted == []
+    assert invalidated == ["path", "command", "bookmarks", "recents", "windows"]
+    mode.handle_query(Query(None, "2+2"), lambda *_args: None)
+    assert mode._accept_paint is True
+
+
 def test_launcher_result_has_activate_action() -> None:
     result = LauncherResult(name="Test", kind="app", payload={"app_id": "x.desktop"})
     assert "activate" in result.actions

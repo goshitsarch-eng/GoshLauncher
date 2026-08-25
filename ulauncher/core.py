@@ -58,6 +58,13 @@ def is_legacy_trigger_mode(mode: Mode) -> bool:
     return type(mode).__name__ in {"ShortcutMode", "ExtensionMode"}
 
 
+def reject_async_paints() -> None:
+    for mode in get_modes():
+        reject = getattr(mode, "reject_async_paint", None)
+        if callable(reject):
+            reject()
+
+
 def launcher_has_local_hits(results: Iterable[Result]) -> bool:
     from ulauncher.modes.launcher.results import SectionHeader
 

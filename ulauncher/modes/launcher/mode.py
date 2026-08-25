@@ -137,6 +137,29 @@ class LauncherMode(Mode):
             self._lookup_idle.cancel()
             self._run_repaint()
 
+    def reject_async_paint(self) -> None:
+        """goshos close: bump load ids and renderer.destroy so in-flight Gio cannot repaint."""
+        self._accept_paint = False
+        idle = self._lookup_idle
+        self._lookup_idle = None
+        self._paint_callback = None
+        self._paint_planned = None
+        self._paint_settings = None
+        self._paint_chrome = None
+        if idle is not None:
+            idle.cancel()
+        from ulauncher.modes.launcher.bookmarks import invalidate_bookmarks
+        from ulauncher.modes.launcher.commands import invalidate_command_lookup
+        from ulauncher.modes.launcher.paths import invalidate_path_lookup
+        from ulauncher.modes.launcher.recents import invalidate_recent_files
+        from ulauncher.modes.launcher.windows import invalidate_windows
+
+        invalidate_path_lookup()
+        invalidate_command_lookup()
+        invalidate_bookmarks()
+        invalidate_recent_files()
+        invalidate_windows()
+
     def get_home_results(self, limit: int) -> Sequence[Result]:
         settings = Settings.load()
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:

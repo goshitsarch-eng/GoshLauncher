@@ -899,6 +899,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             idle.cancel()
             self._live_idle = None
 
+    def _reject_async_paints(self) -> None:
+        from ulauncher.core import reject_async_paints
+
+        reject_async_paints()
+
     def _on_live_search_change(self) -> None:
         from ulauncher.modes.launcher.async_paint import should_schedule_async_paint
 
@@ -931,6 +936,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self._stop_session_watch,
                 self._stop_osk_watch,
                 self._stop_limits_timer,
+                self._reject_async_paints,
             )
         )
         if not save_query or not self.settings.auto_resume:
