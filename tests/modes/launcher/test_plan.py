@@ -188,6 +188,19 @@ def test_goshos_spoken_verbs_battery() -> None:
         ("start up firefox", "firefox"),
         ("execute firefox", "firefox"),
         ("search for firefox", "firefox"),
+        ("open display preferences", "display"),
+        ("open my documents folder", "documents"),
+        ("find files notes", "notes"),
+        ("search for app firefox", "firefox"),
+        ("windows", "windows"),
+        ("folder", "folder"),
+        ("search for open source", "open source"),
+        ("please open source", "open source"),
+        ("open up terminal", "terminal"),
+        ("execute vscode", "vscode"),
+        ("run steam", "steam"),
+        ("launch up code", "code"),
+        ("open", "open"),
     )
     for query, stripped in expected:
         assert strip_leading_verb(query) == stripped, query
