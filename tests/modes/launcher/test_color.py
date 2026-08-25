@@ -29,6 +29,14 @@ def test_named_and_rgb() -> None:
     assert parse_color("rgb(255, 0, 0)")["hex"] == "#ff0000"
 
 
+def test_goshos_named_css_colors() -> None:
+    assert parse_color("RED")["hex"] == "#ff0000"
+    assert parse_color("blue")["hex"] == "#0000ff"
+    assert parse_color("grey")["hex"] == "#808080"
+    assert parse_color("orangered")["hex"] == "#ff4500"
+    assert parse_color("reddish") is None
+
+
 def _hex(query: str) -> str | None:
     hit = parse_color(query)
     return None if hit is None else str(hit["hex"])
