@@ -76,6 +76,56 @@ def test_prefs_window_default_size_matches_goshos() -> None:
     assert (WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT) == (680, 720)
 
 
+def test_reset_look_restores_chrome_picking_same_look_does_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher.modes.launcher.looks import LOOKS, get_look
+    from ulauncher.ui.preferences.views.preferences import PreferencesView
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.update(
+        {
+            "look_id": "spotlight",
+            "applied_look": "spotlight",
+            "icon_size": 48,
+            "enable_prefix_modes": False,
+            "enable_command_run": False,
+        }
+    )
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+
+    view = PreferencesView()
+    try:
+        assert view.settings is settings
+        view._on_look_selected(view._look_combo)
+        assert settings.icon_size == 48
+        assert int(view._icon_spin.get_value_as_int()) == 48
+        view._on_reset_look_clicked(view._icon_spin)
+        assert settings.icon_size == get_look("spotlight")["look"]["icon_size"]
+        assert settings.icon_size == 28
+        assert int(view._icon_spin.get_value_as_int()) == 28
+        assert view._command_switch.get_sensitive() is False
+        settings.enable_prefix_modes = True
+        view._sync_dependent_switches()
+        assert view._command_switch.get_sensitive() is True
+        settings.enable_prefix_modes = False
+        view._sync_dependent_switches()
+        assert view._command_switch.get_sensitive() is False
+        pop = next(index for index, look in enumerate(LOOKS) if look["id"] == "popos")
+        view._look_combo.set_selected(pop)
+        assert settings.look_id == "popos"
+        assert settings.icon_size == get_look("popos")["look"]["icon_size"]
+        assert settings.popup_position == "top"
+    finally:
+        view.unbind_settings()
+
+
 _GTK3_WIDGET_APIS = (
     r"(?<!gtk4)\.pack_start\(",
     r"(?<!gtk4)\.pack_end\(",

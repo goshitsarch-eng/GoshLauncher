@@ -492,3 +492,19 @@ def test_calculator_activate_copies_and_closes(monkeypatch: pytest.MonkeyPatch) 
     LauncherMode().activate_result("activate", result, Query(None, "2+2"), captured.append)
     assert seen == [("app:copy_and_close", "4")]
     assert captured[-1]["type"] == EffectType.CLOSE_WINDOW
+
+
+def test_units_color_and_clock_copy_the_row_title(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.mode._events.emit",
+        lambda name, data: seen.append((name, str(data))),
+    )
+    cases = (("10 km to mi", "units"), ("red", "color"), ("time", "clock"))
+    for query, kind in cases:
+        seen.clear()
+        result = next(row for row in _handle(query) if getattr(row, "kind", "") == kind)
+        captured: list = []
+        LauncherMode().activate_result("activate", result, Query(None, query), captured.append)
+        assert seen == [("app:copy_and_close", result.name)]
+        assert captured[-1]["type"] == EffectType.CLOSE_WINDOW

@@ -128,16 +128,37 @@ def test_places_system_path_and_spoken_math(popup: SearchPopup) -> None:
 
 
 def test_enter_activates_calculator_row(popup: SearchPopup) -> None:
+    from unittest.mock import patch
+
     from gi.repository import Gdk
+
+    from ulauncher.internals.query import Query
+    from ulauncher.modes.launcher.mode import LauncherMode
 
     kinds = popup.type_query("2+2")
     assert "calculator" in kinds
     assert "Calculator" in popup.header_names()
     popup.app.activated = None
+    copied: list[str] = []
+
+    def emit(name: str, data: object = None) -> None:
+        if name == "app:copy_and_close":
+            copied.append(str(data))
+
     assert popup.press(Gdk.KEY_Return)
     chosen, alt = popup.app.activated
     assert alt is False
     assert chosen.kind == "calculator"
+    with patch("ulauncher.modes.launcher.mode._events.emit", emit):
+        LauncherMode().activate_result("activate", chosen, Query(None, "2+2"), lambda *_args: None)
+    assert copied == ["4"]
+    for query, kind in (("10 km to mi", "units"), ("red", "color"), ("time", "clock")):
+        copied.clear()
+        assert kind in popup.type_query(query)
+        row = next(item for item in popup.win.results_view.get_result_objects() if getattr(item, "kind", "") == kind)
+        with patch("ulauncher.modes.launcher.mode._events.emit", emit):
+            LauncherMode().activate_result("activate", row, Query(None, query), lambda *_args: None)
+        assert copied == [row.name]
 
 
 def test_dollar_and_dot_prefixes_need_a_space() -> None:
@@ -273,7 +294,18 @@ def test_more_goshos_queries(popup: SearchPopup) -> None:
     assert "url" in popup.type_query("sftp://nas.example/share")
     assert "url" in popup.type_query("smb://nas/Public")
     assert "url" in popup.type_query("::1")
+    assert "url" in popup.type_query("file:///home/u/My Documents")
+    file_row = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "url")
+    assert file_row.payload.get("url") == "file:///home/u/My%20Documents"
+    assert "url" in popup.type_query("file://localhost/home/u/My Documents")
+    localhost = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "url")
+    assert localhost.payload.get("url") == "file:///home/u/My%20Documents"
+    assert "url" in popup.type_query("sftp://nas/My Documents")
+    sftp = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "url")
+    assert sftp.payload.get("url") == "sftp://nas/My%20Documents"
     assert "system" in popup.type_query("lock now")
+    assert "units" in popup.type_query("how many miles are there in 10 km")
+    assert "calculator" in popup.type_query("what is the answer to 2+2")
 
 
 def test_command_prefix_when_enabled() -> None:

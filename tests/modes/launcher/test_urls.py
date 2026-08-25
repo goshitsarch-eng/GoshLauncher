@@ -151,6 +151,15 @@ def test_davs_and_spaced_file_share() -> None:
     assert share is not None
     assert " " not in share["url"]
     assert share["kind"] == "file"
+    local = match_url("file:///home/u/My Documents")
+    assert local is not None
+    assert local["url"] == "file:///home/u/My%20Documents"
+    localhost = match_url("file://localhost/home/u/My Documents")
+    assert localhost is not None
+    assert localhost["url"] == "file:///home/u/My%20Documents"
+    sftp = match_url("sftp://nas/My Documents")
+    assert sftp is not None
+    assert sftp["url"] == "sftp://nas/My%20Documents"
 
 
 def test_mailto_magnet_localhost_and_https_with_space() -> None:
