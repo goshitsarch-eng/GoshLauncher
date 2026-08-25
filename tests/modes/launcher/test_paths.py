@@ -59,6 +59,10 @@ def test_path_row_meta_pending_and_ready() -> None:
     ready = path_row_meta("/tmp", "/tmp", "directory")
     assert ready["description"] == "Open path"
     assert ready["exists"] is True
+    pdf = path_row_meta("notes.pdf", "/tmp/notes.pdf", "file")
+    assert pdf["icon"] == "x-office-document-symbolic"
+    png = path_row_meta("shot.png", "/home/me/shot.png", "file", home="/home/me")
+    assert png["icon"] == "image-x-generic-symbolic"
 
 
 def test_search_path_pending_then_flush_resolves() -> None:

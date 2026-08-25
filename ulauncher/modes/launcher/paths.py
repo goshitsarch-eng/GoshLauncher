@@ -199,12 +199,18 @@ def path_row_meta(trimmed: str, resolved: str, kind: str, home: str | None = Non
             "in_terminal": False,
         }
     is_dir = kind == "directory"
+    if is_dir:
+        icon = "folder-symbolic"
+    else:
+        from ulauncher.modes.launcher.recents import icon_for_basename
+
+        icon = icon_for_basename(Path(resolved).name)
     return {
         "path": resolved,
         "kind": "directory" if is_dir else "file",
         "title": collapse_home(resolved, home),
         "description": "Open path",
-        "icon": "folder-symbolic" if is_dir else "text-x-generic-symbolic",
+        "icon": icon,
         "exists": True,
         "is_dir": is_dir,
         "checking": False,
