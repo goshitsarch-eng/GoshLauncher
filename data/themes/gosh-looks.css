@@ -139,9 +139,25 @@ window.gosh-popup.background {
   padding-bottom: 4px;
 }
 
-/* spotlight look is the default chrome on .app */
+/* spotlight look is the default chrome on .app. Two-class prompt/result fills so
+   they still beat a descendant popup reset on GTK 4.6 (Ubuntu 22.04). */
 .gosh-theme-spotlight.app {
   padding: 0;
+}
+
+.gosh-theme-spotlight .prompt {
+  background-color: rgb(28, 28, 30);
+  border-radius: 32px;
+  padding: 4px 4px 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.gosh-theme-spotlight .result-box {
+  background-color: rgb(28, 28, 30);
+  border-radius: 24px;
+  padding: 6px;
+  margin-top: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* omarchy look - tokyo night single panel */

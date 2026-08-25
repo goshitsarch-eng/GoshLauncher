@@ -76,7 +76,8 @@ def test_css_reset_omits_gtk3_icon_shadow() -> None:
 
     assert "-icon-shadow" not in CSS_RESET
     assert "-icon-shadow" not in POPUP_CSS_RESET
-    assert POPUP_CSS_RESET.strip().startswith(".gosh-popup, .gosh-popup * {")
+    assert POPUP_CSS_RESET.strip().startswith(".gosh-popup {")
+    assert ".gosh-popup *" not in POPUP_CSS_RESET
 
 
 def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:

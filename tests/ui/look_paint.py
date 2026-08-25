@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gc
+
 from ulauncher.ui.gtk4 import load_css_provider
 from ulauncher.ui.helpers.theme import launcher_popup_css
 
@@ -127,6 +129,25 @@ def widget_rgb_retry(widget: object, x: int, y: int, tries: int = 24) -> tuple[i
     raise last
 
 
+def widget_panel_rgb(widget: object) -> tuple[int, int, int]:
+    """Interior fill. (24, 16) sits in Spotlight's 32px corner on GTK 4.6."""
+    width = max(int(widget.get_width()), 1)
+    height = max(int(widget.get_height()), 1)
+    sample_x = max(width // 2, 8)
+    sample_y = max(min(height // 2, max(height - 8, 1)), 8)
+    return widget_rgb_retry(widget, sample_x, sample_y)
+
+
+def _destroy_tree(win: object) -> None:
+    closer = getattr(win, "close", None)
+    if callable(closer):
+        closer()
+    pump(8)
+    # Collect GI wrappers while the display is still valid. Pytest source
+    # formatting otherwise GCs cairo objects mid-traceback and can SIGSEGV.
+    gc.collect()
+
+
 def _nearest_colored_rgb(pixbuf: object, expected: tuple[int, int, int]) -> tuple[int, int, int]:
     """Closest non-black pixel to ``expected``. Placeholder glyphs sit on a transparent snapshot."""
     rowstride = pixbuf.get_rowstride()
@@ -218,22 +239,21 @@ def sample_look(look_id: str) -> dict[str, tuple[int, int, int]]:
         if mapped["ok"] and prompt.get_width() > 40 and selected.get_width() > 40 and selected.get_height() > 10:
             break
     if prompt.get_width() <= 40 or selected.get_width() <= 40:
-        win.close()
-        pump(8)
+        _destroy_tree(win)
         msg = (
             f"look {look_id} did not allocate "
             f"(prompt {prompt.get_width()}x{prompt.get_height()}, "
             f"selected {selected.get_width()}x{selected.get_height()})"
         )
         raise RuntimeError(msg)
+    pump(12)
     panel = prompt if look_id == "spotlight" else app
-    panel_rgb = widget_rgb(panel, 24, 16)
+    panel_rgb = widget_panel_rgb(panel)
     # Label text sits on the start edge; sample trailing padding for the row fill.
     selected_x = max(int(selected.get_width()) - 16, 4)
     selected_y = max(int(selected.get_height()) // 2, 4)
-    selected_rgb = widget_rgb(selected, selected_x, selected_y)
-    win.close()
-    pump(8)
+    selected_rgb = widget_rgb_retry(selected, selected_x, selected_y)
+    _destroy_tree(win)
     return {"panel": panel_rgb, "selected": selected_rgb}
 
 
@@ -453,9 +473,7 @@ def sample_popup_look(look_id: str) -> dict[str, tuple[int, int, int]]:
         )
         raise RuntimeError(msg)
     panel = prompt if look_id == "spotlight" else win.theme_root  # type: ignore[attr-defined]
-    # Top-center sits in look padding, past rounded-corner border and the search icon.
-    panel_x = max(int(panel.get_width()) // 2, 8)
-    panel_rgb = widget_rgb_retry(panel, panel_x, 2)
+    panel_rgb = widget_panel_rgb(panel)
     selected_x = max(int(selected.get_width()) - 16, 4)
     selected_y = max(int(selected.get_height()) // 2, 4)
     selected_rgb = widget_rgb_retry(selected, selected_x, selected_y)
@@ -511,8 +529,7 @@ def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
     win, app, prompt, _selected = build_look_tree(look_id)
     entry = _entry_in_prompt(prompt)
     if entry is None:
-        win.close()
-        pump(8)
+        _destroy_tree(win)
         msg = f"look {look_id} has no search entry"
         raise RuntimeError(msg)
     mapped = {"ok": False}
@@ -534,8 +551,7 @@ def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
     try:
         return _sample_selected_entry(app, entry)
     finally:
-        win.close()
-        pump(8)
+        _destroy_tree(win)
 
 
 def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
@@ -547,8 +563,7 @@ def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[in
     win, _app, prompt, _selected = build_look_tree(look_id)
     entry = _entry_in_prompt(prompt)
     if entry is None:
-        win.close()
-        pump(8)
+        _destroy_tree(win)
         msg = f"look {look_id} has no search entry"
         raise RuntimeError(msg)
     entry.set_placeholder_text(get_look(look_id)["hint"])
@@ -569,5 +584,4 @@ def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[in
     try:
         return _placeholder_rgb_retry(entry, expected)
     finally:
-        win.close()
-        pump(8)
+        _destroy_tree(win)

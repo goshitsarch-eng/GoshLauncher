@@ -210,6 +210,16 @@ def test_hidden_search_icon_inset_follows_goshos_order() -> None:
     assert leftover_16 == -1
 
 
+def test_spotlight_prompt_owns_the_pill_fill() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    block = text.split(".gosh-theme-spotlight .prompt {", 1)[1].split("}", 1)[0]
+    assert "rgb(28, 28, 30)" in block
+    results = text.split(".gosh-theme-spotlight .result-box {", 1)[1].split("}", 1)[0]
+    assert "rgb(28, 28, 30)" in results
+
+
 def test_spotlight_shell_is_transparent_like_goshos() -> None:
     from pathlib import Path
 
