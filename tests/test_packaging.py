@@ -60,18 +60,18 @@ def test_setup_excludes_tests_from_install() -> None:
 
 def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     tests = (ROOT / ".github" / "workflows" / "tests.yml").read_text()
-    perf = (ROOT / ".github" / "workflows" / "perf.yml").read_text()
     script = (ROOT / "scripts" / "ci-install-gtk4.sh").read_text()
-    assert "ulauncher/build-image" not in tests
-    assert "ulauncher/build-image" not in perf
+    for path in (ROOT / ".github" / "workflows").glob("*.yml"):
+        text = path.read_text()
+        assert "ulauncher/build-image" not in text, path.name
     assert "ubuntu-22.04" in tests
-    assert "ubuntu-22.04" in perf
     assert "scripts/ci-install-gtk4.sh" in tests
-    assert "scripts/ci-install-gtk4.sh" in perf
     draft = (ROOT / ".github" / "workflows" / "draft-release.yml").read_text()
-    assert "ulauncher/build-image" not in draft
     assert "scripts/ci-install-gtk4.sh" in draft
     assert "preferences-src" not in draft
+    publish = (ROOT / ".github" / "workflows" / "publish-release.yml").read_text()
+    assert "scripts/ci-install-gtk4.sh" in publish
+    assert "ubuntu-22.04" in publish
     assert "gir1.2-gtk-4.0" in script
     assert "gir1.2-adw-1" in script
     assert "libadwaita-1-0" in script
