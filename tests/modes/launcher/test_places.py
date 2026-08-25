@@ -14,6 +14,7 @@ def test_single_letter_is_prefix_only() -> None:
     assert not place_matches("Home", ["home", "~"], "o")
     assert place_matches("Desktop", ["desktop"], "d")
     assert place_matches("Documents", ["documents", "docs"], "d")
+    assert any(place["id"] == "home" for place in match_places("~"))
     assert not any(place["id"] == "home" for place in match_places("o"))
     assert not place_matches("Pictures", ["photos", "images"], "hot")
 

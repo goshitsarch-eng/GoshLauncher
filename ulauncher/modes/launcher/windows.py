@@ -17,7 +17,7 @@ from typing import Any, Callable
 from urllib.parse import quote, unquote
 
 from ulauncher.modes.launcher.number_words import replace_number_words
-from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_query, text_matches_query
+from ulauncher.modes.launcher.word_match import id_matches_query, text_matches_query
 
 logger = logging.getLogger(__name__)
 
@@ -122,9 +122,16 @@ def _ewmh_windows() -> list[WindowInfo]:
     for win in reversed(ewmh.getClientListStacking() or []):
         if win is None:
             continue
-        types = ewmh.getWmWindowType(win, str=True) or []
-        skip = {"_NET_WM_WINDOW_TYPE_DESKTOP", "_NET_WM_WINDOW_TYPE_DOCK", "_NET_WM_WINDOW_TYPE_SPLASH"}
-        if skip.intersection(types):
+        try:
+            types = ewmh.getWmWindowType(win, str=True) or []
+        except Exception:
+            types = []
+        try:
+            states = ewmh.getWmState(win, str=True) or []
+        except Exception:
+            states = []
+        skip_taskbar = "_NET_WM_STATE_SKIP_TASKBAR" in states
+        if not should_list_window(True, skip_taskbar, ewmh_window_type(types)):
             continue
         name = ewmh.getWmName(win) or ewmh.getWmVisibleName(win) or ""
         if isinstance(name, bytes):
@@ -889,15 +896,38 @@ def _window_fields_match_all_words(title: str, wm_class: str, query: str) -> boo
     return all(text_matches_query(title, word) or id_matches_query(wm_class, word) for word in words)
 
 
-def window_matches(win: WindowInfo, query: str) -> bool:
-    if not query:
-        return True
-    q = query.lower()
-    if q in {"workspace", "spa", "work"}:
+def should_list_window(
+    has_workspace: Any,
+    skip_taskbar: bool,
+    window_type: str,
+    listed_types: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    # goshos windowMatch.js: closed actors, skip-taskbar, and docks stay out of
+    # alt-tab. Empty EWMH type is treated as normal by ewmh_window_type.
+    if not has_workspace or skip_taskbar:
         return False
-    if text_matches_query(win.title, query) or label_matches_query(win.title, query):
+    allowed = listed_types if listed_types is not None else ("normal", "dialog", "modal_dialog")
+    return window_type in allowed
+
+
+def ewmh_window_type(types: list[str] | None) -> str:
+    names = [str(raw).replace("_NET_WM_WINDOW_TYPE_", "").lower() for raw in types or [] if raw]
+    if "modal_dialog" in names:
+        return "modal_dialog"
+    if "dialog" in names:
+        return "dialog"
+    if not names or "normal" in names:
+        return "normal"
+    return names[0]
+
+
+def window_matches(win: WindowInfo, query: str) -> bool:
+    # goshos windowMatches(title, wmClass, query, workspaceLabel). The shared
+    # Workspace N label is not a free-text match; title/class still are, so a
+    # window named Workspace Settings must keep matching "workspace".
+    if len(query) == 0:
         return True
-    if id_matches_query(win.wm_class, query):
+    if text_matches_query(win.title, query) or id_matches_query(win.wm_class, query):
         return True
     if _window_fields_match_all_words(win.title, win.wm_class, query):
         return True

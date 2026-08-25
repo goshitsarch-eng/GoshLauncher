@@ -180,6 +180,8 @@ def _rows_from_cache() -> list[dict]:
 
 
 def match_recents(query: str, rows: list[dict] | None = None, limit: int = 6) -> list[dict]:
+    if limit <= 0:
+        return []
     rows = rows if rows is not None else _rows_from_cache()
     if not query.strip():
         return rows[:limit]

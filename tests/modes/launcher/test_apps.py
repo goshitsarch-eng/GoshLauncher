@@ -26,6 +26,7 @@ def test_app_base_name_strips_channel_suffix() -> None:
     assert app_base_name("Firefox ESR") == "firefox"
     assert app_base_name("Firefox") == "firefox"
     assert app_base_name("GNOME Builder") == "gnome builder"
+    assert app_base_name("GNOME-Builder") == "gnome-builder"
 
 
 def test_unique_by_base_name_keeps_first_sorted() -> None:

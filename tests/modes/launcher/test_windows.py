@@ -11,6 +11,7 @@ from ulauncher.modes.launcher.windows import (
     application_object_path,
     compositor_list_commands,
     compositor_window_argv,
+    ewmh_window_type,
     match_windows,
     parse_window_close_query,
     parse_window_intent,
@@ -18,6 +19,7 @@ from ulauncher.modes.launcher.windows import (
     parse_workspace_switch_query,
     pick_window_list,
     should_force_quit_window,
+    should_list_window,
     sort_windows_most_recent,
     switch_workspace,
     tab_ranks_from_introspect_payload,
@@ -147,6 +149,34 @@ def test_workspace_label_matches_number_and_sticky() -> None:
     assert not window_matches(firefox, "o")
     assert window_matches(firefox, "firefox navigator")
     assert not window_matches(firefox, "firefox chrome")
+
+
+def test_should_list_window_matches_goshos() -> None:
+    listed = ["normal", "dialog"]
+    assert should_list_window({}, False, "normal", listed) is True
+    assert should_list_window(None, False, "normal", listed) is False
+    assert should_list_window({}, True, "normal", listed) is False
+    assert should_list_window({}, False, "dock", listed) is False
+    assert ewmh_window_type([]) == "normal"
+    assert ewmh_window_type(["_NET_WM_WINDOW_TYPE_DIALOG"]) == "dialog"
+    assert ewmh_window_type(["_NET_WM_WINDOW_TYPE_DOCK"]) == "dock"
+    assert should_list_window(True, False, ewmh_window_type([])) is True
+    assert should_list_window(True, True, "normal") is False
+    assert should_list_window(True, False, ewmh_window_type(["_NET_WM_WINDOW_TYPE_DOCK"])) is False
+
+
+def test_window_title_still_matches_workspace_spa_work() -> None:
+    # goshos only keeps those needles off the shared Workspace N label
+    named = WindowInfo(wid="0x7", title="Workspace Settings", wm_class="gnome-control-center", desktop=0)
+    assert window_matches(named, "workspace")
+    assert window_matches(WindowInfo(wid="0x8", title="Spark", wm_class="spark", desktop=0), "spa")
+    assert window_matches(WindowInfo(wid="0x9", title="Work", wm_class="work", desktop=0), "work")
+    sticky = WindowInfo(wid="0x6", title="Notes", wm_class="gedit", desktop=0, sticky=True)
+    assert window_matches(sticky, "all workspaces")
+    firefox = WindowInfo(wid="0x5", title="Firefox", wm_class="Navigator", desktop=1)
+    assert not window_matches(firefox, "workspace")
+    assert not window_matches(firefox, "spa")
+    assert not window_matches(firefox, "work")
 
 
 def test_take_window_results_workspace_consumes_a_slot() -> None:

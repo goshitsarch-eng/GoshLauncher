@@ -142,6 +142,36 @@ def test_bookmark_uri_canonicalizes_and_rejects_unsafe() -> None:
     assert [row["title"] for row in rows] == ["Documents"]
 
 
+def test_bookmark_title_and_match_follow_goshos() -> None:
+    from ulauncher.modes.launcher.bookmarks import (
+        bookmark_description,
+        bookmark_icon,
+        bookmark_matches,
+        bookmark_title,
+        host_from_uri,
+        match_bookmarks,
+        merge_bookmark_files,
+    )
+
+    assert host_from_uri("sftp://me@nas.local/share") == "nas.local"
+    assert bookmark_title("file:///home/u/Projects", "") == "Projects"
+    assert bookmark_title("file:///home/u/Projects", "Code") == "Code"
+    assert bookmark_title("sftp://nas/share", "") == "share"
+    assert bookmark_description("file:///home/u/Projects", "/home/u") == "~/Projects"
+    assert bookmark_icon("file:///tmp") == "folder-symbolic"
+    assert bookmark_icon("sftp://nas/share") == "network-server-symbolic"
+    assert bookmark_matches("Code", "~/Projects", "cod")
+    assert bookmark_matches("Notes", "~/Documents", "doc")
+    assert bookmark_matches("Notes", "~/Documents", "notes documents")
+    assert not bookmark_matches("Code", "~/Projects", "o")
+    assert not bookmark_matches("Code", "/home/u/Projects", "ome")
+    merged = merge_bookmark_files(["file:///a A", "file:///a B\nfile:///b B"])
+    assert len(merged) == 2
+    rows = [{"title": "Code", "description": "~/x"}, {"title": "Zed", "description": "~/z"}]
+    assert len(match_bookmarks("z", rows, 2)) == 1
+    assert match_bookmarks("z", [{"title": "Zed", "description": "~/z"}], 0) == []
+
+
 def test_search_bookmarks_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     bookmark_file = tmp_path / "bookmarks"
     bookmark_file.write_text("file:///tmp UniqueBookmarkLabelXYZ\n", encoding="utf-8")
@@ -184,3 +214,19 @@ def test_expand_home_argv_and_spawn_path() -> None:
     assert resolve_spawn_path("ls", "/home/u") == "ls"
     assert resolve_spawn_path("./tool", "/home/u") == "/home/u/tool"
     assert resolve_command_argv(["scripts/deploy", "notes.txt"], "/home/u") == ["/home/u/scripts/deploy", "notes.txt"]
+
+
+def test_expand_path_collapses_tilde_parent_like_goshos() -> None:
+    from ulauncher.modes.launcher.paths import collapse_home, expand_path, normalize_absolute
+
+    assert expand_path("~/bin/x", "/home/u") == "/home/u/bin/x"
+    assert expand_path("./run", "/home/u") == "/home/u/run"
+    assert expand_path(".", "/home/u") == "/home/u"
+    assert expand_path("~", "/home/u") == "/home/u"
+    assert expand_path("/usr/bin/ls", "/home/u") == "/usr/bin/ls"
+    assert expand_path("ls", "/home/u") == "ls"
+    assert expand_path("~/../etc", "/home/u") == "/home/etc"
+    assert normalize_absolute("/home/u/../x/./y") == "/home/x/y"
+    assert collapse_home("/home/u/docs", "/home/u") == "~/docs"
+    assert collapse_home("/home/u", "/home/u") == "~"
+    assert collapse_home("/tmp", "/home/u") == "/tmp"

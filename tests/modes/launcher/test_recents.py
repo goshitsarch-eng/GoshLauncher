@@ -87,6 +87,8 @@ def test_parse_recent_xbel_regex_unescapes_and_skips_web() -> None:
     assert "file:///tmp/single.txt" in uris
     assert "file:///tmp/spaced.txt" in uris
     assert "sftp://nas.local/share/notes.txt" in uris
+    assert parse_recent_xbel('<bookmark href="ftp://nas/a.txt"/>') == ["ftp://nas/a.txt"]
+    assert parse_recent_xbel('<bookmark href="davs://nas/a.txt"/>') == ["davs://nas/a.txt"]
     assert all("example.com" not in uri and "javascript" not in uri for uri in uris)
 
 
