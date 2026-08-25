@@ -18,5 +18,18 @@ def test_normalize_prefs_page_aliases() -> None:
     assert normalize_prefs_page("web_search") == "web-search"
     assert normalize_prefs_page("extensions") == "extensions"
     assert normalize_prefs_page("shortcuts") == "shortcuts"
+    assert normalize_prefs_page("desktop") == "desktop"
+    assert normalize_prefs_page("help") == "about"
     assert normalize_prefs_page("not-a-page") is None
     assert set(GOSHOS_PAGE_IDS).issubset(PAGE_IDS)
+    assert PAGE_IDS == (
+        "shortcut",
+        "appearance",
+        "features",
+        "web-search",
+        "about",
+        "desktop",
+        "shortcuts",
+        "extensions",
+    )
+    assert "help" not in PAGE_IDS

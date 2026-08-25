@@ -69,7 +69,7 @@ If the package ships `ulauncher.service`:
 systemctl --user enable --now ulauncher
 ```
 
-Preferences: Shortcut, Appearance, Features, Web Search, About, plus Shortcuts, Extensions, and Help. Default size matches Spotlight-goshos (`680×720`).
+Preferences: Shortcut, Appearance, Features, Web Search, About (Spotlight-goshos order), then Desktop, Shortcuts, and Extensions for this GTK host. Default size matches Spotlight-goshos (`680×720`).
 
 ## Development
 

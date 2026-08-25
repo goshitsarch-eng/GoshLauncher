@@ -144,6 +144,7 @@ class PreferencesView:
             "features": self._build_features_page(),
             "web-search": self._build_web_search_page(),
             "about": self._build_about_page(),
+            "desktop": self._build_desktop_page(),
         }
         self._bind_settings_follow()
 
@@ -218,45 +219,6 @@ class PreferencesView:
                 self._on_hotkey_clicked,
             )
         page.add(group)
-
-        session = Adw.PreferencesGroup(title="Session")
-        self._add_background_row(session)
-        self._add_tray_icon_row(session)
-        add_switch_row(
-            session,
-            "Close when losing focus",
-            "Hide the launcher as soon as another app grabs focus.",
-            self.settings.close_on_focus_out,
-            self._on_close_focus_toggled,
-        )
-        add_switch_row(
-            session,
-            "Grab mouse pointer focus",
-            "Capture the pointer so focus-follows-mouse setups do not steal the launcher.",
-            self.settings.grab_mouse_pointer,
-            self._on_grab_mouse_toggled,
-        )
-        add_switch_row(
-            session,
-            "Auto-resume unfinished sessions",
-            "If you close without running the query, restore it next time.",
-            self.settings.auto_resume,
-            self._on_auto_resume_toggled,
-        )
-        screen_items = (
-            {"id": "mouse-pointer-monitor", "label": "The screen with the mouse pointer"},
-            {"id": "default-monitor", "label": "The default screen"},
-        )
-        self._screen_combo = add_combo_row(
-            session,
-            "Screen to show on",
-            "Which monitor presents the launcher when you press the shortcut.",
-            screen_items,
-            self.settings.render_on_screen,
-        )
-        self._screen_items = screen_items
-        self._screen_combo.connect("notify::selected", self._on_screen_changed)
-        page.add(session)
         return page
 
     def _add_background_row(self, group: Adw.PreferencesGroup) -> None:
@@ -458,8 +420,50 @@ class PreferencesView:
             "Show windows and frequent apps before you type",
         )
         page.add(extras)
+        return page
 
-        desktop = Adw.PreferencesGroup(title="Desktop")
+    def _build_desktop_page(self) -> Adw.PreferencesPage:
+        page = Adw.PreferencesPage(title="Desktop", icon_name="computer-symbolic")
+        session = Adw.PreferencesGroup(title="Session")
+        self._add_background_row(session)
+        self._add_tray_icon_row(session)
+        add_switch_row(
+            session,
+            "Close when losing focus",
+            "Hide the launcher as soon as another app grabs focus.",
+            self.settings.close_on_focus_out,
+            self._on_close_focus_toggled,
+        )
+        add_switch_row(
+            session,
+            "Grab mouse pointer focus",
+            "Capture the pointer so focus-follows-mouse setups do not steal the launcher.",
+            self.settings.grab_mouse_pointer,
+            self._on_grab_mouse_toggled,
+        )
+        add_switch_row(
+            session,
+            "Auto-resume unfinished sessions",
+            "If you close without running the query, restore it next time.",
+            self.settings.auto_resume,
+            self._on_auto_resume_toggled,
+        )
+        screen_items = (
+            {"id": "mouse-pointer-monitor", "label": "The screen with the mouse pointer"},
+            {"id": "default-monitor", "label": "The default screen"},
+        )
+        self._screen_combo = add_combo_row(
+            session,
+            "Screen to show on",
+            "Which monitor presents the launcher when you press the shortcut.",
+            screen_items,
+            self.settings.render_on_screen,
+        )
+        self._screen_items = screen_items
+        self._screen_combo.connect("notify::selected", self._on_screen_changed)
+        page.add(session)
+
+        desktop = Adw.PreferencesGroup(title="Host")
         raise_switch = add_switch_row(
             desktop,
             "Switch to application if already running",
@@ -513,6 +517,8 @@ class PreferencesView:
         return page
 
     def _build_about_page(self) -> Adw.PreferencesPage:
+        from ulauncher.ui.preferences.views.help import add_usage_groups
+
         page = Adw.PreferencesPage(title="About", icon_name="dialog-information-symbolic")
         group = Adw.PreferencesGroup(title="About")
         group.add(plain_action_row("GoshLauncher", "A compact GTK4/Adwaita launcher with interchangeable looks."))
@@ -526,6 +532,7 @@ class PreferencesView:
         about_version = f"{version} (Extension API v{api_version})"
         group.add(plain_action_row("Version", about_version))
         page.add(group)
+        add_usage_groups(page)
         return page
 
     def _bind_settings_follow(self) -> None:

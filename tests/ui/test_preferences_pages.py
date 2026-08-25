@@ -24,7 +24,7 @@ def test_preferences_view_omits_ulauncher_color_theme_and_window_shadow() -> Non
     assert not about_path.exists()
 
 
-def test_help_page_documents_goshos_keyboard() -> None:
+def test_about_page_documents_goshos_keyboard() -> None:
     source = Path(__file__).resolve().parents[2] / "ulauncher" / "ui" / "preferences" / "views" / "help.py"
     text = source.read_text()
     assert "Alt+Number/Letter" not in text
@@ -34,6 +34,7 @@ def test_help_page_documents_goshos_keyboard() -> None:
     assert "Ctrl+N / Ctrl+P" in text
     assert "Checking" in text
     assert "Ctrl+Space" in text
+    assert "def build_help_page" not in text
 
     import gi
 
@@ -42,10 +43,11 @@ def test_help_page_documents_goshos_keyboard() -> None:
 
     Adw.init()
 
-    from ulauncher.ui.preferences.views.help import build_help_page
+    from ulauncher.ui.preferences.views.help import add_usage_groups
 
-    page = build_help_page()
-    assert page.get_title() == "Help"
+    page = Adw.PreferencesPage(title="About")
+    add_usage_groups(page)
+    assert page.get_title() == "About"
 
 
 def test_goshos_pref_page_titles() -> None:
@@ -66,8 +68,31 @@ def test_goshos_pref_page_titles() -> None:
         assert int(view._look_combo.get_selected()) >= 0
         assert int(view._look_combo.get_selected()) < len(LOOKS)
         assert view._engine_combo.get_model().get_n_items() == 9
+        assert view.pages["desktop"].get_title() == "Desktop"
+        assert "Desktop" not in titles
     finally:
         view.unbind_settings()
+
+
+def test_preferences_window_lists_goshos_pages_before_desktop_extras() -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher.ui.preferences.preferences_window import PreferencesWindow
+
+    window = PreferencesWindow()
+    try:
+        assert window._page_order[:5] == ["Shortcut", "Appearance", "Features", "Web Search", "About"]
+        assert window._page_order[5] == "Desktop"
+        assert "Help" not in window._page_order
+        assert "Shortcuts" in window._page_order
+        assert "Extensions" in window._page_order
+    finally:
+        window._launcher_prefs.unbind_settings()
 
 
 def test_prefs_window_default_size_matches_goshos() -> None:

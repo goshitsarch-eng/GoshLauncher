@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-# goshos prefs.js order, then desktop-app pages this GTK launcher still needs.
+# goshos prefs.js order, then GTK-host pages this desktop app still needs.
 GOSHOS_PAGE_IDS = ("shortcut", "appearance", "features", "web-search", "about")
-DESKTOP_PAGE_IDS = ("shortcuts", "extensions", "help")
+DESKTOP_PAGE_IDS = ("desktop", "shortcuts", "extensions")
 PAGE_IDS = (*GOSHOS_PAGE_IDS, *DESKTOP_PAGE_IDS)
 
 _ALIASES = {
@@ -18,6 +18,8 @@ _ALIASES = {
     "web_search": "web-search",
     "keyboard": "shortcut",
     "hotkey": "shortcut",
+    "help": "about",
+    "session": "desktop",
 }
 
 

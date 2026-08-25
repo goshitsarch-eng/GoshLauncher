@@ -36,9 +36,8 @@ _PREFIX_ROWS = (
 )
 
 
-def build_help_page() -> Adw.PreferencesPage:
-    page = Adw.PreferencesPage(title="Help", icon_name="help-browser-symbolic")
-
+def add_usage_groups(page: Adw.PreferencesPage) -> None:
+    """Keyboard and prefix docs on About. Goshos prefs.js has no Help page."""
     keyboard = Adw.PreferencesGroup(
         title="Keyboard",
         description="Open with Ctrl+Space and begin typing. Navigation matches Spotlight-goshos.",
@@ -61,4 +60,3 @@ def build_help_page() -> Adw.PreferencesPage:
     spec_row.connect("activated", lambda *_args: open_detached(_GOSHOS_SPEC))
     spec.add(spec_row)
     page.add(spec)
-    return page

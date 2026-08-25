@@ -11,7 +11,6 @@ from ulauncher.ui.helpers.system_theme import SystemThemeWatcher
 from ulauncher.ui.preferences.adw_rows import wrap_custom_view
 from ulauncher.ui.preferences.page_names import GOSHOS_PAGE_IDS, normalize_prefs_page
 from ulauncher.ui.preferences.views.extensions import ExtensionsView
-from ulauncher.ui.preferences.views.help import build_help_page
 from ulauncher.ui.preferences.views.preferences import PreferencesView
 from ulauncher.ui.preferences.views.shortcuts import ShortcutsView
 
@@ -25,7 +24,7 @@ _CUSTOM_PAGES = (
 
 
 class PreferencesWindow(Adw.PreferencesWindow):
-    """Adwaita preferences window with Spotlight-goshos pages plus desktop extras."""
+    """Adwaita preferences window: goshos pages first, then GTK-host extras."""
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(title="Preferences", **kwargs)
@@ -45,20 +44,19 @@ class PreferencesWindow(Adw.PreferencesWindow):
     def _create_pages(self) -> None:
         self._launcher_prefs = PreferencesView()
         self._pages.update(self._launcher_prefs.pages)
+        self._page_order: list[str] = []
         for key in GOSHOS_PAGE_IDS:
-            if key == "about":
-                continue
             self.add(self._pages[key])
+            self._page_order.append(self._pages[key].get_title() or key)
+        self.add(self._pages["desktop"])
+        self._page_order.append(self._pages["desktop"].get_title() or "desktop")
         for key, title, icon_name, view_class in _CUSTOM_PAGES:
             view = view_class()
             page = wrap_custom_view(title, icon_name, view)
             self._pages[key] = page
             self.views[key] = view
             self.add(page)
-        help_page = build_help_page()
-        self._pages["help"] = help_page
-        self.add(help_page)
-        self.add(self._pages["about"])
+            self._page_order.append(title)
 
     def present(self, view: str | None = None) -> None:  # type: ignore[override]
         self.show(view)
