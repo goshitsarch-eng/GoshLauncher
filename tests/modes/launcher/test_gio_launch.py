@@ -67,3 +67,41 @@ def test_launch_uri_uses_gio_app_info() -> None:
     assert "Gio.AppInfo.launch_default_for_uri_async" in source
     assert "Gio.AppLaunchContext()" in source
     assert "display.get_app_launch_context()" not in source
+
+
+def test_prefs_saved_reprobes_program_path_and_parental(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Importing mode.py registers the goshos extension.disable() reset on the
+    # daemon's reconfigure event (a settings save).
+    import ulauncher.modes.launcher.mode  # noqa: F401
+    from ulauncher.modes.launcher.parental import (
+        has_parental_give_up,
+        mark_parental_give_up,
+        reset_parental_give_up,
+    )
+    from ulauncher.utils.eventbus import EventBus
+
+    reset_program_path_cache()
+    reset_parental_give_up()
+    try:
+        holder: dict[str, str | None] = {"found": None}
+        monkeypatch.setattr(
+            "ulauncher.modes.launcher.gio_launch.find_user_program",
+            lambda _name, *_a, **_k: holder["found"],
+        )
+        # First lookup misses and the miss is cached for the session.
+        assert find_in_user_path("goshterm") is None
+        # The program is installed mid-session, but the cache still returns the miss.
+        holder["found"] = "/usr/bin/goshterm"
+        assert find_in_user_path("goshterm") is None
+        mark_parental_give_up()
+        assert has_parental_give_up() is True
+
+        # A preferences save is the daemon's re-enable moment.
+        EventBus().emit("app:prefs_saved", ("enable_calculator",))
+
+        # PATH is re-probed and the parental give-up flag is cleared.
+        assert find_in_user_path("goshterm") == "/usr/bin/goshterm"
+        assert has_parental_give_up() is False
+    finally:
+        reset_program_path_cache()
+        reset_parental_give_up()
