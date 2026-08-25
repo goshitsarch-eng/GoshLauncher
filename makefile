@@ -295,6 +295,8 @@ deb: sdist
 	cp -r debian dist/ulauncher_deb/
 	cd dist/ulauncher_deb || exit
 	rm -f debian/changelog
+	# This makefile prepends .venv/bin; pybuild must use distro setuptools.
+	export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 	dch --create --no-multimaint --package ulauncher --newversion="${DEB_VERSION}" --distribution ${DEB_DISTRO} "New upstream release"
 	echo ${DPKG_ARGS} | xargs dpkg-buildpackage
 	cd -
