@@ -43,6 +43,8 @@ def test_goshos_arithmetic_battery() -> None:
     assert evaluate_arithmetic("sin 90 + 1") == 2
     assert evaluate_arithmetic("sin90") is None
     assert evaluate_arithmetic("1/0") is None
+    assert evaluate_arithmetic("10 / 0") is None
+    assert evaluate_arithmetic("sqrt(16)") == 4
     assert evaluate_arithmetic("not math") is None
     assert evaluate_arithmetic("address") is None
     assert evaluate_arithmetic("sometimes") is None
