@@ -6,6 +6,8 @@ from typing import Any
 
 from gi.repository import Gdk, Gtk
 
+from ulauncher.ui import gtk4
+
 logger = logging.getLogger(__name__)
 footer_notice = "Be aware that keyboard shortcuts may be reserved by, or conflict with your system."
 
@@ -17,7 +19,8 @@ class HotkeyDialog(Gtk.Dialog):
 
     def __init__(self) -> None:
         super().__init__(title="Set new hotkey", modal=True)
-        self.add_buttons("Close", Gtk.ResponseType.CLOSE, "Save", Gtk.ResponseType.OK)
+        self.add_button("Close", Gtk.ResponseType.CLOSE)
+        self.add_button("Save", Gtk.ResponseType.OK)
         self.set_response_sensitive(RESPONSES.OK, False)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, margin_top=20, margin_bottom=20, spacing=10)
@@ -93,6 +96,6 @@ class HotkeyDialog(Gtk.Dialog):
             return True
         return False
 
-    def run(self, *args: Any, **kwargs: Any) -> str:
-        super().run(*args, **kwargs)
+    def run(self, *_args: Any, **_kwargs: Any) -> str:
+        gtk4.run_dialog(self)
         return self._hotkey

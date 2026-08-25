@@ -47,6 +47,11 @@ def _pack(box: Gtk.Box, child: Gtk.Widget, expand: bool, fill: bool, padding: in
     box.append(child)
 
 
+def image_from_paintable(paintable: Any) -> Gtk.Image:
+    """GTK4 Image from a Gdk.Paintable (GTK3 used Image.new_from_surface)."""
+    return Gtk.Image(paintable=paintable)
+
+
 def add_child(parent: Gtk.Widget, child: Gtk.Widget) -> None:
     """GTK3 Container.add equivalent for the widgets this UI uses."""
     if isinstance(parent, Gtk.Box):
@@ -136,6 +141,11 @@ def measure_height_for_width(widget: Gtk.Widget, width: int) -> tuple[int, int]:
     """GTK3 get_preferred_height_for_width equivalent using GTK4 measure()."""
     min_h, nat_h, _min_b, _nat_b = widget.measure(Gtk.Orientation.VERTICAL, width)
     return min_h, nat_h
+
+
+def run_dialog(dialog: Gtk.Dialog) -> int:
+    """Block until a GTK4 dialog emits ``response`` (GTK 4.6 has no Dialog.run())."""
+    return _dialog_run(dialog)
 
 
 def _dialog_run(self: Gtk.Dialog, *_args: Any, **_kwargs: Any) -> int:

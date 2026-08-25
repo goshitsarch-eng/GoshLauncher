@@ -13,6 +13,7 @@ from gi.repository import GObject, Gtk
 
 from ulauncher import paths
 from ulauncher.modes.launcher.status_notifier import StatusNotifierItem, preferred_tray_backend
+from ulauncher.ui import gtk4
 from ulauncher.utils.environment import IS_X11_COMPATIBLE
 from ulauncher.utils.eventbus import EventBus
 from ulauncher.utils.settings import Settings
@@ -89,7 +90,7 @@ class TrayIcon(GObject.Object):
             menu.append(_create_menu_item("About", lambda *_: events.emit("app:show_preferences", "about")))
             menu.append(Gtk.SeparatorMenuItem())
             menu.append(_create_menu_item("Exit", lambda *_: events.emit("app:quit")))
-            menu.show_all()
+            gtk4.show_all(menu)
 
         from gi.repository import Gdk
 

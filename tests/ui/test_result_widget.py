@@ -6,6 +6,7 @@ from pytest_mock import MockerFixture
 
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
+from ulauncher.ui import gtk4
 from ulauncher.ui.result_widget import ResultWidget
 
 
@@ -19,11 +20,11 @@ class TestResultWidget:
         return mocker.patch("ulauncher.ui.result_widget.ResultWidget.scroll_to_focus")
 
     def test_descr(self) -> None:
-        assert len(ResultWidget(Result(), 0, Query("", None), noop, noop).text_container.get_children()) == 1
+        assert len(gtk4.list_children(ResultWidget(Result(), 0, Query("", None), noop, noop).text_container)) == 1
         res = Result(description="descr")
-        assert len(ResultWidget(res, 0, Query("", None), noop, noop).text_container.get_children()) == 2
+        assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 2
         res = Result(description="descr", compact=True)
-        assert len(ResultWidget(res, 0, Query("", None), noop, noop).text_container.get_children()) == 1
+        assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 1
 
     def test_select(self) -> None:
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop)
@@ -51,8 +52,8 @@ class TestResultWidget:
         res = Result(name="long name", description="long descr", wrap=True)
         widget = ResultWidget(res, 0, Query("", None), noop, noop)
 
-        name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
-        descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
+        name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
+        descr_label = cast("Gtk.Label", gtk4.list_children(widget.text_container)[1])
         for label in (name_label, descr_label):
             assert label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.NONE
@@ -63,8 +64,8 @@ class TestResultWidget:
         res = Result(name="long name", description="long descr")
         widget = ResultWidget(res, 0, Query("", None), noop, noop)
 
-        name_label = cast("Gtk.Label", widget.title_box.get_children()[0])
-        descr_label = cast("Gtk.Label", widget.text_container.get_children()[1])
+        name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
+        descr_label = cast("Gtk.Label", gtk4.list_children(widget.text_container)[1])
         for label in (name_label, descr_label):
             assert not label.get_wrap()
             assert label.get_ellipsize() == Pango.EllipsizeMode.END
@@ -76,7 +77,7 @@ class TestResultWidget:
         widget = ResultWidget(res, 0, Query("wrap", None), noop, noop)
 
         # highlighting would split the name over multiple labels, which cannot wrap as one paragraph
-        children = widget.title_box.get_children()
+        children = gtk4.list_children(widget.title_box)
         assert len(children) == 1
         assert cast("Gtk.Label", children[0]).get_text() == "wrapped name"
         assert not any(c.has_css_class("item-highlight") for c in children)

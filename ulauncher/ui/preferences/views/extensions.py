@@ -11,6 +11,7 @@ from ulauncher.modes.extensions.extension_record import (
     ExtensionRecord,
 )
 from ulauncher.modes.extensions.extension_service import ext_service
+from ulauncher.ui import gtk4
 from ulauncher.ui.load_icon_surface import load_icon_surface
 from ulauncher.ui.preferences import views
 from ulauncher.ui.preferences.utils import ext_utils
@@ -58,7 +59,7 @@ class ExtensionsView(BaseView):
                 ("Develop your own", "text-x-generic-symbolic", lambda _: open_detached("https://docs.ulauncher.io")),
             ],
         )
-        self.pack_start(self.layout, True, True, 0)
+        gtk4.pack_start(self, self.layout, True, True, 0)
 
         self._load_extension_list()
         self._show_placeholder()
@@ -110,7 +111,7 @@ class ExtensionsView(BaseView):
         items: list[SidebarItem] = []
         for ext_id, (name, status, icon_path) in self.extension_cache.items():
             icon_surface = load_icon_surface(icon_path or "", views.ICON_SIZE_M, self.get_scale_factor())
-            icon_image = Gtk.Image.new_from_surface(icon_surface)
+            icon_image = gtk4.image_from_paintable(icon_surface)
 
             # Only show status badge if not "on" (enabled extensions don't need a badge)
             display_status = None if status == "on" else status
@@ -174,8 +175,8 @@ class ExtensionsView(BaseView):
             "dim-label",
         )
 
-        placeholder_box.pack_start(heading_label, False, False, 0)
-        placeholder_box.pack_start(hint_label, False, False, 0)
+        gtk4.pack_start(placeholder_box, heading_label, False, False, 0)
+        gtk4.pack_start(placeholder_box, hint_label, False, False, 0)
 
         self.layout.set_content(placeholder_box)
 
@@ -195,9 +196,9 @@ class ExtensionsView(BaseView):
             margin_end=20,
             margin_bottom=0,
         )
-        header_box.pack_start(self._create_extension_header(ext), False, False, 0)
-        header_box.pack_start(Gtk.Separator(), False, False, 0)
-        container.pack_start(header_box, False, False, 0)
+        gtk4.pack_start(header_box, self._create_extension_header(ext), False, False, 0)
+        gtk4.pack_start(header_box, Gtk.Separator(), False, False, 0)
+        gtk4.pack_start(container, header_box, False, False, 0)
 
         # Scrollable content section
         scrolled = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
@@ -210,14 +211,14 @@ class ExtensionsView(BaseView):
             margin_top=15,
         )
 
-        details_box.pack_start(self._create_extension_status_info(ext), False, False, 0)
-        details_box.pack_start(self._create_installation_instructions_section(ext), False, False, 0)
-        details_box.pack_start(self._create_triggers_section(ext), False, False, 0)
-        details_box.pack_start(self._create_preferences_section(ext), False, False, 0)
-        details_box.pack_start(self._create_error_section(ext), False, False, 0)
+        gtk4.pack_start(details_box, self._create_extension_status_info(ext), False, False, 0)
+        gtk4.pack_start(details_box, self._create_installation_instructions_section(ext), False, False, 0)
+        gtk4.pack_start(details_box, self._create_triggers_section(ext), False, False, 0)
+        gtk4.pack_start(details_box, self._create_preferences_section(ext), False, False, 0)
+        gtk4.pack_start(details_box, self._create_error_section(ext), False, False, 0)
 
-        scrolled.add(details_box)
-        container.pack_start(scrolled, True, True, 0)
+        scrolled.set_child(details_box)
+        gtk4.pack_start(container, scrolled, True, True, 0)
 
         self.layout.set_content(container)
 
@@ -231,22 +232,22 @@ class ExtensionsView(BaseView):
         # Large icon
         icon_path = ext.get_icon_value()
         icon_surface = load_icon_surface(icon_path or "", views.ICON_SIZE_L, self.get_scale_factor())
-        icon_image = Gtk.Image.new_from_surface(icon_surface)
-        left_box.pack_start(icon_image, False, False, 0)
+        icon_image = gtk4.image_from_paintable(icon_surface)
+        gtk4.pack_start(left_box, icon_image, False, False, 0)
 
         # Name and secondary info
         info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         name_toggle_box, secondary_info_box = self._create_name_toggle_column(ext)
-        info_box.pack_start(name_toggle_box, False, False, 0)
+        gtk4.pack_start(info_box, name_toggle_box, False, False, 0)
         if secondary_info_box:
-            info_box.pack_start(secondary_info_box, False, False, 0)
-        left_box.pack_start(info_box, True, True, 0)
+            gtk4.pack_start(info_box, secondary_info_box, False, False, 0)
+        gtk4.pack_start(left_box, info_box, True, True, 0)
 
-        header_box.pack_start(left_box, True, True, 0)
+        gtk4.pack_start(header_box, left_box, True, True, 0)
 
         # Right side: Action buttons - right aligned
         button_box = self._create_header_buttons(ext)
-        header_box.pack_end(button_box, False, False, 0)
+        gtk4.pack_end(header_box, button_box, False, False, 0)
 
         return header_box
 
@@ -254,7 +255,7 @@ class ExtensionsView(BaseView):
         """Create the name column content"""
         name_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         name_label = styled(Gtk.Label(label=ext.display_manifest.name, halign=Gtk.Align.START), "title")
-        name_box.pack_start(name_label, False, False, 0)
+        gtk4.pack_start(name_box, name_label, False, False, 0)
 
         # Create a vertical box for authors and updated date
         secondary_info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, valign=Gtk.Align.END)
@@ -263,7 +264,7 @@ class ExtensionsView(BaseView):
             authors_label = styled(
                 Gtk.Label(label=f"by {ext.display_manifest.authors}", halign=Gtk.Align.START), "caption", "dim-label"
             )
-            secondary_info_box.pack_start(authors_label, False, False, 0)
+            gtk4.pack_start(secondary_info_box, authors_label, False, False, 0)
 
         # Add updated date (commit time)
         if ext.state.commit_time:
@@ -273,11 +274,11 @@ class ExtensionsView(BaseView):
                 updated_row = styled(
                     Gtk.Label(label=f"updated on {updated_date}", halign=Gtk.Align.START), "caption", "dim-label"
                 )
-                secondary_info_box.pack_start(updated_row, False, False, 0)
+                gtk4.pack_start(secondary_info_box, updated_row, False, False, 0)
             except (ValueError, AttributeError):
                 pass
 
-        return name_box, secondary_info_box if secondary_info_box.get_children() else None
+        return name_box, secondary_info_box if gtk4.list_children(secondary_info_box) else None
 
     def _create_extension_status_info(self, ext: ExtensionRecord) -> Gtk.Box:
         """Create a centered row with status information"""
@@ -313,8 +314,8 @@ class ExtensionsView(BaseView):
         folder_link.set_halign(Gtk.Align.CENTER)
         folder_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=3)
         folder_icon = styled(Gtk.Label(label="📁"), "caption")
-        folder_box.pack_start(folder_icon, False, False, 0)
-        folder_box.pack_start(folder_link, False, False, 0)
+        gtk4.pack_start(folder_box, folder_icon, False, False, 0)
+        gtk4.pack_start(folder_box, folder_link, False, False, 0)
         folder_box.set_halign(Gtk.Align.CENTER)
         parts.append(folder_box)
 
@@ -323,8 +324,8 @@ class ExtensionsView(BaseView):
             if i > 0:
                 # Add bullet separator
                 bullet = styled(Gtk.Label(label=" • "), "caption", "dim-label")
-                container.pack_start(bullet, False, False, 0)
-            container.pack_start(part, False, False, 0)
+                gtk4.pack_start(container, bullet, False, False, 0)
+            gtk4.pack_start(container, part, False, False, 0)
 
         return container
 
@@ -343,24 +344,24 @@ class ExtensionsView(BaseView):
             "small-switch",
         )
         toggle_switch.connect("state-set", self._on_toggle_extension, ext)
-        button_box.pack_start(toggle_switch, False, False, 0)
+        gtk4.pack_start(button_box, toggle_switch, False, False, 0)
 
         # Save button
         self.save_button = styled(Gtk.Button(label="Save", sensitive=False), "suggested-action")
         self.save_button.connect("clicked", lambda _: self.save_changes())
-        button_box.pack_start(self.save_button, False, False, 0)
+        gtk4.pack_start(button_box, self.save_button, False, False, 0)
 
         # Check Updates button
         if ext.is_manageable and ext.update_url:
             update_button = Gtk.Button(label="Check Updates")
             update_button.connect("clicked", self._on_check_updates, ext)
-            button_box.pack_start(update_button, False, False, 0)
+            gtk4.pack_start(button_box, update_button, False, False, 0)
 
         # Remove button (only if extension is manageable)
         if ext.is_manageable:
             remove_button = styled(Gtk.Button(label="Remove"), "destructive-action")
             remove_button.connect("clicked", self.on_remove_extension, ext)
-            button_box.pack_start(remove_button, False, False, 0)
+            gtk4.pack_start(button_box, remove_button, False, False, 0)
 
         return button_box
 
@@ -389,9 +390,9 @@ class ExtensionsView(BaseView):
                 wrap=True,
             )
 
-            instructions_expander.add(instructions_label)
-            instructions_container.add(instructions_expander)
-            container.pack_start(instructions_container, False, False, 0)
+            instructions_expander.set_child(instructions_label)
+            gtk4.pack_start(instructions_container, instructions_expander, False, False, 0)
+            gtk4.pack_start(container, instructions_container, False, False, 0)
 
         return container
 
@@ -409,12 +410,12 @@ class ExtensionsView(BaseView):
                 keyword_label = styled(
                     Gtk.Label(label=f"{trigger.name} keyword", use_markup=True, halign=Gtk.Align.START), "body"
                 )
-                trigger_box.pack_start(keyword_label, False, False, 0)
+                gtk4.pack_start(trigger_box, keyword_label, False, False, 0)
 
                 # Keyword input field
                 keyword_entry = Gtk.Entry(text=trigger.keyword, placeholder_text="Enter keyword...", width_chars=20)
                 keyword_entry.connect("changed", self._on_setting_change)
-                trigger_box.pack_start(keyword_entry, False, False, 0)
+                gtk4.pack_start(trigger_box, keyword_entry, False, False, 0)
 
                 if trigger.description:
                     footnotes_label = styled(
@@ -426,11 +427,11 @@ class ExtensionsView(BaseView):
                         "caption",
                         "dim-label",
                     )
-                    trigger_box.pack_start(footnotes_label, False, False, 0)
+                    gtk4.pack_start(trigger_box, footnotes_label, False, False, 0)
 
                 # Store widget reference
                 self.keyword_inputs[trigger_id] = keyword_entry
-                container.pack_start(trigger_box, False, False, 0)
+                gtk4.pack_start(container, trigger_box, False, False, 0)
 
         return container
 
@@ -451,10 +452,10 @@ class ExtensionsView(BaseView):
                 checkbox = Gtk.CheckButton(label=pref_name, active=pref.get("value", False))
                 checkbox.connect("toggled", self._on_setting_change)
                 self.pref_widgets[pref_id] = checkbox
-                pref_box.pack_start(checkbox, False, False, 0)
+                gtk4.pack_start(pref_box, checkbox, False, False, 0)
             else:
                 label = styled(Gtk.Label(label=pref_name, halign=Gtk.Align.START), "body")
-                pref_box.pack_start(label, False, False, 0)
+                gtk4.pack_start(pref_box, label, False, False, 0)
 
                 if descr := pref.description:
                     desc_label = styled(
@@ -467,13 +468,13 @@ class ExtensionsView(BaseView):
                         "caption",
                         "dim-label",
                     )
-                    pref_box.pack_start(desc_label, False, False, 0)
+                    gtk4.pack_start(pref_box, desc_label, False, False, 0)
 
                 widget = self._create_preference_widget(pref_id, pref, pref_type)
                 if widget:
-                    pref_box.pack_start(widget, False, False, 0)
+                    gtk4.pack_start(pref_box, widget, False, False, 0)
 
-            container.pack_start(pref_box, False, False, 0)
+            gtk4.pack_start(container, pref_box, False, False, 0)
 
         return container
 
@@ -538,7 +539,7 @@ class ExtensionsView(BaseView):
             top_margin=10, bottom_margin=10, left_margin=10, right_margin=10, wrap_mode=Gtk.WrapMode.WORD
         )
         textview.set_text(str(pref.get("value", "")))
-        scroll_container.add(textview)
+        scroll_container.set_child(textview)
         textview.get_buffer().connect("changed", self._on_setting_change)
         self.pref_widgets[pref_id] = textview
         return scroll_container
@@ -572,9 +573,9 @@ class ExtensionsView(BaseView):
             )
 
             error_label.connect("activate-link", lambda _, uri: open_detached(uri))
-            warning_frame.pack_start(error_label, False, False, 0)
-            error_box.pack_start(warning_frame, False, False, 0)
-            container.pack_start(error_box, False, False, 0)
+            gtk4.pack_start(warning_frame, error_label, False, False, 0)
+            gtk4.pack_start(error_box, warning_frame, False, False, 0)
+            gtk4.pack_start(container, error_box, False, False, 0)
 
         return container
 

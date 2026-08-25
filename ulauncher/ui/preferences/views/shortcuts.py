@@ -6,6 +6,7 @@ from time import time
 from gi.repository import Gtk, Pango
 
 from ulauncher.modes.shortcuts.shortcuts import Shortcut, Shortcuts
+from ulauncher.ui import gtk4
 from ulauncher.ui.load_icon_surface import load_icon_surface
 from ulauncher.ui.preferences import views
 from ulauncher.ui.preferences.utils.ext_utils import autofmt_pango_code_block
@@ -31,7 +32,7 @@ class ShortcutsView(views.BaseView):
         self.layout = SidebarLayout(
             footer_actions=[("Add Shortcut", "list-add-symbolic", self._on_add_shortcut)],
         )
-        self.pack_start(self.layout, True, True, 0)
+        gtk4.pack_start(self, self.layout, True, True, 0)
 
         self._load_shortcut_list()
         self._show_placeholder()
@@ -40,11 +41,11 @@ class ShortcutsView(views.BaseView):
         """Create the edit form with shortcut data"""
         form_box = self._create_form_container()
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20, hexpand=True)
-        content_box.pack_start(self._create_icon_button_row(shortcut), False, False, 0)
-        content_box.pack_start(self._create_name_keyword_row(shortcut), False, False, 0)
-        content_box.pack_start(self._create_command_section(shortcut), True, True, 0)
-        content_box.pack_start(self._create_options_section(shortcut), False, False, 0)
-        form_box.pack_start(content_box, True, True, 0)
+        gtk4.pack_start(content_box, self._create_icon_button_row(shortcut), False, False, 0)
+        gtk4.pack_start(content_box, self._create_name_keyword_row(shortcut), False, False, 0)
+        gtk4.pack_start(content_box, self._create_command_section(shortcut), True, True, 0)
+        gtk4.pack_start(content_box, self._create_options_section(shortcut), False, False, 0)
+        gtk4.pack_start(form_box, content_box, True, True, 0)
 
         self.selected_icon_path = shortcut.icon or ""
         self._update_icon_button()
@@ -71,7 +72,7 @@ class ShortcutsView(views.BaseView):
 
         # Icon section on the left
         icon_section = self._create_icon_section()
-        row.pack_start(icon_section, False, False, 0)
+        gtk4.pack_start(row, icon_section, False, False, 0)
 
         # Buttons on the right
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, valign=Gtk.Align.CENTER)
@@ -83,10 +84,10 @@ class ShortcutsView(views.BaseView):
         save_button.connect("clicked", self._on_save_shortcut)
         self.save_button = save_button
 
-        button_box.pack_start(save_button, False, False, 0)
-        button_box.pack_start(remove_button, False, False, 0)
+        gtk4.pack_start(button_box, save_button, False, False, 0)
+        gtk4.pack_start(button_box, remove_button, False, False, 0)
 
-        row.pack_end(button_box, False, False, 0)
+        gtk4.pack_end(row, button_box, False, False, 0)
 
         return row
 
@@ -96,11 +97,11 @@ class ShortcutsView(views.BaseView):
 
         # Name section
         name_section = self._create_name_section(shortcut)
-        row.pack_start(name_section, True, True, 0)
+        gtk4.pack_start(row, name_section, True, True, 0)
 
         # Keyword section
         keyword_section = self._create_keyword_section(shortcut)
-        row.pack_start(keyword_section, True, True, 0)
+        gtk4.pack_start(row, keyword_section, True, True, 0)
 
         return row
 
@@ -110,7 +111,7 @@ class ShortcutsView(views.BaseView):
 
         self.icon_button = Gtk.Button(width_request=views.ICON_SIZE_L, height_request=views.ICON_SIZE_L)
         self.icon_button.connect("clicked", self._on_select_icon)
-        icon_section.pack_start(self.icon_button, False, False, 0)
+        gtk4.pack_start(icon_section, self.icon_button, False, False, 0)
 
         return icon_section
 
@@ -118,11 +119,11 @@ class ShortcutsView(views.BaseView):
         """Create the name input section"""
         name_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         name_label = Gtk.Label(label="Name", halign=Gtk.Align.START)
-        name_section.pack_start(name_label, False, False, 0)
+        gtk4.pack_start(name_section, name_label, False, False, 0)
 
         self.name_entry = Gtk.Entry(text=shortcut.name, placeholder_text="Enter shortcut name")
         self.name_entry.connect("changed", self._on_form_field_changed)
-        name_section.pack_start(self.name_entry, False, False, 0)
+        gtk4.pack_start(name_section, self.name_entry, False, False, 0)
 
         return name_section
 
@@ -130,11 +131,11 @@ class ShortcutsView(views.BaseView):
         """Create the keyword input section"""
         keyword_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         keyword_label = Gtk.Label(label="Keyword", halign=Gtk.Align.START)
-        keyword_section.pack_start(keyword_label, False, False, 0)
+        gtk4.pack_start(keyword_section, keyword_label, False, False, 0)
 
         self.keyword_entry = Gtk.Entry(text=shortcut.keyword, placeholder_text="Enter keyword")
         self.keyword_entry.connect("changed", self._on_form_field_changed)
-        keyword_section.pack_start(self.keyword_entry, False, False, 0)
+        gtk4.pack_start(keyword_section, self.keyword_entry, False, False, 0)
 
         return keyword_section
 
@@ -142,7 +143,7 @@ class ShortcutsView(views.BaseView):
         """Create the command/script input section"""
         cmd_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         cmd_label = Gtk.Label(label="Query or script", halign=Gtk.Align.START)
-        cmd_section.pack_start(cmd_label, False, False, 0)
+        gtk4.pack_start(cmd_section, cmd_label, False, False, 0)
 
         cmd_help_expander = styled(Gtk.Expander(label="Show help and examples"), "shortcuts-cmd-help")
         cmd_examples_label = Gtk.Label(
@@ -162,8 +163,8 @@ class ShortcutsView(views.BaseView):
             selectable=True,
         )
 
-        cmd_help_expander.add(cmd_examples_label)
-        cmd_section.pack_start(cmd_help_expander, False, False, 5)
+        cmd_help_expander.set_child(cmd_examples_label)
+        gtk4.pack_start(cmd_section, cmd_help_expander, False, False, 5)
 
         scrolled_cmd = styled(
             Gtk.ScrolledWindow(min_content_height=100),
@@ -173,9 +174,9 @@ class ShortcutsView(views.BaseView):
         self.cmd_textview = TextArea(monospace=True, top_margin=10, bottom_margin=10, left_margin=10, right_margin=10)
         self.cmd_textview.set_text(shortcut.cmd)
         self.cmd_textview.get_buffer().connect("changed", self._on_form_field_changed)
-        scrolled_cmd.add(self.cmd_textview)
+        scrolled_cmd.set_child(self.cmd_textview)
 
-        cmd_section.pack_start(scrolled_cmd, True, True, 0)
+        gtk4.pack_start(cmd_section, scrolled_cmd, True, True, 0)
 
         return cmd_section
 
@@ -210,16 +211,16 @@ class ShortcutsView(views.BaseView):
             "preferences-setting-description",
         )
 
-        text_box.pack_start(title_label, False, False, 0)
-        text_box.pack_start(description_label, False, False, 0)
-        row.pack_start(text_box, True, True, 0)
+        gtk4.pack_start(text_box, title_label, False, False, 0)
+        gtk4.pack_start(text_box, description_label, False, False, 0)
+        gtk4.pack_start(row, text_box, True, True, 0)
 
         option_switch = Gtk.Switch(active=active, halign=Gtk.Align.END, valign=Gtk.Align.CENTER)
-        row.pack_end(option_switch, False, False, 0)
+        gtk4.pack_end(row, option_switch, False, False, 0)
 
         option_switch.connect("notify::active", lambda switch, _pspec: self._on_form_field_changed(switch))
 
-        container.pack_start(row, False, False, 0)
+        gtk4.pack_start(container, row, False, False, 0)
         return option_switch
 
     def _on_form_field_changed(self, _widget: Gtk.Widget) -> None:
@@ -248,7 +249,7 @@ class ShortcutsView(views.BaseView):
         for shortcut_id, shortcut in self.shortcuts.items():
             if shortcut:  # Skip None values (deleted shortcuts)
                 icon_surface = load_icon_surface(shortcut.icon, views.ICON_SIZE_M, self.get_scale_factor())
-                icon_image = Gtk.Image.new_from_surface(icon_surface)
+                icon_image = gtk4.image_from_paintable(icon_surface)
 
                 item = SidebarItem(
                     id=shortcut_id,
@@ -326,8 +327,8 @@ class ShortcutsView(views.BaseView):
             "dim-label",
         )
 
-        placeholder_box.pack_start(heading_label, False, False, 0)
-        placeholder_box.pack_start(hint_label, False, False, 0)
+        gtk4.pack_start(placeholder_box, heading_label, False, False, 0)
+        gtk4.pack_start(placeholder_box, hint_label, False, False, 0)
 
         self.layout.set_content(placeholder_box)
 
@@ -375,8 +376,7 @@ class ShortcutsView(views.BaseView):
     def _update_icon_button(self) -> None:
         """Update the icon button image"""
         icon_surface = load_icon_surface(self.selected_icon_path, views.ICON_SIZE_L, self.get_scale_factor())
-        icon = Gtk.Image.new_from_surface(icon_surface)
-        self.icon_button.set_image(icon)
+        self.icon_button.set_child(gtk4.image_from_paintable(icon_surface))
 
     def _on_select_icon(self, _button: Gtk.Button) -> None:
         """Handle icon selection via GTK4 FileChooserNative (Ubuntu 22.04 / GTK 4.6)."""

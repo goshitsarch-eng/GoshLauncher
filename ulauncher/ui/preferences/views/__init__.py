@@ -5,6 +5,7 @@ from typing import Any, Callable, TypeVar, cast
 
 from gi.repository import Gtk
 
+from ulauncher.ui import gtk4
 from ulauncher.utils import scheduling
 
 T = TypeVar("T", bound=Gtk.Widget)
@@ -61,9 +62,8 @@ def prefs_view_reload_action(toplevel: Any, widget: Any) -> str:
 
 
 def styled(widget: T, *class_names: str) -> T:
-    style = widget.get_style_context()
     for class_name in class_names:
-        style.add_class(class_name)
+        gtk4.add_css_class(widget, class_name)
     return widget
 
 
@@ -73,12 +73,11 @@ def start_spinner_button_animation(button: Gtk.Button) -> Callable[[], None]:
     Returns a function to stops the animation
     """
     start_time = time()
-    btn_style = button.get_style_context()
-    btn_style.add_class("spinner-button")
+    gtk4.add_css_class(button, "spinner-button")
     button.set_sensitive(False)
 
     def do_stop_animation() -> None:
-        btn_style.remove_class("spinner-button")
+        gtk4.remove_css_class(button, "spinner-button")
         button.set_sensitive(True)
 
     def stop_animation() -> None:
@@ -138,7 +137,7 @@ class DialogLauncher:
             text=text,
             secondary_text=secondary_text,
         )
-        response = cast("Gtk.ResponseType | None", dialog.run())
+        response = cast("Gtk.ResponseType | None", gtk4.run_dialog(dialog))
         dialog.destroy()
         return response
 

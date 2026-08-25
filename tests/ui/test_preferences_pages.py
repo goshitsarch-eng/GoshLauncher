@@ -74,3 +74,55 @@ def test_prefs_window_default_size_matches_goshos() -> None:
     from ulauncher.ui.preferences.preferences_window import WINDOW_DEFAULT_HEIGHT, WINDOW_DEFAULT_WIDTH
 
     assert (WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT) == (680, 720)
+
+
+_GTK3_WIDGET_APIS = (
+    r"(?<!gtk4)\.pack_start\(",
+    r"(?<!gtk4)\.pack_end\(",
+    r"(?<!gtk4)\.show_all\(",
+    r"(?<!gtk4)\.get_children\(",
+    r"Gtk\.Image\.new_from_surface",
+    r"\.set_image\(",
+    r"\.add_buttons\(",
+    r"dialog\.run\(",
+)
+
+
+def test_legacy_pref_pages_use_gtk4_helpers() -> None:
+    import re
+
+    root = Path(__file__).resolve().parents[2] / "ulauncher" / "ui"
+    files = [
+        root / "preferences" / "utils" / "sidebar_layout.py",
+        root / "preferences" / "utils" / "ext_handlers.py",
+        root / "preferences" / "views" / "shortcuts.py",
+        root / "preferences" / "views" / "extensions.py",
+        root / "hotkey_dialog.py",
+    ]
+    for path in files:
+        text = path.read_text()
+        for pattern in _GTK3_WIDGET_APIS:
+            match = re.search(pattern, text)
+            assert match is None, f"{path.name} still uses GTK3 {pattern}: {match.group(0) if match else ''}"
+        if path.name in {"sidebar_layout.py", "shortcuts.py", "extensions.py", "ext_handlers.py"}:
+            assert "gtk4.pack_start" in text
+
+
+def test_sidebar_layout_constructs_on_gtk4() -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, Gtk
+
+    Adw.init()
+
+    from ulauncher.ui import gtk4
+    from ulauncher.ui.preferences.utils.sidebar_layout import SidebarItem, SidebarLayout
+
+    layout = SidebarLayout()
+    assert layout.listbox.get_first_child() is None
+    icon = Gtk.Image.new_from_icon_name("image-missing")
+    layout.set_items([SidebarItem(id="one", icon=icon, name="One")])
+    rows = gtk4.list_children(layout.listbox)
+    assert len(rows) == 1
+    assert layout.listbox.get_first_child() is not None
