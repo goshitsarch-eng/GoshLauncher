@@ -160,7 +160,29 @@ class LauncherMode(Mode):
         invalidate_recent_files()
         invalidate_windows()
 
+    def _drop_typed_async_paint(self) -> None:
+        """goshos _showEmptyState: bump path/command load ids and drop the pending Gio idle.
+
+        Clearing the query never calls handle_query, so _paint_planned would still be the
+        previous ~/ path. An idle scheduled before the delete would then paint that row
+        over frequent apps. Bookmarks, recents, and windows stay; empty-state uses them.
+        """
+        idle = self._lookup_idle
+        self._lookup_idle = None
+        self._paint_callback = None
+        self._paint_planned = None
+        self._paint_settings = None
+        self._paint_chrome = None
+        if idle is not None:
+            idle.cancel()
+        from ulauncher.modes.launcher.commands import invalidate_command_lookup
+        from ulauncher.modes.launcher.paths import invalidate_path_lookup
+
+        invalidate_path_lookup()
+        invalidate_command_lookup()
+
     def get_home_results(self, limit: int) -> Sequence[Result]:
+        self._drop_typed_async_paint()
         settings = Settings.load()
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []

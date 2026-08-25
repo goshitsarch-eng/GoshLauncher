@@ -137,3 +137,12 @@ class TestResultWidget:
         widget = ResultWidget(Result(icon="image-missing"), 0, Query("", None), noop, noop, chrome=chrome)
         assert widget.item_icon is not None
         assert widget.item_icon.get_pixel_size() == icon_size_for_look(chrome, "compact") == 32
+
+    def test_throwing_icon_still_paints_the_row(self, mocker: MockerFixture) -> None:
+        from gi.repository import Gtk
+
+        mocker.patch("ulauncher.ui.result_widget.load_icon_paintable", side_effect=RuntimeError("bad icon"))
+        widget = ResultWidget(Result(name="Firefox", icon="gone"), 0, Query("", None), noop, noop)
+        name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
+        assert name_label.get_text() == "Firefox"
+        assert widget.item_icon is not None

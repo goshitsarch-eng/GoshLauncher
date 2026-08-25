@@ -68,6 +68,41 @@ def test_reject_async_paint_blocks_in_flight_gio(monkeypatch: pytest.MonkeyPatch
     assert mode._accept_paint is True
 
 
+def test_empty_state_drops_in_flight_path_paint(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    invalidated: list[str] = []
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.invalidate_path_lookup",
+        lambda: invalidated.append("path"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.commands.invalidate_command_lookup",
+        lambda: invalidated.append("command"),
+    )
+    settings = Settings()
+    settings.enable_empty_suggestions = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    mode = LauncherMode()
+    painted: list[object] = []
+    cancelled: list[str] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "~/foo", "providers": ["path"], "mode": "all"}
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._lookup_idle = SimpleNamespace(cancel=lambda: cancelled.append("cancel"))
+    assert list(mode.get_home_results(6)) == []
+    assert cancelled == ["cancel"]
+    assert mode._lookup_idle is None
+    assert mode._paint_planned is None
+    mode._run_repaint()
+    assert painted == []
+    assert invalidated == ["path", "command"]
+    mode.handle_query(Query(None, "2+2"), lambda *_args: None)
+    assert mode._accept_paint is True
+
+
 def test_launcher_result_has_activate_action() -> None:
     result = LauncherResult(name="Test", kind="app", payload={"app_id": "x.desktop"})
     assert "activate" in result.actions
