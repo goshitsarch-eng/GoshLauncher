@@ -15,6 +15,9 @@ from ulauncher.modes.launcher.windows import (
     compositor_window_argv,
     ewmh_window_type,
     filter_listed_windows,
+    gtk_action_names_for_close,
+    gtk_muxer_close,
+    gtk_muxer_targets_from_payload,
     gtk_unique_props_from_mapping,
     gtk_unique_props_from_xprop,
     hypr_current_desktop,
@@ -795,6 +798,41 @@ def test_kill_uses_session_bus_pid_when_ext_foreign_has_none(monkeypatch: pytest
     calls.clear()
     activate_window({"kind": "close", "wid": "ext:abc", "pid": 0, "app_id": "firefox"})
     assert calls == [("close", "ext:abc")]
+
+
+def test_gtk_muxer_close_is_win_delete_for_unique_apps() -> None:
+    assert gtk_action_names_for_close("close") == ("close", "win.close")
+    assert gtk_action_names_for_close("quit")[0] == "quit"
+    payload = {
+        "gtk_unique_bus_name": ":1.9",
+        "gtk_application_object_path": "/org/gnome/Console",
+        "app_id": "org.gnome.Console",
+    }
+    assert gtk_muxer_targets_from_payload(payload)[0] == (":1.9", "/org/gnome/Console")
+    calls: list[tuple[str, str, str]] = []
+
+    def activate(bus_name: str, object_path: str, action: str) -> bool:
+        calls.append((bus_name, object_path, action))
+        return action == "close"
+
+    assert gtk_muxer_close(payload, "close", activate=activate) is True
+    assert calls[0] == (":1.9", "/org/gnome/Console", "close")
+    calls.clear()
+    assert gtk_muxer_close({"app_id": "org.gnome.Console"}, "quit", activate=activate) is True
+    assert calls[0] == ("org.gnome.Console", "/org/gnome/Console", "quit")
+
+
+def test_close_prefers_gtk_actions_before_sigterm(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._close_window", lambda wid: calls.append(("wm", wid)))
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.gtk_muxer_close", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._signal_pid",
+        lambda pid, sig: calls.append(("sig", pid, sig)),
+    )
+    activate_window({"kind": "close", "wid": "ext:abc", "pid": 9, "app_id": "org.gnome.Console"})
+    assert calls == [("wm", "ext:abc")]
 
 
 def test_listed_workspace_count_prefers_ext_then_wmctrl(monkeypatch: pytest.MonkeyPatch) -> None:

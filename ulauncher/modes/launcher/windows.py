@@ -2051,6 +2051,7 @@ def match_windows(
                 "wm_class": win.wm_class,
                 "app_id": win.app_id,
                 "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
+                "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
                 "atspi_ref": getattr(win, "atspi_ref", "") or "",
                 "id": window_result_id(win.wid, title, win.wm_class, description),
             }
@@ -2089,6 +2090,66 @@ def session_has_x11_window_control(is_x11: bool | None = None) -> bool:
 
         is_x11 = IS_X11
     return bool(is_x11)
+
+
+def gtk_action_names_for_close(intent: str) -> tuple[str, ...]:
+    if intent == "quit":
+        return ("quit", "app.quit", "close", "win.close")
+    return ("close", "win.close")
+
+
+def gtk_muxer_targets_from_payload(payload: Mapping[str, Any]) -> list[tuple[str, str]]:
+    targets: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    pairs = (
+        (str(payload.get("gtk_unique_bus_name") or ""), str(payload.get("gtk_application_object_path") or "")),
+        (
+            application_bus_name(str(payload.get("app_id") or "")),
+            application_object_path(application_bus_name(str(payload.get("app_id") or ""))),
+        ),
+    )
+    for bus_name, object_path in pairs:
+        if not bus_name or not object_path or (bus_name, object_path) in seen:
+            continue
+        seen.add((bus_name, object_path))
+        targets.append((bus_name, object_path))
+    return targets
+
+
+def gtk_muxer_close(
+    payload: Mapping[str, Any],
+    intent: str = "close",
+    activate: Callable[[str, str, str], bool] | None = None,
+) -> bool:
+    """goshos win.delete for GtkApplication windows that expose org.gtk.Actions."""
+    call = activate or _gtk_actions_activate
+    for bus_name, object_path in gtk_muxer_targets_from_payload(payload):
+        for action in gtk_action_names_for_close(intent):
+            if call(bus_name, object_path, action):
+                return True
+    return False
+
+
+def _gtk_actions_activate(bus_name: str, object_path: str, action: str) -> bool:
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus.call_sync(
+            bus_name,
+            object_path,
+            "org.gtk.Actions",
+            "Activate",
+            GLib.Variant("(sava{sv})", (action, [], {})),
+            None,
+            Gio.DBusCallFlags.NONE,
+            200,
+            None,
+        )
+    except Exception:
+        logger.debug("org.gtk.Actions %s failed on %s", action, bus_name, exc_info=True)
+        return False
+    return True
 
 
 def bus_pid_for_window(
@@ -2139,7 +2200,10 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
         return
     if kind in {"close", "quit"}:
         _close_window(wid)
-        if pid and not session_has_x11_window_control() and not compositor_can_close:
+        closed = compositor_can_close or session_has_x11_window_control()
+        if not closed:
+            closed = gtk_muxer_close(payload, kind)
+        if pid and not closed:
             _signal_pid(pid, signal.SIGTERM)
         return
     _focus_window(wid)
