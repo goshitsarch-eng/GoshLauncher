@@ -800,6 +800,32 @@ def windows_from_lswt_csv(text: str) -> list[WindowInfo]:
     return windows
 
 
+def windows_from_ext_foreign_handles(items: Any) -> list[WindowInfo]:
+    """Map ext-foreign-toplevel-list handles onto WindowInfo (GNOME Wayland)."""
+    if not isinstance(items, list):
+        return []
+    windows: list[WindowInfo] = []
+    from ulauncher.modes.launcher.wayland_toplevels import ext_foreign_handle_to_window_fields
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        fields = ext_foreign_handle_to_window_fields(item)
+        if fields is None:
+            continue
+        app_id = fields["app_id"]
+        windows.append(
+            WindowInfo(
+                wid=f"ext:{fields['identifier']}",
+                title=fields["title"],
+                wm_class=window_class_text("", "", app_id) or app_id,
+                desktop=0,
+                app_id=app_id,
+            )
+        )
+    return windows
+
+
 KWIN_LIST_SCRIPT = (
     "var clients = workspace.windowList();"
     "for (var i = 0; i < clients.length; i++) {"
@@ -956,6 +982,11 @@ def _compositor_windows() -> list[WindowInfo]:
         parsed = parser(payload)
         if parsed:
             return parsed
+    from ulauncher.modes.launcher.wayland_toplevels import list_ext_foreign_toplevels
+
+    ext = windows_from_ext_foreign_handles(list_ext_foreign_toplevels())
+    if ext:
+        return ext
     if shutil.which("wlrctl"):
         text = _text_command(["wlrctl", "toplevel", "list"])
         if text:

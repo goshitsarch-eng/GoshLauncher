@@ -37,6 +37,7 @@ from ulauncher.modes.launcher.windows import (
     window_recency_value,
     window_result_id,
     window_workspace_label,
+    windows_from_ext_foreign_handles,
     windows_from_hypr_clients,
     windows_from_i3_tree,
     windows_from_introspect_payload,
@@ -655,6 +656,23 @@ def test_lswt_csv_lists_ext_foreign_toplevels() -> None:
     assert rows[1].title == "Notes, 1"
     assert rows[0].wid == "lswt:ext-1"
     assert compositor_window_argv(rows[0].wid, "focus") is None
+
+
+def test_ext_foreign_handles_list_gnome_wayland_toplevels() -> None:
+    rows = windows_from_ext_foreign_handles(
+        [
+            {"identifier": "gen-1", "title": "Mozilla Firefox", "app_id": "org.mozilla.firefox"},
+            {"identifier": "", "title": "No id", "app_id": "x"},
+            {"title": "Notes", "app_id": "org.gnome.TextEditor"},
+            {"identifier": "gen-2", "title": "", "app_id": ""},
+            {"identifier": "gen-3", "title": "Settings", "app_id": "org.gnome.Settings"},
+        ]
+    )
+    assert [row.wid for row in rows] == ["ext:gen-1", "ext:gen-3"]
+    assert rows[0].wm_class == "org.mozilla.firefox"
+    assert window_matches(rows[0], "mozilla")
+    assert compositor_window_argv(rows[0].wid, "focus") is None
+    assert windows_from_ext_foreign_handles(None) == []
 
 
 def test_kwin_dump_lists_and_activates_plasma_windows() -> None:
