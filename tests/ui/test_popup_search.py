@@ -82,6 +82,7 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     ready = LauncherResult(name="Firefox", kind="app", payload={"app_id": "firefox.desktop"})
     later = LauncherResult(name="Files", kind="app", payload={"app_id": "files.desktop"})
     popup.win._chrome["show_numbers"] = True
+    popup.win.set_input("")
     popup.win.show_results(results_update([pending, ready, later], Query(None, "/tmp")))
     popup.app.activated = None
     popup.app.closed = False
@@ -215,7 +216,7 @@ def test_web_fallback_and_at_prefix_with_fallback_off() -> None:
     try:
         kinds = probe.type_query("zzzxqwerty999nomatch")
         assert kinds == ["web"]
-        assert "Search Google" in probe.names()[0]
+        assert any(name.startswith("Search Google for") for name in probe.names())
     finally:
         probe.close()
 
