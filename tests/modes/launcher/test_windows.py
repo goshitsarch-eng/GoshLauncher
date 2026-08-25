@@ -1022,6 +1022,52 @@ def test_compositor_skip_taskbar_counts_for_apps_not_search() -> None:
     )
 
 
+def test_sway_scratchpad_and_qtile_minimized_are_skip_taskbar() -> None:
+    sway = windows_from_sway_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "__i3_scratch",
+                    "floating_nodes": [
+                        {"id": 9, "type": "floating_con", "name": "Notes", "app_id": "notes", "pid": 3},
+                    ],
+                }
+            ],
+        }
+    )
+    assert len(sway) == 1
+    assert sway[0].skip_taskbar is True
+    assert sway[0].desktop == -1
+    assert not window_is_searchable(sway[0])
+    marked = windows_from_i3_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "1",
+                    "nodes": [
+                        {
+                            "id": 4,
+                            "type": "con",
+                            "name": "Vim",
+                            "app_id": "vim",
+                            "pid": 5,
+                            "scratchpad_state": "fresh",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    assert marked[0].skip_taskbar is True
+    qtile = windows_from_qtile_windows([{"id": 2, "name": "Hidden", "wm_class": "x", "minimized": True, "group": "1"}])
+    assert qtile[0].skip_taskbar is True
+    assert not window_is_searchable(qtile[0])
+
+
 def test_qtile_windows_list_and_activate() -> None:
     rows = windows_from_qtile_windows(
         [

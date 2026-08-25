@@ -770,15 +770,27 @@ def windows_from_i3ipc_tree(payload: Any, prefix: str) -> list[WindowInfo]:
     return windows
 
 
-def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int, prefix: str = "sway") -> None:
+def _walk_sway_tree(
+    node: Any,
+    windows: list[WindowInfo],
+    desktop: int,
+    prefix: str = "sway",
+    skip_taskbar: bool = False,
+) -> None:
     if not isinstance(node, dict):
         return
     next_desktop = desktop
+    next_skip = skip_taskbar
     if node.get("type") == "workspace":
         name = str(node.get("name") or "")
         if name.startswith("__"):
-            return
-        next_desktop = workspace_desktop_from_name(name, node.get("num"))
+            next_skip = True
+            next_desktop = -1
+        else:
+            next_desktop = workspace_desktop_from_name(name, node.get("num"))
+    state = str(node.get("scratchpad_state") or "none").lower()
+    if state not in {"", "none"}:
+        next_skip = True
     children = list(node.get("nodes") or []) + list(node.get("floating_nodes") or [])
     is_leaf = not children
     has_window = bool(node.get("pid") or node.get("app_id") or node.get("window_properties"))
@@ -801,10 +813,11 @@ def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int, prefix: 
                     sticky=bool(node.get("sticky")),
                     user_time=1 if node.get("focused") else 0,
                     app_id=str(node.get("app_id") or klass),
+                    skip_taskbar=next_skip,
                 )
             )
     for child in children:
-        _walk_sway_tree(child, windows, next_desktop, prefix)
+        _walk_sway_tree(child, windows, next_desktop, prefix, next_skip)
 
 
 def compositor_window_argv(wid: str, action: str) -> list[str] | None:
@@ -1121,6 +1134,7 @@ def windows_from_qtile_windows(payload: Any) -> list[WindowInfo]:
                 pid=pid,
                 user_time=1 if item.get("focused") else 0,
                 app_id=klass,
+                skip_taskbar=bool(item.get("minimized") or item.get("hidden")),
             )
         )
     return windows
