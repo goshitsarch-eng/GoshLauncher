@@ -52,6 +52,8 @@ class LiveSearchWatcher:
         self._fingerprint: tuple[Any, ...] = ()
         self._bus: Any = None
         self._windows_changed_ids: list[int] = []
+        self._x11: Any = None
+        self._ext_ws: Any = None
 
     @property
     def listening(self) -> bool:
@@ -64,6 +66,7 @@ class LiveSearchWatcher:
         self._fingerprint = self._snapshot()
         self._listen_apps()
         self._listen_shell_windows()
+        self._listen_host_signals()
         if self._poll_interval > 0:
             self._timer = scheduling.interval(self._poll_interval, self.poll)
 
@@ -77,6 +80,7 @@ class LiveSearchWatcher:
             with contextlib.suppress(TypeError, RuntimeError):
                 self._apps.disconnect(self._apps_handler)
         self._unlisten_shell_windows()
+        self._unlisten_host_signals()
         self._apps = None
         self._apps_handler = 0
         self._fingerprint = ()
@@ -175,3 +179,26 @@ class LiveSearchWatcher:
                     self._bus.signal_unsubscribe(watch_id)
         self._bus = None
         self._windows_changed_ids = []
+
+    def _listen_host_signals(self) -> None:
+        # goshos connects to workspace_manager and per-window unmanaged. GTK
+        # stand-ins: EWMH PropertyNotify on X11, ext-workspace-v1 on Wayland.
+        from ulauncher.modes.launcher.wayland_workspaces import ExtWorkspaceLiveWatch
+        from ulauncher.modes.launcher.x11_live import X11LiveWatch
+
+        x11 = X11LiveWatch()
+        if x11.start(self._notify):
+            self._x11 = x11
+        ext_ws = ExtWorkspaceLiveWatch()
+        if ext_ws.start(self._notify):
+            self._ext_ws = ext_ws
+
+    def _unlisten_host_signals(self) -> None:
+        if self._x11 is not None:
+            with contextlib.suppress(AttributeError, OSError, RuntimeError, TypeError):
+                self._x11.stop()
+            self._x11 = None
+        if self._ext_ws is not None:
+            with contextlib.suppress(AttributeError, OSError, RuntimeError, TypeError):
+                self._ext_ws.stop()
+            self._ext_ws = None

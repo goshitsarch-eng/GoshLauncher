@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from ulauncher.modes.launcher.live_search import (
     INTROSPECT_RUNNING_WATCHES,
     INTROSPECT_WINDOW_WATCHES,
@@ -108,3 +110,38 @@ def test_introspect_running_watches_cover_both_shell_names() -> None:
         assert path == "/org/gnome/Shell/Introspect"
         assert iface == "org.gnome.Shell.Introspect"
         assert member == "RunningApplicationsChanged"
+
+
+def test_watcher_starts_x11_and_ext_workspace_listeners(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[str] = []
+    stopped: list[str] = []
+
+    class _X11:
+        def start(self, _on_change: object) -> bool:
+            started.append("x11")
+            return True
+
+        def stop(self) -> None:
+            stopped.append("x11")
+
+    class _Ext:
+        def start(self, _on_change: object) -> bool:
+            started.append("ext")
+            return True
+
+        def stop(self) -> None:
+            stopped.append("ext")
+
+    monkeypatch.setattr("ulauncher.modes.launcher.x11_live.X11LiveWatch", _X11)
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.ExtWorkspaceLiveWatch", _Ext)
+    watcher = LiveSearchWatcher(
+        lambda: None,
+        list_windows=list,
+        poll_interval=0,
+        workspace_count=lambda: 1,
+        current_desktop=lambda: 0,
+    )
+    watcher.start()
+    assert started == ["x11", "ext"]
+    watcher.stop()
+    assert stopped == ["x11", "ext"]

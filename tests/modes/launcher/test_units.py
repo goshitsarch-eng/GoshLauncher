@@ -83,6 +83,10 @@ def test_goshos_unit_conversion_battery() -> None:
     assert convert_query("200 kcal to kj")["title"] == "836.8 kj"
     assert convert_query("1 kwh to kj")["title"] == "3600 kj"
     assert convert_query("100 w to kw")["title"] == "0.1 kw"
+    hp_kw = convert_query("1 hp to kw")
+    assert hp_kw is not None
+    assert hp_kw["title"].split()[1] == "kw"
+    assert abs(float(hp_kw["title"].split()[0]) - 0.746) < 0.001
     assert convert_query("1 cup to tbsp")["title"] == "16 tbsp"
     assert convert_query("3 tsp to tbsp")["title"] == "1 tbsp"
     assert round(float(convert_query("1 floz to ml")["title"].split()[0])) == 30

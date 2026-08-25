@@ -96,3 +96,16 @@ class TestRunWhenIdle:
         schedule = scheduling.run_when_idle(func, "arg1", "arg2", kw="value")
         schedule._trigger()
         func.assert_called_once_with("arg1", "arg2", kw="value")
+
+
+class TestWatchFd:
+    def test_creates_unix_fd_source(self, glib: MagicMock) -> None:
+        scheduling.watch_fd(7, Mock())
+        glib.unix_fd_source_new.assert_called_once()
+        fd = glib.unix_fd_source_new.call_args[0][0]
+        assert fd == 7
+
+    def test_returns_a_repeating_schedule(self) -> None:
+        schedule = scheduling.watch_fd(3, Mock())
+        assert isinstance(schedule, scheduling.Context)
+        assert schedule._trigger() is True

@@ -104,6 +104,30 @@ def pop_wayland_message(buf: bytes) -> tuple[tuple[int, int, bytes] | None, byte
     return (object_id, opcode, buf[8:size]), buf[size:]
 
 
+def recv_wayland_available(sock: Any, buf: bytes) -> tuple[list[tuple[int, int, bytes]], bytes]:
+    """Read pending Wayland messages without blocking. Leaves a partial header in buf."""
+    events: list[tuple[int, int, bytes]] = []
+    while True:
+        while True:
+            try:
+                message, buf = pop_wayland_message(buf)
+            except ValueError:
+                return events, b""
+            if message is None:
+                break
+            events.append(message)
+        try:
+            chunk = sock.recv(4096)
+        except (BlockingIOError, InterruptedError, TimeoutError):
+            break
+        except OSError:
+            break
+        if not chunk:
+            break
+        buf += chunk
+    return events, buf
+
+
 def wayland_socket_path(environ: Mapping[str, str] | None = None) -> str:
     env = os.environ if environ is None else environ
     display = env.get("WAYLAND_DISPLAY") or "wayland-0"

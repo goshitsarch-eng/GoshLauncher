@@ -8,10 +8,11 @@ Missing globals are a no-op so older Mutter can fall through to wmctrl/EWMH.
 
 from __future__ import annotations
 
+import contextlib
 import struct
 import time
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Callable
 
 from ulauncher.modes.launcher.wayland_toplevels import (
     CLIENT_ID_START,
@@ -24,6 +25,7 @@ from ulauncher.modes.launcher.wayland_toplevels import (
     _registry_globals,
     pack_wayland_message,
     pack_wayland_string,
+    recv_wayland_available,
     unpack_wayland_string,
     unpack_wayland_uint32_array,
 )
@@ -236,3 +238,101 @@ def activate_ext_workspace(
     finally:
         if owned:
             conn.close()
+
+
+def ext_workspace_events_are_live(events: Sequence[tuple[int, int, bytes]], manager_id: int) -> bool:
+    """True when a drained batch is a workspace count or active-desktop change.
+
+    Mutter sends handle STATE/WORKSPACE/REMOVED then manager DONE. DONE is the
+    goshos stand-in for both notify::n-workspaces and active-workspace-changed.
+    """
+    for object_id, opcode, _payload in events:
+        if object_id == manager_id and opcode in (EXT_WS_MANAGER_WORKSPACE, EXT_WS_MANAGER_DONE):
+            return True
+        if opcode in (EXT_WS_STATE, EXT_WS_REMOVED):
+            return True
+    return False
+
+
+class ExtWorkspaceLiveWatch:
+    """Keep ext-workspace-v1 open while the popup is up. No-op without the protocol."""
+
+    def __init__(self) -> None:
+        self._sock: Any = None
+        self._owned = False
+        self._manager_id = 0
+        self._buf = b""
+        self._source: Any = None
+        self._on_change: Callable[[], None] | None = None
+
+    def start(
+        self,
+        on_change: Callable[[], None],
+        environ: Mapping[str, str] | None = None,
+        sock: Any = None,
+        timeout: float = 0.25,
+    ) -> bool:
+        if self._sock is not None:
+            return True
+        conn, owned = _session(sock, environ)
+        if conn is None:
+            return False
+        bound: tuple[int, list[dict[str, Any]]] | None = None
+        try:
+            bound = _bind_and_list(conn, timeout)
+        except (OSError, struct.error, ValueError, TimeoutError):
+            if owned:
+                conn.close()
+            return False
+        if bound is None:
+            if owned:
+                conn.close()
+            return False
+        with contextlib.suppress(AttributeError, OSError):
+            conn.setblocking(False)
+        try:
+            fd = int(conn.fileno())
+        except (AttributeError, OSError, TypeError, ValueError):
+            if owned:
+                conn.close()
+            return False
+        self._on_change = on_change
+        self._sock = conn
+        self._owned = owned
+        self._manager_id = bound[0]
+        self._buf = b""
+        try:
+            from ulauncher.utils.scheduling import watch_fd
+
+            self._source = watch_fd(fd, self._on_readable)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+            self._sock = None
+            self._owned = False
+            self._manager_id = 0
+            self._on_change = None
+            if owned:
+                conn.close()
+            return False
+        return True
+
+    def stop(self) -> None:
+        if self._source is not None:
+            self._source.cancel()
+            self._source = None
+        if self._sock is not None and self._owned:
+            with contextlib.suppress(OSError, RuntimeError, TypeError):
+                self._sock.close()
+        self._sock = None
+        self._owned = False
+        self._manager_id = 0
+        self._buf = b""
+        self._on_change = None
+
+    def _on_readable(self) -> None:
+        sock = self._sock
+        on_change = self._on_change
+        if sock is None or on_change is None:
+            return
+        events, self._buf = recv_wayland_available(sock, self._buf)
+        if ext_workspace_events_are_live(events, self._manager_id):
+            on_change()

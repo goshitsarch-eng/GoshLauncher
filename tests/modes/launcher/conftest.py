@@ -22,3 +22,18 @@ def _reset_launcher_lookups() -> None:
     invalidate_bookmarks()
     invalidate_recent_files()
     reset_gnome_app_usage_cache()
+
+
+@pytest.fixture(autouse=True)
+def _no_host_live_watches(monkeypatch: pytest.MonkeyPatch) -> None:
+    # LiveSearchWatcher.start would otherwise open an X Display / Wayland
+    # socket during unit tests when python-xlib and xvfb are present.
+    class _NoHostWatch:
+        def start(self, _on_change: object, **_kwargs: object) -> bool:
+            return False
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr("ulauncher.modes.launcher.x11_live.X11LiveWatch", _NoHostWatch)
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.ExtWorkspaceLiveWatch", _NoHostWatch)

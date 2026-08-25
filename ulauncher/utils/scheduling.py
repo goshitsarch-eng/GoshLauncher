@@ -78,6 +78,17 @@ def interval(delay_sec: float, func: Callable[P, Any], *args: P.args, **kwargs: 
     return Context(GLib.timeout_source_new(int(delay_sec * 1000)), func, True, args, kwargs)
 
 
+def watch_fd(fd: int, func: Callable[P, Any], *args: P.args, **kwargs: P.kwargs) -> Context:
+    """
+    Runs func on the GLib main thread whenever fd is readable, hung up, or in error.
+
+    Used by live-search host watches (X11 PropertyNotify, ext-workspace-v1) so
+    compositor events do not need a Python thread.
+    """
+    condition = GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR
+    return Context(GLib.unix_fd_source_new(fd, condition), func, True, args, kwargs)
+
+
 def run_when_idle(func: Callable[P, Any], *args: P.args, **kwargs: P.kwargs) -> Context:
     """
     Runs func when the GLib main loop is idle, in the GLib main thread.
