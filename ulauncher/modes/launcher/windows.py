@@ -633,9 +633,42 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
     return windows
 
 
-def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
+def niri_workspace_idx_by_id(workspaces: Any) -> dict[Any, int]:
+    """Map niri workspace unique ids onto 1-based ``idx`` (per-output index)."""
+    if isinstance(workspaces, dict):
+        workspaces = workspaces.get("workspaces") or workspaces.get("items") or []
+    mapping: dict[Any, int] = {}
+    if not isinstance(workspaces, list):
+        return mapping
+    for item in workspaces:
+        if not isinstance(item, dict):
+            continue
+        ident = item.get("id")
+        if ident is None:
+            continue
+        number = _workspace_num(item.get("idx"))
+        if number is None or number < 1:
+            continue
+        mapping[ident] = number
+        mapping[str(ident)] = number
+    return mapping
+
+
+def _niri_window_desktop(workspace_id: Any, idx_by_id: Mapping[Any, int]) -> int:
+    if not idx_by_id:
+        return _compositor_workspace_desktop(workspace_id)
+    idx = idx_by_id.get(workspace_id)
+    if idx is None and workspace_id is not None:
+        idx = idx_by_id.get(str(workspace_id))
+    if idx is None:
+        return -1
+    return one_based_workspace_desktop(idx)
+
+
+def windows_from_niri_windows(payload: Any, workspaces: Any = None) -> list[WindowInfo]:
     if not isinstance(payload, list):
         return []
+    idx_by_id = niri_workspace_idx_by_id(workspaces)
     windows: list[WindowInfo] = []
     for item in payload:
         if not isinstance(item, dict):
@@ -647,7 +680,7 @@ def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
         app_id = str(item.get("app_id") or "")
         if not title and not app_id:
             continue
-        desktop = _compositor_workspace_desktop(item.get("workspace_id"))
+        desktop = _niri_window_desktop(item.get("workspace_id"), idx_by_id)
         try:
             pid = int(item.get("pid") or 0)
         except (TypeError, ValueError):
@@ -1081,7 +1114,10 @@ def _compositor_windows() -> list[WindowInfo]:
         payload = _json_command(argv)
         if payload is None:
             continue
-        parsed = parser(payload)
+        if argv == ["niri", "msg", "--json", "windows"]:
+            parsed = windows_from_niri_windows(payload, _json_command(["niri", "msg", "--json", "workspaces"]))
+        else:
+            parsed = parser(payload)
         if parsed:
             return parsed
     from ulauncher.modes.launcher.wayland_toplevels import list_ext_foreign_toplevels
