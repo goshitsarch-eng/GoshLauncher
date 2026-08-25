@@ -75,3 +75,5 @@ def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     assert "gir1.2-gtk-4.0" in script
     assert "gir1.2-adw-1" in script
     assert "libadwaita-1-0" in script
+    makefile = (ROOT / "makefile").read_text()
+    assert 'export PATH="/usr/sbin:/usr/bin:/sbin:/bin"' in makefile
