@@ -281,6 +281,15 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     )
     assert focused["new"] == 0
     assert focused["old"] == 1
+    focused_rows = windows_from_introspect_payload(
+        {
+            1: {"title": "Back", "wm-class": "old"},
+            2: {"title": "Front", "wm-class": "new", "has-focus": True},
+        }
+    )
+    by_focus = {row.title: row for row in focused_rows}
+    assert by_focus["Front"].user_time == 1
+    assert by_focus["Back"].user_time == 0
     sandboxed = windows_from_introspect_payload(
         {
             5: {

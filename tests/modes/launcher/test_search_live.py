@@ -39,6 +39,12 @@ def test_windows_fingerprint_changes_with_title() -> None:
     assert windows_fingerprint(first) != windows_fingerprint(second)
 
 
+def test_windows_fingerprint_changes_with_user_time() -> None:
+    first = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x", user_time=1)]
+    second = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x", user_time=9)]
+    assert windows_fingerprint(first) != windows_fingerprint(second)
+
+
 def test_live_search_fingerprint_includes_workspace_count() -> None:
     windows = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x")]
     same_windows = live_search_fingerprint(windows, 2)

@@ -8,7 +8,10 @@ from typing import Any, Callable
 from ulauncher.modes.launcher.search_live import live_search_fingerprint, windows_for_live_track
 from ulauncher.utils import scheduling
 
-_POLL_SEC = 0.8
+# goshos liveSearchWatcher is signal-driven (0ms). This is the GTK stand-in
+# while the popup is open: cheap enough to feel snappy, long enough to avoid
+# hammering Introspect/compositor IPC on every frame.
+LIVE_SEARCH_POLL_SEC = 0.25
 
 # goshos connects to global.display window-created and Shell.AppSystem
 # app-state-changed. Mutter exports those as WindowsChanged and
@@ -33,7 +36,7 @@ class LiveSearchWatcher:
         self,
         on_change: Callable[[], None],
         list_windows: Callable[[], list[Any]] | None = None,
-        poll_interval: float = _POLL_SEC,
+        poll_interval: float = LIVE_SEARCH_POLL_SEC,
         workspace_count: Callable[[], int | None] | None = None,
         current_desktop: Callable[[], int | str | None] | None = None,
     ) -> None:

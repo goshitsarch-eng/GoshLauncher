@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from ulauncher.modes.launcher.live_search import (
     INTROSPECT_RUNNING_WATCHES,
     INTROSPECT_WINDOW_WATCHES,
+    LIVE_SEARCH_POLL_SEC,
     LiveSearchWatcher,
 )
 
@@ -67,6 +68,28 @@ def test_watcher_notifies_when_current_desktop_changes() -> None:
     desktop["n"] = 1
     watcher.poll()
     assert events == [1]
+
+
+def test_watcher_notifies_when_window_recency_changes() -> None:
+    windows = [SimpleNamespace(wid="1", title="Term", desktop=0, wm_class="kgx", user_time=1)]
+    events: list[int] = []
+    watcher = LiveSearchWatcher(
+        lambda: events.append(1),
+        list_windows=lambda: list(windows),
+        poll_interval=0,
+        workspace_count=lambda: 2,
+        current_desktop=lambda: 0,
+    )
+    watcher.start()
+    watcher.poll()
+    assert events == []
+    windows[0].user_time = 9
+    watcher.poll()
+    assert events == [1]
+
+
+def test_default_poll_is_faster_than_a_second() -> None:
+    assert 0 < LIVE_SEARCH_POLL_SEC <= 0.3
 
 
 def test_introspect_window_watches_cover_both_shell_names() -> None:

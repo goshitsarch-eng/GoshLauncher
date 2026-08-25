@@ -38,6 +38,7 @@ def windows_fingerprint(windows: list[Any]) -> tuple[tuple[Any, ...], ...]:
                 getattr(win, "title", None),
                 getattr(win, "desktop", None),
                 getattr(win, "wm_class", None),
+                getattr(win, "user_time", None),
             )
         )
     return tuple(rows)

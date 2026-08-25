@@ -554,6 +554,7 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
                 gtk_app_id=gtk_app_id,
                 gtk_unique_bus_name=gtk_bus,
                 gtk_application_object_path=gtk_path,
+                user_time=1 if props.get("has-focus") or props.get("has_focus") else 0,
             )
         )
     return windows
