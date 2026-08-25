@@ -68,3 +68,9 @@ def test_goshos_pref_page_titles() -> None:
         assert view._engine_combo.get_model().get_n_items() == 9
     finally:
         view.unbind_settings()
+
+
+def test_prefs_window_default_size_matches_goshos() -> None:
+    from ulauncher.ui.preferences.preferences_window import WINDOW_DEFAULT_HEIGHT, WINDOW_DEFAULT_WIDTH
+
+    assert (WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT) == (680, 720)

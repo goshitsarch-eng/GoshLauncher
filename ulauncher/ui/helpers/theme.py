@@ -22,7 +22,6 @@ CSS_RESET = """
   padding: initial;
   text-shadow: inherit;
   transition: initial;
-  -icon-shadow: inherit;
   outline: initial;
 }
 """

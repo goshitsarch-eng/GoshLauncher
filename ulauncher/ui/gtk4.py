@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any, Iterator
 
 from gi.repository import Gdk, GLib, Gtk
+
+logger = logging.getLogger(__name__)
 
 
 def pack_start(box: Gtk.Box, child: Gtk.Widget, expand: bool = True, fill: bool = True, padding: int = 0) -> None:
@@ -96,8 +99,14 @@ def remove_css_class(widget: Gtk.Widget, class_name: str) -> None:
 
 def load_css_provider(css: str) -> Gtk.CssProvider:
     provider = Gtk.CssProvider()
+    provider.connect("parsing-error", _on_css_parsing_error)
     provider.load_from_data(css.encode())
     return provider
+
+
+def _on_css_parsing_error(_provider: Gtk.CssProvider, _section: object, error: object) -> None:
+    message = getattr(error, "message", None) or str(error)
+    logger.warning("GTK CSS parser: %s", message)
 
 
 def add_provider_to_display(provider: Gtk.CssProvider, priority: int = Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION) -> None:

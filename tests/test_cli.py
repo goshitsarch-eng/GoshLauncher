@@ -171,6 +171,17 @@ class TestCLIHelp:
         assert "Spotlight-goshos" in man
         assert "Seventeen looks" in man
 
+    def test_readme_describes_goshos_launcher(self) -> None:
+        from pathlib import Path
+
+        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
+        assert "file browser" not in readme.lower()
+        assert "custom color themes" not in readme.lower()
+        assert "Ctrl+Space" in readme
+        assert "Spotlight-goshos" in readme
+        assert "Seventeen looks" in readme
+        assert "GTK 4" in readme
+
     def test_subcommand_help_does_not_repeat_top_level_command_groups(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:
             cli.parse(["show", "--help"])

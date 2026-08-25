@@ -15,7 +15,7 @@ from ulauncher.ui.preferences.views.help import build_help_page
 from ulauncher.ui.preferences.views.preferences import PreferencesView
 from ulauncher.ui.preferences.views.shortcuts import ShortcutsView
 
-WINDOW_DEFAULT_WIDTH = 840
+WINDOW_DEFAULT_WIDTH = 680
 WINDOW_DEFAULT_HEIGHT = 720
 
 _CUSTOM_PAGES = (

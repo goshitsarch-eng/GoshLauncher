@@ -71,6 +71,12 @@ def test_get_themes__unusable_root_manifest__leaves_the_css_themes_alone(user_th
     assert sorted(get_themes()) == ["dark"]
 
 
+def test_css_reset_omits_gtk3_icon_shadow() -> None:
+    from ulauncher.ui.helpers.theme import CSS_RESET
+
+    assert "-icon-shadow" not in CSS_RESET
+
+
 def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:
     css = launcher_popup_css()
     assert "window.background" in css

@@ -111,6 +111,8 @@ def test_every_look_has_theme_css() -> None:
     assert len(ids) == 17
     for look_id in ids:
         assert f".gosh-theme-{look_id}" in text
+    assert "selection-background-color" not in text
+    assert ".input selection {" in text
 
 
 def test_hidden_search_icon_inset_follows_goshos_order() -> None:
