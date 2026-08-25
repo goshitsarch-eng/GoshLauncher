@@ -19,7 +19,7 @@ from ulauncher.modes.launcher.plan import (
     should_refresh_windows,
 )
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
-from ulauncher.modes.launcher.search_run import safe_provider_results
+from ulauncher.modes.launcher.search_run import run_isolated, safe_provider_results
 from ulauncher.modes.mode import Mode
 from ulauncher.utils import scheduling
 from ulauncher.utils.eventbus import EventBus
@@ -319,28 +319,29 @@ class LauncherMode(Mode):
             if name in buckets:
                 buckets[name].append(row)
 
-        if "url" in providers:
+        def collect_url() -> None:
             from ulauncher.modes.launcher.urls import match_url
 
             hit = match_url(q)
-            if hit:
-                from ulauncher.modes.launcher.paths import canonicalize_launch_uri
+            if not hit:
+                return
+            from ulauncher.modes.launcher.paths import canonicalize_launch_uri
 
-                url = canonicalize_launch_uri(str(hit["url"]))
-                if url:
-                    add(
-                        "url",
-                        {
-                            "kind": "url",
-                            "score": 200,
-                            "title": hit.get("label") or url,
-                            "description": hit.get("description") or "",
-                            "icon": hit.get("icon") or "web-browser-symbolic",
-                            "url": url,
-                        },
-                    )
+            url = canonicalize_launch_uri(str(hit["url"]))
+            if url:
+                add(
+                    "url",
+                    {
+                        "kind": "url",
+                        "score": 200,
+                        "title": hit.get("label") or url,
+                        "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "web-browser-symbolic",
+                        "url": url,
+                    },
+                )
 
-        if "path" in providers:
+        def collect_path() -> None:
             from ulauncher.modes.launcher.paths import search_path
 
             for hit in safe_provider_results(lambda: search_path(q)):
@@ -361,7 +362,7 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "places" in providers:
+        def collect_places() -> None:
             from ulauncher.modes.launcher.places import search_places
 
             for hit in safe_provider_results(lambda: search_places(q, cap)):
@@ -378,7 +379,7 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "bookmarks" in providers:
+        def collect_bookmarks() -> None:
             from ulauncher.modes.launcher.bookmarks import search_bookmarks
 
             for hit in safe_provider_results(lambda: search_bookmarks(q, cap)):
@@ -386,12 +387,12 @@ class LauncherMode(Mode):
                 if row:
                     add("bookmarks", row)
 
-        if "apps" in providers:
+        def collect_apps() -> None:
             from ulauncher.modes.launcher.apps import app_action_rows, app_row_description, app_window_count, match_apps
             from ulauncher.modes.launcher.windows import cached_windows
 
             matched = safe_provider_results(lambda: match_apps(q, cap))
-            open_windows = cached_windows()
+            open_windows = safe_provider_results(cached_windows)
             for app in matched:
                 actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
                 if not getattr(settings, "enable_app_actions", True):
@@ -413,11 +414,13 @@ class LauncherMode(Mode):
                     },
                 )
             if matched and getattr(settings, "enable_app_actions", True):
-                for action in app_action_rows(
-                    matched[0],
-                    cap,
-                    app_window_count(matched[0], open_windows),
-                    open_windows,
+                for action in safe_provider_results(
+                    lambda: app_action_rows(
+                        matched[0],
+                        cap,
+                        app_window_count(matched[0], open_windows),
+                        open_windows,
+                    )
                 ):
                     add(
                         "apps",
@@ -434,25 +437,26 @@ class LauncherMode(Mode):
                         },
                     )
 
-        if "calculator" in providers:
+        def collect_calculator() -> None:
             from ulauncher.modes.launcher.calculator import calculator_description, evaluate_arithmetic, format_number
 
             value = evaluate_arithmetic(q, allow_bare=(mode == "calculator"))
-            if value is not None:
-                formatted = format_number(value)
-                add(
-                    "calculator",
-                    {
-                        "kind": "calculator",
-                        "score": 95,
-                        "title": formatted,
-                        "description": calculator_description(value),
-                        "icon": "accessories-calculator-symbolic",
-                        "copy_text": formatted,
-                    },
-                )
+            if value is None:
+                return
+            formatted = format_number(value)
+            add(
+                "calculator",
+                {
+                    "kind": "calculator",
+                    "score": 95,
+                    "title": formatted,
+                    "description": calculator_description(value),
+                    "icon": "accessories-calculator-symbolic",
+                    "copy_text": formatted,
+                },
+            )
 
-        if "units" in providers:
+        def collect_units() -> None:
             from ulauncher.modes.launcher.units import convert_query
 
             hit = convert_query(q)
@@ -469,7 +473,7 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "color" in providers:
+        def collect_color() -> None:
             from ulauncher.modes.launcher.color import parse_color
 
             hit = parse_color(q)
@@ -486,27 +490,28 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "time" in providers:
+        def collect_time() -> None:
             from ulauncher.modes.launcher.clock import match_clock
 
             hit = match_clock(q)
-            if hit:
-                clock_icon = (
-                    "preferences-system-time-symbolic" if hit.get("kind") == "time" else "x-office-calendar-symbolic"
-                )
-                add(
-                    "time",
-                    {
-                        "kind": "clock",
-                        "score": 60,
-                        "title": hit["title"],
-                        "description": f"{hit['description']} · press Enter to copy",
-                        "icon": clock_icon,
-                        "copy_text": hit["copy_text"],
-                    },
-                )
+            if not hit:
+                return
+            clock_icon = (
+                "preferences-system-time-symbolic" if hit.get("kind") == "time" else "x-office-calendar-symbolic"
+            )
+            add(
+                "time",
+                {
+                    "kind": "clock",
+                    "score": 60,
+                    "title": hit["title"],
+                    "description": f"{hit['description']} · press Enter to copy",
+                    "icon": clock_icon,
+                    "copy_text": hit["copy_text"],
+                },
+            )
 
-        if "windows" in providers:
+        def collect_windows() -> None:
             from ulauncher.modes.launcher.windows import match_windows
 
             for win in safe_provider_results(lambda: match_windows(q, cap)):
@@ -524,7 +529,7 @@ class LauncherMode(Mode):
                 row["icon"] = win.get("icon") or "focus-windows-symbolic"
                 add("windows", row)
 
-        if "system" in providers:
+        def collect_system() -> None:
             from ulauncher.modes.launcher.system_actions import match_system_actions
 
             for hit in safe_provider_results(lambda: match_system_actions(q, cap)):
@@ -540,7 +545,7 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "settings" in providers:
+        def collect_settings() -> None:
             from ulauncher.modes.launcher.settings_panels import (
                 match_settings_panels,
                 settings_argv,
@@ -563,7 +568,7 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "files" in providers:
+        def collect_files() -> None:
             from ulauncher.modes.launcher.recents import search_recents
 
             for hit in safe_provider_results(lambda: search_recents(q, cap)):
@@ -571,7 +576,7 @@ class LauncherMode(Mode):
                 if row:
                     add("files", row)
 
-        if "command" in providers:
+        def collect_command() -> None:
             from ulauncher.modes.launcher.commands import search_command
 
             for hit in safe_provider_results(lambda: search_command(q)):
@@ -590,11 +595,11 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "web" in providers:
+        def collect_web() -> None:
             from ulauncher.modes.launcher.web import search_web
 
             engine_id = getattr(settings, "web_search_engine", "google")
-            for hit in search_web(q, engine_id):
+            for hit in safe_provider_results(lambda: search_web(q, engine_id)):
                 add(
                     "web",
                     {
@@ -607,22 +612,57 @@ class LauncherMode(Mode):
                     },
                 )
 
+        if "url" in providers:
+            run_isolated(collect_url)
+        if "path" in providers:
+            run_isolated(collect_path)
+        if "places" in providers:
+            run_isolated(collect_places)
+        if "bookmarks" in providers:
+            run_isolated(collect_bookmarks)
+        if "apps" in providers:
+            run_isolated(collect_apps)
+        if "calculator" in providers:
+            run_isolated(collect_calculator)
+        if "units" in providers:
+            run_isolated(collect_units)
+        if "color" in providers:
+            run_isolated(collect_color)
+        if "time" in providers:
+            run_isolated(collect_time)
+        if "windows" in providers:
+            run_isolated(collect_windows)
+        if "system" in providers:
+            run_isolated(collect_system)
+        if "settings" in providers:
+            run_isolated(collect_settings)
+        if "files" in providers:
+            run_isolated(collect_files)
+        if "command" in providers:
+            run_isolated(collect_command)
+        if "web" in providers:
+            run_isolated(collect_web)
+
         rows = [row for name in providers for row in buckets.get(name, [])]
         if web_fallback and not rows:
-            from ulauncher.modes.launcher.web import search_web
 
-            engine_id = getattr(settings, "web_search_engine", "google")
-            for hit in search_web(q, engine_id):
-                rows.append(
-                    {
-                        "kind": "web",
-                        "score": 10,
-                        "title": hit["title"],
-                        "description": hit.get("description") or "",
-                        "icon": hit.get("icon") or "web-browser-symbolic",
-                        "url": hit["url"],
-                    }
-                )
+            def collect_web_fallback() -> None:
+                from ulauncher.modes.launcher.web import search_web
+
+                engine_id = getattr(settings, "web_search_engine", "google")
+                for hit in safe_provider_results(lambda: search_web(q, engine_id)):
+                    rows.append(
+                        {
+                            "kind": "web",
+                            "score": 10,
+                            "title": hit["title"],
+                            "description": hit.get("description") or "",
+                            "icon": hit.get("icon") or "web-browser-symbolic",
+                            "url": hit["url"],
+                        }
+                    )
+
+            run_isolated(collect_web_fallback)
 
         return rows
 

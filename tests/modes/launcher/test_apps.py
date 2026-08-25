@@ -128,6 +128,19 @@ def test_new_window_and_desktop_action_titles() -> None:
     assert take_app_actions(["a"], 0) == []
 
 
+def test_app_action_rows_swallow_bad_action_list() -> None:
+    class Boom:
+        name = "Firefox"
+        app_id = "firefox.desktop"
+
+        @property
+        def actions(self) -> dict:
+            message = "vanished"
+            raise RuntimeError(message)
+
+    assert app_action_rows(Boom(), 6, window_count=0) == []
+
+
 def test_app_action_rows_hide_new_window_when_not_running() -> None:
     app = SimpleNamespace(
         name="Firefox",

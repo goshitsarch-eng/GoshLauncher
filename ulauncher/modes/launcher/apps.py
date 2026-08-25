@@ -441,6 +441,19 @@ def app_action_rows(
     window_count: int = 0,
     windows: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
+    try:
+        return _app_action_rows(app, limit, window_count, windows)
+    except Exception:
+        # a bad action list must not drop the app rows already scored
+        return []
+
+
+def _app_action_rows(
+    app: Any,
+    limit: int,
+    window_count: int,
+    windows: Sequence[Any] | None,
+) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     rows: list[dict[str, Any]] = []

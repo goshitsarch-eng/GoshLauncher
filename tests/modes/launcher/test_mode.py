@@ -749,6 +749,109 @@ def test_running_app_offers_new_window_action(monkeypatch: pytest.MonkeyPatch) -
     assert any(row.description == "Switch to application" for row in results)
 
 
+def _stub_typed_firefox(monkeypatch: pytest.MonkeyPatch, settings: object) -> None:
+    from ulauncher.utils.settings import Settings
+
+    app = SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        _executable="firefox",
+        actions={"launch": {"name": "Launch"}, "action:private": {"name": "Private"}},
+    )
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.match_apps", lambda _query, _limit: [app])
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", list)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.match_windows", lambda *_args, **_kwargs: [])
+
+
+def test_throwing_url_provider_still_shows_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    _stub_typed_firefox(monkeypatch, settings)
+
+    def boom(_query: str) -> None:
+        message = "url vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.urls.match_url", boom)
+    assert "app" in _kinds(_handle("firefox"))
+
+
+def test_throwing_window_list_still_shows_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    _stub_typed_firefox(monkeypatch, settings)
+
+    def boom() -> list:
+        message = "windows vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", boom)
+    kinds = _kinds(_handle("firefox"))
+    assert "app" in kinds
+    assert "app-action" in kinds
+
+
+def test_throwing_app_actions_keep_app_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    settings.enable_app_actions = True
+    _stub_typed_firefox(monkeypatch, settings)
+
+    def boom(*_args: object, **_kwargs: object) -> list:
+        message = "actions vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.app_action_rows", boom)
+    kinds = _kinds(_handle("firefox"))
+    assert "app" in kinds
+    assert "app-action" not in kinds
+
+
+def test_throwing_apps_still_show_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    settings.show_web_search = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+
+    def boom(_query: str, _limit: int) -> list:
+        message = "apps vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.match_apps", boom)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.match_windows",
+        lambda _query, _limit: [
+            {
+                "title": "Mozilla Firefox",
+                "description": "Workspace 1",
+                "icon": "firefox",
+                "wid": "0x1",
+                "pid": 11,
+                "wm_class": "firefox",
+                "kind": "focus",
+                "payload": "0x1",
+            }
+        ],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", list)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    assert "window" in _kinds(_handle("firefox"))
+    assert "app" not in _kinds(_handle("firefox"))
+
+
 def test_calculator_activate_copies_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[str, str]] = []
     monkeypatch.setattr(

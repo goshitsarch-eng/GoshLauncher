@@ -13,6 +13,14 @@ def safe_provider_results(run: Callable[[], Any]) -> list[Any]:
     return list(rows) if isinstance(rows, list) else []
 
 
+def run_isolated(run: Callable[[], Any]) -> None:
+    """goshos searchRun: a throwing provider must not hide later categories."""
+    try:
+        run()
+    except Exception:
+        return
+
+
 def append_provider_results(
     results: list[Any],
     run: Callable[..., Any],
