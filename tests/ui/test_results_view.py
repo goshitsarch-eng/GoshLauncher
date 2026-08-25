@@ -135,9 +135,11 @@ class TestResultsViewNavigation:
         pending = MagicMock()
         pending.result.highlightable = True
         pending.result.actions = {}
+        pending.result.name = "Checking path"
         ready = MagicMock()
         ready.result.highlightable = True
         ready.result.actions = {"activate": {"name": "Activate"}}
+        ready.result.name = "Firefox"
         view._widgets = cast("Any", [header, pending, ready])
         assert view._highlightable_indices() == [1, 2]
         assert view._nav_indices() == [2]
@@ -147,6 +149,7 @@ class TestResultsViewNavigation:
         assert view._index == 2
         view.select_jump(0)
         assert view._index == 1
+        assert [row.name for row in view.numbered_results()] == ["Checking path", "Firefox"]
 
 
 class TestResultsViewSelection:
@@ -197,8 +200,6 @@ class TestResultsViewStreaming:
     @pytest.fixture
     def view(self) -> ResultsView:
         settings = MagicMock()
-        no_jump_keys: list[str] = []
-        settings.get_jump_keys.return_value = no_jump_keys
         return ResultsView(settings, lambda *_: None, lambda *_: None)
 
     @staticmethod
@@ -236,3 +237,9 @@ class TestResultsViewStreaming:
         view.render(self._update(["a", "b"], query="q2"))
         assert view._user_selected is False
         assert view._index == 0
+
+    def test_render_keeps_every_provider_row(self, view: ResultsView) -> None:
+        names = [f"row-{index}" for index in range(40)]
+        view.render(self._update(names))
+        assert len(view._widgets) == 40
+        assert [widget.result.name for widget in view._widgets] == names

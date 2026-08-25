@@ -92,6 +92,10 @@ class ResultsView(Gtk.ScrolledWindow):
         self._select(index)
         self._user_selected = True
 
+    def numbered_results(self) -> list[Result]:
+        """Rows that carry 1-9 hints. Headers are not in this list, matching goshos."""
+        return [self._widgets[index].result for index in self._highlightable_indices()]
+
     def select_jump(self, jump_index: int) -> None:
         highlightable = self._highlightable_indices()
         if 0 <= jump_index < len(highlightable):
@@ -149,7 +153,7 @@ class ResultsView(Gtk.ScrolledWindow):
             self._widgets = []
             self._index = 0
 
-            result_list = update["results"][: self._limit()]
+            result_list = update["results"]
             self._has_wrapped_results = any(result.wrap for result in result_list)
             if not self._has_wrapped_results:
                 self.set_min_content_height(-1)
@@ -175,7 +179,7 @@ class ResultsView(Gtk.ScrolledWindow):
 
     def _append_results(self, update: ResultsUpdate) -> None:
         existing = len(self._widgets)
-        new_results = update["results"][: max(0, self._limit() - existing)]
+        new_results = update["results"]
         if not new_results:
             return
         if any(result.wrap for result in new_results):
@@ -190,14 +194,13 @@ class ResultsView(Gtk.ScrolledWindow):
     def _add_widgets(self, results: list[Result], query: Query, start_index: int) -> None:
         from ulauncher.ui.result_widget import ResultWidget
 
-        jump_keys = self._settings.get_jump_keys()
         jump_i = len(self._highlightable_indices())
         for offset, result in enumerate(results):
             jump_index = jump_i if result.highlightable else -1
             if jump_index >= 0:
                 jump_i += 1
             widget = ResultWidget(
-                result, start_index + offset, query, self.select, self._select_and_activate, jump_keys, jump_index
+                result, start_index + offset, query, self.select, self._select_and_activate, jump_index
             )
             self._widgets.append(widget)
             self._box.append(widget)
@@ -235,9 +238,6 @@ class ResultsView(Gtk.ScrolledWindow):
         if len(self._widgets) > self._index:
             return self._widgets[self._index]
         return None
-
-    def _limit(self) -> int:
-        return len(self._settings.get_jump_keys()) or 25
 
     def _index_for_name(self, name: str | None) -> int:
         for index, widget in enumerate(self._widgets):

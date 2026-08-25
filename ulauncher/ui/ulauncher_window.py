@@ -377,6 +377,13 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def _activate_clicked(self, alt: bool) -> None:
         self.activate_result(alt, fallback=False)
 
+    def _activate_numbered(self, index: int) -> None:
+        from ulauncher.modes.launcher.activate import indexed_activatable_result
+
+        chosen = indexed_activatable_result(self.results_view.numbered_results(), index)
+        if chosen:
+            self.get_app().activate_result(chosen, False)
+
     def _apply_move(self, delta: int) -> None:
         if delta <= -999:  # noqa: PLR2004
             self.results_view.go_home()
@@ -488,9 +495,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if action["type"] == "activate" and self.results_view.has_results:
             self.activate_result(alt)
             return True
-        if action["type"] == "activate-index" and self.results_view.has_results:
-            self.results_view.select_jump(int(action["index"]))
-            self.activate_result(False, fallback=False)
+        if action["type"] == "activate-index":
+            self._activate_numbered(int(action["index"]))
             return True
 
         if self.results_view.has_results:

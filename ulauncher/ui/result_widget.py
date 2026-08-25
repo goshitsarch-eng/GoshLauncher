@@ -23,7 +23,6 @@ class ResultWidget(Gtk.Box):
     index: int = 0
     query: Query
     result: Result
-    jump_keys: list[str]
     item_box: Gtk.Box
     item_container: Gtk.Box
     shortcut_label: Gtk.Label
@@ -37,14 +36,12 @@ class ResultWidget(Gtk.Box):
         query: Query,
         on_select: Callable[[int], None],
         on_activate: Callable[[int, bool], None],
-        jump_keys: list[str],
         jump_index: int = -1,
     ) -> None:
         self.result = result
         self.query = query
         self._on_select = on_select
         self._on_activate = on_activate
-        self.jump_keys = jump_keys
         self.widget_index = index
         text_scaling_factor = get_text_scaling_factor()
         from ulauncher.modes.launcher.looks import chrome_from_settings, icon_size_for_look

@@ -498,13 +498,6 @@ class PreferencesView:
             self.settings.terminal_command,
             self._on_terminal_changed,
         )
-        add_entry_row(
-            desktop,
-            "Jump keys",
-            "Characters used to jump directly to a result. Number hints (Alt+1-9) are the look chrome equivalent.",
-            self.settings.jump_keys,
-            self._on_jump_keys_changed,
-        )
         page.add(desktop)
         return page
 
@@ -701,9 +694,6 @@ class PreferencesView:
 
     def _on_recent_apps_changed(self, spin: Gtk.SpinButton) -> None:
         self.settings.save({"max_recent_apps": spin.get_value_as_int()})
-
-    def _on_jump_keys_changed(self, entry: Gtk.Entry) -> None:
-        self.settings.save({"jump_keys": entry.get_text()})
 
     def _on_terminal_changed(self, entry: Gtk.Entry) -> None:
         self.settings.save({"terminal_command": entry.get_text()})
