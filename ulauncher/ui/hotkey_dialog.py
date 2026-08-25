@@ -55,10 +55,10 @@ class HotkeyDialog(Gtk.Dialog):
 
     def close(self) -> None:  # type: ignore[override]
         self._hotkey = ""
-        self.hide()
+        self.set_visible(False)
 
     def save_and_close(self) -> None:
-        self.hide()
+        self.set_visible(False)
 
     def on_key_press(self, _controller: Gtk.EventControllerKey, keyval: int, _keycode: int, state: int) -> bool:
         from ulauncher.modes.launcher.shortcut import build_accelerator, is_modifier_key_name, modifiers_from_mask

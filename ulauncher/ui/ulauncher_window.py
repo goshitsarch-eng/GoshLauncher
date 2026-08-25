@@ -914,7 +914,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._cancel_refocus_idle()
         # hide before host disconnects so a throw cannot leave visible true
         if self.get_visible():
-            self.hide()
+            self.set_visible(False)
         self._destroy_backdrop()
         self._apply_unredirect(False)
         run_isolated_teardown(

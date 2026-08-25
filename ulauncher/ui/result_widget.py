@@ -163,11 +163,29 @@ class ResultWidget(Gtk.Box):
         if not isinstance(scrolled, Gtk.ScrolledWindow):
             return
         adjustment = scrolled.get_vadjustment()
-        viewport_height = scrolled.get_allocated_height()
+        viewport_height = scrolled.get_height()
         scroll_y = adjustment.get_value()
-        allocation = self.get_allocation()
+        row_y, row_height = self._row_offset_in_parent()
         # page_size is 0 before the first allocate; writing that offset jumps the list
-        adjustment.set_value(scroll_value_to_show_row(allocation.y, allocation.height, scroll_y, viewport_height))
+        adjustment.set_value(scroll_value_to_show_row(row_y, row_height, scroll_y, viewport_height))
+
+    def _row_offset_in_parent(self) -> tuple[float, float]:
+        row_height = float(self.get_height())
+        parent = self.get_parent()
+        compute = getattr(self, "compute_bounds", None)
+        if parent is None or not callable(compute):
+            return 0.0, row_height
+        ok, bounds = compute(parent)
+        if not ok or bounds is None:
+            return 0.0, row_height
+        get_y = getattr(bounds, "get_y", None)
+        if callable(get_y):
+            return float(get_y()), float(bounds.get_height())
+        origin = getattr(bounds, "origin", None)
+        size = getattr(bounds, "size", None)
+        if origin is not None and size is not None:
+            return float(origin.y), float(size.height)
+        return float(bounds.y), float(bounds.height)
 
     def highlight_name(self) -> None:
         if self.result.wrap:
