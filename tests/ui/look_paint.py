@@ -180,6 +180,38 @@ def _placeholder_label(entry: object) -> object:
     return entry
 
 
+def _placeholder_rgb(entry: object, expected: tuple[int, int, int]) -> tuple[int, int, int]:
+    last: Exception | None = None
+    targets = [_placeholder_label(entry), entry]
+    seen: set[int] = set()
+    for target in targets:
+        ident = id(target)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        try:
+            pixbuf = widget_pixbuf(target)
+            return _nearest_colored_rgb(pixbuf, expected)
+        except RuntimeError as exc:
+            last = exc
+    if last is not None:
+        raise last
+    msg = "placeholder produced no colored pixels"
+    raise RuntimeError(msg)
+
+
+def _placeholder_rgb_retry(entry: object, expected: tuple[int, int, int], tries: int = 24) -> tuple[int, int, int]:
+    last: Exception | None = None
+    for _ in range(tries):
+        try:
+            return _placeholder_rgb(entry, expected)
+        except RuntimeError as exc:
+            last = exc
+            pump(4)
+    assert last is not None
+    raise last
+
+
 def sample_look(look_id: str) -> dict[str, tuple[int, int, int]]:
     from gi.repository import GLib
 
@@ -547,9 +579,7 @@ def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[in
         if mapped["ok"] and entry.get_width() > 40 and entry.get_height() > 8:
             break
     try:
-        target = _placeholder_label(entry)
-        pixbuf = widget_pixbuf_retry(target)
-        return _nearest_colored_rgb(pixbuf, expected)
+        return _placeholder_rgb_retry(entry, expected)
     finally:
         win.close()
         pump(8)
@@ -563,6 +593,9 @@ def sample_popup_placeholder(look_id: str, expected: tuple[int, int, int]) -> tu
     restyle_popup(win, look_id)
     entry = win.prompt_input  # type: ignore[attr-defined]
     entry.set_text("")
+    present = getattr(win, "present", None)
+    if callable(present):
+        present()
     ctx = GLib.MainContext.default()
     deadline = GLib.get_monotonic_time() + 2_000_000
     while GLib.get_monotonic_time() < deadline:
@@ -570,6 +603,4 @@ def sample_popup_placeholder(look_id: str, expected: tuple[int, int, int]) -> tu
         if entry.get_width() > 40 and entry.get_height() > 8 and not entry.get_text():
             pump(8)
             break
-    target = _placeholder_label(entry)
-    pixbuf = widget_pixbuf_retry(target)
-    return _nearest_colored_rgb(pixbuf, expected)
+    return _placeholder_rgb_retry(entry, expected)
