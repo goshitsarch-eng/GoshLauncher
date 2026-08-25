@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ulauncher.modes.launcher.live_search import INTROSPECT_WINDOW_WATCHES, LiveSearchWatcher
+from ulauncher.modes.launcher.live_search import (
+    INTROSPECT_RUNNING_WATCHES,
+    INTROSPECT_WINDOW_WATCHES,
+    LiveSearchWatcher,
+)
 
 
 def test_watcher_notifies_when_window_list_changes() -> None:
@@ -72,3 +76,12 @@ def test_introspect_window_watches_cover_both_shell_names() -> None:
         assert path == "/org/gnome/Shell/Introspect"
         assert iface == "org.gnome.Shell.Introspect"
         assert member == "WindowsChanged"
+
+
+def test_introspect_running_watches_cover_both_shell_names() -> None:
+    dests = {row[0] for row in INTROSPECT_RUNNING_WATCHES}
+    assert dests == {"org.gnome.Shell.Introspect", "org.gnome.Shell"}
+    for _dest, path, iface, member in INTROSPECT_RUNNING_WATCHES:
+        assert path == "/org/gnome/Shell/Introspect"
+        assert iface == "org.gnome.Shell.Introspect"
+        assert member == "RunningApplicationsChanged"

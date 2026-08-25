@@ -10,11 +10,21 @@ from ulauncher.utils import scheduling
 
 _POLL_SEC = 0.8
 
-# goshos connects to global.display window-created. Mutter exports the same
-# change as WindowsChanged on Introspect; some sessions own it on org.gnome.Shell.
+# goshos connects to global.display window-created and Shell.AppSystem
+# app-state-changed. Mutter exports those as WindowsChanged and
+# RunningApplicationsChanged on Introspect; some sessions own it on org.gnome.Shell.
 INTROSPECT_WINDOW_WATCHES = (
     ("org.gnome.Shell.Introspect", "/org/gnome/Shell/Introspect", "org.gnome.Shell.Introspect", "WindowsChanged"),
     ("org.gnome.Shell", "/org/gnome/Shell/Introspect", "org.gnome.Shell.Introspect", "WindowsChanged"),
+)
+INTROSPECT_RUNNING_WATCHES = (
+    (
+        "org.gnome.Shell.Introspect",
+        "/org/gnome/Shell/Introspect",
+        "org.gnome.Shell.Introspect",
+        "RunningApplicationsChanged",
+    ),
+    ("org.gnome.Shell", "/org/gnome/Shell/Introspect", "org.gnome.Shell.Introspect", "RunningApplicationsChanged"),
 )
 
 
@@ -127,7 +137,8 @@ class LiveSearchWatcher:
             self._apps_handler = 0
 
     def _listen_shell_windows(self) -> None:
-        # goshos uses global.display window-created; GTK gets WindowsChanged from Mutter introspect
+        # goshos uses window-created and AppSystem app-state-changed; GTK gets
+        # WindowsChanged and RunningApplicationsChanged from Mutter introspect
         try:
             from ulauncher.gi import Gio
 
@@ -138,7 +149,7 @@ class LiveSearchWatcher:
             return
         self._bus = bus
         self._windows_changed_ids = []
-        for dest, path, iface, member in INTROSPECT_WINDOW_WATCHES:
+        for dest, path, iface, member in INTROSPECT_WINDOW_WATCHES + INTROSPECT_RUNNING_WATCHES:
             try:
                 watch_id = bus.signal_subscribe(
                     dest,
