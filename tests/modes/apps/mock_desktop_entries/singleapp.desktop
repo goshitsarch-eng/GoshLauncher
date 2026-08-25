@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=SingleApp
+Comment=One window only
+Exec=true
+Icon=dialog-yes
+Type=Application
+X-GNOME-SingleWindow=true

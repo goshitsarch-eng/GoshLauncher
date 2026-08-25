@@ -13,11 +13,25 @@ from ulauncher.modes.launcher.scroll_view import scroll_value_to_show_row
 from ulauncher.ui import gtk4
 from ulauncher.ui.helpers.monitor import get_text_scaling_factor
 from ulauncher.ui.helpers.text_highlighter import highlight_text
-from ulauncher.ui.load_icon_surface import load_icon_paintable
+from ulauncher.ui.load_icon_surface import DEFAULT_EXE_ICON, load_icon_paintable
 
 ELLIPSIZE_MIN_LENGTH = 6
 ELLIPSIZE_FORCE_AT_LENGTH = 20
 logger = logging.getLogger(__name__)
+
+
+def _paintable_for_result(result: Result, icon_size: int, scale: int) -> Any:
+    """goshos resultIcon: a throwing get_icon still paints the row with a fallback."""
+    from ulauncher.modes.launcher.result_icon import result_icon_name
+
+    name = result_icon_name(result)
+    try:
+        return load_icon_paintable(name, icon_size, scale)
+    except Exception:  # noqa: BLE001
+        try:
+            return load_icon_paintable(DEFAULT_EXE_ICON, icon_size, scale)
+        except Exception:  # noqa: BLE001
+            return None
 
 
 class ResultWidget(Gtk.Box):
@@ -92,9 +106,9 @@ class ResultWidget(Gtk.Box):
         if should_build_result_icon(show_icons):
             icon = Gtk.Image()
             icon.set_pixel_size(icon_size)
-            icon.set_from_paintable(
-                load_icon_paintable(result.icon or "image-missing", icon_size, self.get_scale_factor())
-            )
+            paintable = _paintable_for_result(result, icon_size, self.get_scale_factor())
+            if paintable is not None:
+                icon.set_from_paintable(paintable)
             gtk4.add_css_class(icon, "item-icon")
             gtk4.pack_start(item_container, icon, False, True, 0)
             self.item_icon = icon
@@ -179,20 +193,30 @@ class ResultWidget(Gtk.Box):
     def _row_offset_in_parent(self) -> tuple[float, float]:
         row_height = float(self.get_height())
         parent = self.get_parent()
-        compute = getattr(self, "compute_bounds", None)
-        if parent is None or not callable(compute):
+        if not isinstance(parent, Gtk.Widget):
             return 0.0, row_height
-        ok, bounds = compute(parent)
+        ok, bounds = gtk4.widget_bounds(self, parent)
         if not ok or bounds is None:
             return 0.0, row_height
         get_y = getattr(bounds, "get_y", None)
-        if callable(get_y):
-            return float(get_y()), float(bounds.get_height())
+        get_height = getattr(bounds, "get_height", None)
+        if callable(get_y) and callable(get_height):
+            y = get_y()
+            height = get_height()
+            if isinstance(y, (int, float)) and isinstance(height, (int, float)):
+                return float(y), float(height)
         origin = getattr(bounds, "origin", None)
         size = getattr(bounds, "size", None)
         if origin is not None and size is not None:
-            return float(origin.y), float(size.height)
-        return float(bounds.y), float(bounds.height)
+            y = getattr(origin, "y", None)
+            height = getattr(size, "height", None)
+            if isinstance(y, (int, float)) and isinstance(height, (int, float)):
+                return float(y), float(height)
+        y = getattr(bounds, "y", None)
+        height = getattr(bounds, "height", None)
+        if isinstance(y, (int, float)) and isinstance(height, (int, float)):
+            return float(y), float(height)
+        return 0.0, row_height
 
     def highlight_name(self) -> None:
         if self.result.wrap:

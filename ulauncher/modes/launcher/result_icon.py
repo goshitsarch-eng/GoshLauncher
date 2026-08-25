@@ -41,3 +41,14 @@ def result_icon_source(result: Any) -> dict[str, Any]:
     if icon:
         return {"gicon": icon}
     return {"icon_name": "application-x-executable-symbolic"}
+
+
+def result_icon_name(result: Any) -> str:
+    source = result_icon_source(result)
+    name = source.get("icon_name")
+    if isinstance(name, str) and name:
+        return name
+    icon = source.get("gicon")
+    if isinstance(icon, str) and icon:
+        return icon
+    return "application-x-executable-symbolic"

@@ -53,9 +53,17 @@ if tray_icon_lib is None:
 if getattr(Gtk, "Menu", None) is None and tray_icon_lib == "AyatanaIndicator":
     tray_icon_lib = None
 
+_GtkMenu = getattr(Gtk, "Menu", None)
+_GtkMenuItem = getattr(Gtk, "MenuItem", None)
+_GtkSeparatorMenuItem = getattr(Gtk, "SeparatorMenuItem", None)
 
-def _create_menu_item(label: str, handler: Callable[[Any], None]) -> Gtk.MenuItem:
-    menu_item = Gtk.MenuItem(label=label)
+
+def _create_menu_item(label: str, handler: Callable[[Any], None]) -> Any:
+    factory = _GtkMenuItem
+    if factory is None:
+        msg = "Gtk.MenuItem is unavailable"
+        raise RuntimeError(msg)
+    menu_item = factory(label=label)
     menu_item.connect("activate", handler)
     return menu_item
 
@@ -79,16 +87,18 @@ class TrayIcon(GObject.Object):
         super().__init__(*args, **kwargs)
         settings = Settings.load()
         menu = None
-        show_menu_item: Gtk.MenuItem | None = None
-        gtk_has_menu = getattr(Gtk, "Menu", None) is not None
+        show_menu_item: Any | None = None
+        menu_type = _GtkMenu
+        separator_type = _GtkSeparatorMenuItem
+        gtk_has_menu = menu_type is not None
         backend = preferred_tray_backend(tray_icon_lib, gtk_has_menu)
-        if backend in {"XApp", "AyatanaIndicator"} and gtk_has_menu:
-            menu = Gtk.Menu()
+        if backend in {"XApp", "AyatanaIndicator"} and menu_type is not None and separator_type is not None:
+            menu = menu_type()
             show_menu_item = _create_menu_item(show_launcher_label, lambda *_: events.emit("app:show_launcher"))
             menu.append(show_menu_item)
             menu.append(_create_menu_item("Preferences", lambda *_: events.emit("app:show_preferences")))
             menu.append(_create_menu_item("About", lambda *_: events.emit("app:show_preferences", "about")))
-            menu.append(Gtk.SeparatorMenuItem())
+            menu.append(separator_type())
             menu.append(_create_menu_item("Exit", lambda *_: events.emit("app:quit")))
             gtk4.show_all(menu)
 
@@ -126,11 +136,11 @@ class TrayIcon(GObject.Object):
             self.xapp_indicator.connect("activate", lambda *_: events.emit("app:show_launcher"))
 
         elif backend == "AyatanaIndicator":
-            app_status = AyatanaIndicator.IndicatorCategory.APPLICATION_STATUS
+            app_status: Any = AyatanaIndicator.IndicatorCategory.APPLICATION_STATUS
             self.aya_indicator = AyatanaIndicator.Indicator.new(
                 "ulauncher",
                 icon_name,
-                app_status,  # pyrefly: ignore[bad-argument-type]
+                app_status,
             )
             if icon_dir:
                 self.aya_indicator.set_icon_theme_path(icon_dir)

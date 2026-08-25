@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Iterator, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any, Callable, Iterator
 
 from ulauncher.internals import effects
 from ulauncher.internals.query import Query
@@ -9,6 +10,7 @@ from ulauncher.internals.result import Result
 from ulauncher.modes.launcher.looks import chrome_from_settings
 from ulauncher.modes.launcher.plan import (
     flags_from_settings,
+    is_active_search_query,
     merge_empty_suggestions,
     plan_search,
     should_refresh_bookmarks,
@@ -18,7 +20,7 @@ from ulauncher.modes.launcher.plan import (
     should_refresh_windows,
 )
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
-from ulauncher.modes.launcher.search_run import safe_provider_results
+from ulauncher.modes.launcher.search_run import run_isolated, safe_provider_results
 from ulauncher.modes.mode import Mode
 from ulauncher.utils import scheduling
 from ulauncher.utils.eventbus import EventBus
@@ -36,8 +38,9 @@ class LauncherMode(Mode):
         self._lookup_idle: Any = None
         self._paint_callback: Callable[[effects.EffectMessage], None] | None = None
         self._paint_planned: dict[str, Any] | None = None
+        self._paint_query = ""
         self._paint_settings: Settings | None = None
-        self._paint_chrome: dict[str, Any] | None = None
+        self._paint_chrome: Mapping[str, Any] | None = None
         self._accept_paint = False
 
     def matches_query_str(self, query_str: str) -> bool:
@@ -63,6 +66,9 @@ class LauncherMode(Mode):
         planned = plan_search(str(query), flags)
         self._paint_callback = callback
         self._paint_planned = planned
+        # goshos shouldRunAsyncPaint(isActiveSearchQuery(_lastQuery)): the entry
+        # text, not plan.query. `.` / `$` / `#` strip to "" but are still a search.
+        self._paint_query = str(query)
         self._paint_settings = settings
         self._paint_chrome = chrome
         self._accept_paint = True
@@ -113,10 +119,9 @@ class LauncherMode(Mode):
         planned = self._paint_planned
         settings = self._paint_settings
         chrome = self._paint_chrome
-        query_active = planned is not None and bool(planned.get("query"))
         if callback is None or planned is None or settings is None or chrome is None:
             return
-        if not should_run_async_paint(query_active, self._accept_paint):
+        if not should_run_async_paint(is_active_search_query(self._paint_query), self._accept_paint):
             return
         callback(effects.render_results(self._results_for_plan(planned, settings, chrome)))
 
@@ -136,12 +141,62 @@ class LauncherMode(Mode):
             self._lookup_idle.cancel()
             self._run_repaint()
 
+    def reject_async_paint(self) -> None:
+        """goshos close: bump load ids and renderer.destroy so in-flight Gio cannot repaint."""
+        self._accept_paint = False
+        idle = self._lookup_idle
+        self._lookup_idle = None
+        self._paint_callback = None
+        self._paint_planned = None
+        self._paint_query = ""
+        self._paint_settings = None
+        self._paint_chrome = None
+        if idle is not None:
+            idle.cancel()
+        from ulauncher.modes.launcher.bookmarks import invalidate_bookmarks
+        from ulauncher.modes.launcher.commands import invalidate_command_lookup
+        from ulauncher.modes.launcher.paths import invalidate_path_lookup
+        from ulauncher.modes.launcher.recents import invalidate_recent_files
+
+        invalidate_path_lookup()
+        invalidate_command_lookup()
+        invalidate_bookmarks()
+        invalidate_recent_files()
+        # goshos close/open does not wipe searchWindows. Keeping the snapshot
+        # lets empty-state paint windows on the first frame instead of waiting
+        # for another compositor round-trip after every dismiss.
+
+    def _drop_typed_async_paint(self) -> None:
+        """goshos _showEmptyState: bump path/command load ids and drop the pending Gio idle.
+
+        Clearing the query never calls handle_query, so _paint_planned would still be the
+        previous ~/ path. An idle scheduled before the delete would then paint that row
+        over frequent apps. Bookmarks, recents, and windows stay; empty-state uses them.
+        Async paints also key off _paint_query (the entry text), matching goshos
+        isActiveSearchQuery(_lastQuery) rather than the stripped plan query.
+        """
+        idle = self._lookup_idle
+        self._lookup_idle = None
+        self._paint_callback = None
+        self._paint_planned = None
+        self._paint_query = ""
+        self._paint_settings = None
+        self._paint_chrome = None
+        if idle is not None:
+            idle.cancel()
+        from ulauncher.modes.launcher.commands import invalidate_command_lookup
+        from ulauncher.modes.launcher.paths import invalidate_path_lookup
+
+        invalidate_path_lookup()
+        invalidate_command_lookup()
+
     def get_home_results(self, limit: int) -> Sequence[Result]:
+        self._drop_typed_async_paint()
         settings = Settings.load()
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []
-        from ulauncher.modes.launcher.apps import app_row_description, app_window_count, home_apps
-        from ulauncher.modes.launcher.windows import cached_windows, ensure_windows
+        from ulauncher.modes.launcher.apps import home_apps
+        from ulauncher.modes.launcher.windows import cached_windows
 
         chrome = chrome_from_settings(settings)
         flags = flags_from_settings(settings)
@@ -151,40 +206,31 @@ class LauncherMode(Mode):
         # max_recent_apps is leftover Ulauncher JSON; goshos caps both empty-state
         # lists with the same max-results as search categories.
         need_windows = bool(flags.get("windows") or flags.get("apps"))
-        open_windows = cached_windows() if need_windows else []
+        open_windows: list[Any] = safe_provider_results(cached_windows) if need_windows else []
         if need_windows:
-            ensure_windows(lambda: _events.emit("app:reload_query"))
+            safe_provider_results(_watch_empty_windows)
         app_rows: list[dict[str, Any]] = []
+        app_source: list[Any] = []
         if flags.get("apps"):
-            for app in home_apps(limit):
-                app_rows.append(
-                    {
-                        "kind": "app",
-                        "title": app.name,
-                        "description": app_row_description(app_window_count(app, open_windows)),
-                        "icon": app.icon,
-                        "app_id": app.app_id,
-                    }
-                )
+            app_source = safe_provider_results(lambda: list(home_apps(limit)))
+            for app in app_source:
+                row = _empty_app_row(app, open_windows)
+                if row is not None:
+                    app_rows.append(row)
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
-            for win in open_windows[:limit]:
-                if win.sticky or win.desktop < 0:
-                    workspace = "On all workspaces"
+            # goshos runEmptySuggestions: searchWindows('', maxResults)
+            icon_apps: Sequence[Any] = app_source
+            win_rows = _empty_window_hits(open_windows, icon_apps, limit)
+            if any(row.get("icon") == "focus-windows-symbolic" for row in win_rows):
+                from ulauncher.modes.launcher.apps import iter_apps
+
+                try:
+                    icon_apps = list(iter_apps())
+                except Exception:
+                    logger.debug("Desktop apps unavailable for empty-state window icons", exc_info=True)
                 else:
-                    workspace = f"Workspace {win.desktop + 1}"
-                win_rows.append(
-                    {
-                        "kind": "window",
-                        "title": win.title or win.wm_class,
-                        "description": workspace,
-                        "icon": "focus-windows-symbolic",
-                        "wid": win.wid,
-                        "pid": win.pid,
-                        "wm_class": win.wm_class,
-                        "window_kind": "focus",
-                    }
-                )
+                    win_rows = _empty_window_hits(open_windows, icon_apps, limit)
         merged = merge_empty_suggestions(order, win_rows, app_rows, limit)
         return list(self._materialize(merged, chrome, headers=False))
 
@@ -213,7 +259,11 @@ class LauncherMode(Mode):
                 return
             action_name = payload.get("action_name")
             launched = False
-            if action_id.startswith(ACTION_PREFIX):
+            if payload.get("synthetic_new_window"):
+                from ulauncher.modes.launcher.apps import open_new_window
+
+                launched = open_new_window(app)
+            elif action_id.startswith(ACTION_PREFIX):
                 launched = launch_app(app_id, action_name=action_id[len(ACTION_PREFIX) :])
             elif action_name:
                 launched = launch_app(app_id, action_name=str(action_name))
@@ -298,7 +348,7 @@ class LauncherMode(Mode):
             return
         callback(effects.do_nothing())
 
-    def _results_for_plan(self, planned: dict[str, Any], settings: Settings, chrome: dict[str, Any]) -> list[Result]:
+    def _results_for_plan(self, planned: dict[str, Any], settings: Settings, chrome: Mapping[str, Any]) -> list[Result]:
         rows = list(self._collect(planned, settings))
         show_headers = bool(chrome.get("show_headers")) and planned["mode"] == "all"
         return list(self._materialize(rows, chrome, headers=show_headers))
@@ -315,28 +365,29 @@ class LauncherMode(Mode):
             if name in buckets:
                 buckets[name].append(row)
 
-        if "url" in providers:
+        def collect_url() -> None:
             from ulauncher.modes.launcher.urls import match_url
 
             hit = match_url(q)
-            if hit:
-                from ulauncher.modes.launcher.paths import canonicalize_launch_uri
+            if not hit:
+                return
+            from ulauncher.modes.launcher.paths import canonicalize_launch_uri
 
-                url = canonicalize_launch_uri(str(hit["url"]))
-                if url:
-                    add(
-                        "url",
-                        {
-                            "kind": "url",
-                            "score": 200,
-                            "title": hit.get("label") or url,
-                            "description": hit.get("description") or "",
-                            "icon": hit.get("icon") or "web-browser-symbolic",
-                            "url": url,
-                        },
-                    )
+            url = canonicalize_launch_uri(str(hit["url"]))
+            if url:
+                add(
+                    "url",
+                    {
+                        "kind": "url",
+                        "score": 200,
+                        "title": hit.get("label") or url,
+                        "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "web-browser-symbolic",
+                        "url": url,
+                    },
+                )
 
-        if "path" in providers:
+        def collect_path() -> None:
             from ulauncher.modes.launcher.paths import search_path
 
             for hit in safe_provider_results(lambda: search_path(q)):
@@ -349,34 +400,32 @@ class LauncherMode(Mode):
                         "description": hit.get("description") or "",
                         "icon": hit.get("icon") or "folder-symbolic",
                         "path": hit["path"],
+                        "id": hit.get("id") or hit["path"],
                         "in_terminal": bool(hit.get("in_terminal")),
                         "exists": hit.get("exists", True),
                         "checking": bool(hit.get("checking")),
+                        "activatable": hit.get("activatable", True) is not False,
                     },
                 )
 
-        if "places" in providers:
-            from ulauncher.modes.launcher.places import match_places
+        def collect_places() -> None:
+            from ulauncher.modes.launcher.places import search_places
 
-            for index, hit in enumerate(safe_provider_results(lambda: match_places(q))[:cap]):
+            for hit in safe_provider_results(lambda: search_places(q, cap)):
                 add(
                     "places",
                     {
                         "kind": "place",
-                        "score": 80,
+                        "score": 79 if hit.get("in_terminal") else 80,
                         "title": hit["title"],
                         "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "folder-symbolic",
                         "path": hit["path"],
-                        "in_terminal": False,
+                        "in_terminal": bool(hit.get("in_terminal")),
                     },
                 )
-                if index == 0:
-                    from ulauncher.modes.launcher.paths import terminal_row_meta
 
-                    term = terminal_row_meta(str(hit["path"]))
-                    add("places", {"kind": "path", "score": 79, **term})
-
-        if "bookmarks" in providers:
+        def collect_bookmarks() -> None:
             from ulauncher.modes.launcher.bookmarks import search_bookmarks
 
             for hit in safe_provider_results(lambda: search_bookmarks(q, cap)):
@@ -384,12 +433,12 @@ class LauncherMode(Mode):
                 if row:
                     add("bookmarks", row)
 
-        if "apps" in providers:
+        def collect_apps() -> None:
             from ulauncher.modes.launcher.apps import app_action_rows, app_row_description, app_window_count, match_apps
             from ulauncher.modes.launcher.windows import cached_windows
 
             matched = safe_provider_results(lambda: match_apps(q, cap))
-            open_windows = cached_windows()
+            open_windows = safe_provider_results(cached_windows)
             for app in matched:
                 actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
                 if not getattr(settings, "enable_app_actions", True):
@@ -411,7 +460,14 @@ class LauncherMode(Mode):
                     },
                 )
             if matched and getattr(settings, "enable_app_actions", True):
-                for action in app_action_rows(matched[0], cap, app_window_count(matched[0], open_windows)):
+                for action in safe_provider_results(
+                    lambda: app_action_rows(
+                        matched[0],
+                        cap,
+                        app_window_count(matched[0], open_windows),
+                        open_windows,
+                    )
+                ):
                     add(
                         "apps",
                         {
@@ -419,32 +475,34 @@ class LauncherMode(Mode):
                             "score": 69,
                             "title": action["title"],
                             "description": action["description"],
-                            "icon": action.get("icon") or "application-x-executable",
+                            "icon": action.get("icon") or "application-x-executable-symbolic",
                             "app_id": action["app_id"],
                             "action_name": action["action_name"],
+                            "synthetic_new_window": bool(action.get("synthetic_new_window")),
                             "actions": {"activate": {"name": "Activate"}},
                         },
                     )
 
-        if "calculator" in providers:
+        def collect_calculator() -> None:
             from ulauncher.modes.launcher.calculator import calculator_description, evaluate_arithmetic, format_number
 
             value = evaluate_arithmetic(q, allow_bare=(mode == "calculator"))
-            if value is not None:
-                formatted = format_number(value)
-                add(
-                    "calculator",
-                    {
-                        "kind": "calculator",
-                        "score": 95,
-                        "title": formatted,
-                        "description": calculator_description(value),
-                        "icon": "accessories-calculator-symbolic",
-                        "copy_text": formatted,
-                    },
-                )
+            if value is None:
+                return
+            formatted = format_number(value)
+            add(
+                "calculator",
+                {
+                    "kind": "calculator",
+                    "score": 95,
+                    "title": formatted,
+                    "description": calculator_description(value),
+                    "icon": "accessories-calculator-symbolic",
+                    "copy_text": formatted,
+                },
+            )
 
-        if "units" in providers:
+        def collect_units() -> None:
             from ulauncher.modes.launcher.units import convert_query
 
             hit = convert_query(q)
@@ -461,7 +519,7 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "color" in providers:
+        def collect_color() -> None:
             from ulauncher.modes.launcher.color import parse_color
 
             hit = parse_color(q)
@@ -478,27 +536,28 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "time" in providers:
+        def collect_time() -> None:
             from ulauncher.modes.launcher.clock import match_clock
 
             hit = match_clock(q)
-            if hit:
-                clock_icon = (
-                    "preferences-system-time-symbolic" if hit.get("kind") == "time" else "x-office-calendar-symbolic"
-                )
-                add(
-                    "time",
-                    {
-                        "kind": "clock",
-                        "score": 60,
-                        "title": hit["title"],
-                        "description": f"{hit['description']} · press Enter to copy",
-                        "icon": clock_icon,
-                        "copy_text": hit["copy_text"],
-                    },
-                )
+            if not hit:
+                return
+            clock_icon = (
+                "preferences-system-time-symbolic" if hit.get("kind") == "time" else "x-office-calendar-symbolic"
+            )
+            add(
+                "time",
+                {
+                    "kind": "clock",
+                    "score": 60,
+                    "title": hit["title"],
+                    "description": f"{hit['description']} · press Enter to copy",
+                    "icon": clock_icon,
+                    "copy_text": hit["copy_text"],
+                },
+            )
 
-        if "windows" in providers:
+        def collect_windows() -> None:
             from ulauncher.modes.launcher.windows import match_windows
 
             for win in safe_provider_results(lambda: match_windows(q, cap)):
@@ -509,27 +568,17 @@ class LauncherMode(Mode):
                     row_kind = "window-close"
                 else:
                     row_kind = "window"
-                add(
-                    "windows",
-                    {
-                        "kind": row_kind,
-                        "score": 65,
-                        "title": win["title"],
-                        "description": win.get("description") or "",
-                        "icon": win.get("icon") or "focus-windows-symbolic",
-                        "wid": win.get("wid") or win.get("payload") or "",
-                        "pid": win.get("pid") or 0,
-                        "wm_class": win.get("wm_class") or "",
-                        "window_kind": raw_kind,
-                        "payload": win.get("payload"),
-                        "id": win.get("id"),
-                    },
-                )
+                row = dict(win)
+                row["kind"] = row_kind
+                row["window_kind"] = raw_kind
+                row["score"] = 65
+                row["icon"] = win.get("icon") or "focus-windows-symbolic"
+                add("windows", row)
 
-        if "system" in providers:
+        def collect_system() -> None:
             from ulauncher.modes.launcher.system_actions import match_system_actions
 
-            for hit in safe_provider_results(lambda: match_system_actions(q))[:cap]:
+            for hit in safe_provider_results(lambda: match_system_actions(q, cap)):
                 add(
                     "system",
                     {
@@ -542,23 +591,30 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "settings" in providers:
-            from ulauncher.modes.launcher.settings_panels import match_settings_panels
+        def collect_settings() -> None:
+            from ulauncher.modes.launcher.settings_panels import (
+                match_settings_panels,
+                settings_argv,
+                settings_panel_available,
+                settings_result_meta,
+            )
 
-            for hit in safe_provider_results(lambda: match_settings_panels(q))[:cap]:
+            for hit in safe_provider_results(lambda: match_settings_panels(q, cap, settings_panel_available)):
+                meta = settings_result_meta(hit, settings_argv(hit["id"]))
                 add(
                     "settings",
                     {
                         "kind": "settings",
                         "score": 55,
-                        "title": hit["title"],
-                        "description": "GNOME Settings",
-                        "icon": hit.get("icon") or "preferences-system-symbolic",
+                        "title": meta["title"],
+                        "description": meta["description"],
+                        "icon": meta["icon"],
                         "panel_id": hit["id"],
+                        "activatable": meta["activatable"],
                     },
                 )
 
-        if "files" in providers:
+        def collect_files() -> None:
             from ulauncher.modes.launcher.recents import search_recents
 
             for hit in safe_provider_results(lambda: search_recents(q, cap)):
@@ -566,7 +622,7 @@ class LauncherMode(Mode):
                 if row:
                     add("files", row)
 
-        if "command" in providers:
+        def collect_command() -> None:
             from ulauncher.modes.launcher.commands import search_command
 
             for hit in safe_provider_results(lambda: search_command(q)):
@@ -585,43 +641,80 @@ class LauncherMode(Mode):
                     },
                 )
 
-        if "web" in providers:
-            from ulauncher.modes.launcher.web import web_result
+        def collect_web() -> None:
+            from ulauncher.modes.launcher.web import search_web
 
             engine_id = getattr(settings, "web_search_engine", "google")
-            hit = web_result(q, engine_id)
-            add(
-                "web",
-                {
-                    "kind": "web",
-                    "score": 10,
-                    "title": hit["title"],
-                    "description": hit.get("description") or "",
-                    "icon": hit.get("icon") or "web-browser-symbolic",
-                    "url": hit["url"],
-                },
-            )
+            for hit in safe_provider_results(lambda: search_web(q, engine_id)):
+                add(
+                    "web",
+                    {
+                        "kind": "web",
+                        "score": 10,
+                        "title": hit["title"],
+                        "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "web-browser-symbolic",
+                        "url": hit["url"],
+                    },
+                )
+
+        if "url" in providers:
+            run_isolated(collect_url)
+        if "path" in providers:
+            run_isolated(collect_path)
+        if "places" in providers:
+            run_isolated(collect_places)
+        if "bookmarks" in providers:
+            run_isolated(collect_bookmarks)
+        if "apps" in providers:
+            run_isolated(collect_apps)
+        if "calculator" in providers:
+            run_isolated(collect_calculator)
+        if "units" in providers:
+            run_isolated(collect_units)
+        if "color" in providers:
+            run_isolated(collect_color)
+        if "time" in providers:
+            run_isolated(collect_time)
+        if "windows" in providers:
+            run_isolated(collect_windows)
+        if "system" in providers:
+            run_isolated(collect_system)
+        if "settings" in providers:
+            run_isolated(collect_settings)
+        if "files" in providers:
+            run_isolated(collect_files)
+        if "command" in providers:
+            run_isolated(collect_command)
+        if "web" in providers:
+            run_isolated(collect_web)
 
         rows = [row for name in providers for row in buckets.get(name, [])]
         if web_fallback and not rows:
-            from ulauncher.modes.launcher.web import web_result
 
-            engine_id = getattr(settings, "web_search_engine", "google")
-            hit = web_result(q, engine_id)
-            rows.append(
-                {
-                    "kind": "web",
-                    "score": 10,
-                    "title": hit["title"],
-                    "description": hit.get("description") or "",
-                    "icon": hit.get("icon") or "web-browser-symbolic",
-                    "url": hit["url"],
-                }
-            )
+            def collect_web_fallback() -> None:
+                from ulauncher.modes.launcher.web import search_web
+
+                engine_id = getattr(settings, "web_search_engine", "google")
+                for hit in safe_provider_results(lambda: search_web(q, engine_id)):
+                    rows.append(
+                        {
+                            "kind": "web",
+                            "score": 10,
+                            "title": hit["title"],
+                            "description": hit.get("description") or "",
+                            "icon": hit.get("icon") or "web-browser-symbolic",
+                            "url": hit["url"],
+                        }
+                    )
+
+            run_isolated(collect_web_fallback)
 
         return rows
 
-    def _materialize(self, rows: Sequence[dict[str, Any]], chrome: dict[str, Any], headers: bool) -> Iterator[Result]:
+    def _materialize(
+        self, rows: Sequence[dict[str, Any]], chrome: Mapping[str, Any], headers: bool
+    ) -> Iterator[Result]:
         from ulauncher.modes.launcher.section_titles import section_title
 
         last_kind = ""
@@ -646,6 +739,8 @@ class LauncherMode(Mode):
             if kind in {"path", "place", "file", "bookmark"} and not row.get("exists", True):
                 actions = {}
                 activatable = False
+            if not activatable:
+                actions = {}
             yield LauncherResult(
                 name=str(row["title"]),
                 description="" if not show_descriptions else str(row.get("description") or ""),
@@ -656,6 +751,68 @@ class LauncherMode(Mode):
                 activatable=activatable,
                 actions=actions,
             )
+
+
+def _watch_empty_windows() -> list[Any]:
+    from ulauncher.modes.launcher.windows import ensure_windows
+
+    ensure_windows(lambda: _events.emit("app:reload_query"))
+    return []
+
+
+def _empty_app_row(app: Any, open_windows: Sequence[Any]) -> dict[str, Any] | None:
+    from ulauncher.modes.launcher.apps import app_row_description, app_window_count
+
+    try:
+        return {
+            "kind": "app",
+            "title": app.name,
+            "description": app_row_description(app_window_count(app, open_windows)),
+            "icon": app.icon,
+            "app_id": app.app_id,
+        }
+    except Exception:
+        return None
+
+
+def _empty_window_hits(open_windows: Sequence[Any], icon_apps: Sequence[Any], limit: int) -> list[dict[str, Any]]:
+    from ulauncher.modes.launcher.windows import match_windows
+
+    rows: list[dict[str, Any]] = []
+    for hit in safe_provider_results(lambda: match_windows("", limit, windows=list(open_windows), apps=icon_apps)):
+        row = _empty_from_window_hit(hit)
+        if row is not None:
+            rows.append(row)
+    return rows
+
+
+def _empty_from_window_hit(hit: Mapping[str, Any]) -> dict[str, Any] | None:
+    raw_kind = hit.get("kind") or "focus"
+    if raw_kind == "workspace" or raw_kind in {"close", "quit", "kill"}:
+        return None
+    try:
+        title = str(hit.get("title") or "")
+        if not title:
+            return None
+        return {
+            "kind": "window",
+            "title": title,
+            "description": hit.get("description") or "",
+            "icon": hit.get("icon") or "focus-windows-symbolic",
+            "wid": hit.get("wid") or "",
+            "pid": hit.get("pid") or 0,
+            "wm_class": hit.get("wm_class") or "",
+            "app_id": hit.get("app_id") or "",
+            "gtk_unique_bus_name": hit.get("gtk_unique_bus_name") or "",
+            "gtk_application_object_path": hit.get("gtk_application_object_path") or "",
+            "atspi_ref": hit.get("atspi_ref") or "",
+            "window_title": hit.get("window_title") or title,
+            "window_kind": "focus",
+            "id": hit.get("id") or hit.get("wid") or "",
+            "payload": hit.get("payload") or hit.get("wid") or "",
+        }
+    except Exception:
+        return None
 
 
 def _row_from_uri(hit: dict[str, Any], score: int, kind: str | None = None) -> dict[str, Any] | None:
@@ -704,6 +861,6 @@ def _default_icon(kind: str) -> str:
         "file": "text-x-generic-symbolic",
         "bookmark": "user-bookmarks-symbolic",
         "app-action": "application-x-executable-symbolic",
-        "workspace": "workspace-switcher-symbolic",
+        "workspace": "view-app-grid-symbolic",
         "window-close": "window-close-symbolic",
     }.get(kind, "application-x-executable-symbolic")

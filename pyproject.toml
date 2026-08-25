@@ -27,14 +27,23 @@ version = {attr = "ulauncher._version.version"}
 python-interpreter-path = ".venv/bin/python"
 python-platform = "linux"
 python-version = "3.8"
-project-includes = ["ulauncher", "tests"]
-min-severity = "info"
+# tests/ is GTK mocks and fixtures, not the shipped type surface.
+project-includes = ["ulauncher"]
+min-severity = "error"
 preset = "strict"
 
 [tool.pyrefly.errors]
 bad-param-name-override = false
 missing-override-decorator = false
 implicit-any-lambda = false
+# pygobject-stubs 2.12 with preset=strict: empty {} / [] and GLib.GError's stub base class.
+implicit-any-type-argument = false
+implicit-any-empty-container = false
+implicit-any-attribute = false
+invalid-inheritance = false
+# GTK getters are already bool/int/str; wrapping them trips this on Ubuntu 22.04 stubs.
+unnecessary-type-conversion = false
+redundant-cast = false
 
 # Pylint is not checked in CI or included in `make check` due to being slow.
 # Run occasional manual audit with `make pylint`
@@ -59,6 +68,13 @@ enable = [
 extend-ignore-re = [
   # prevent correcting gir to git
   "gir1.2",
+  # goshos word-prefix needles: bui in builder, ome in /home
+  '"bui"',
+  '"ome"',
+  # spoken ordinals 1st/2nd/3rd/4th in calculator.js
+  "st\\|nd\\|rd\\|th",
+  # goshos latin-1 percent-byte fixture (café encoded as ISO-8859-1)
+  "caf%E9",
 ]
 
 [tool.typos.files]

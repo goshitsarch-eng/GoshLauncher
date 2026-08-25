@@ -6,6 +6,8 @@ class TestSettings:
         assert Settings().theme_name == "light"
         assert Settings(theme_name="asdf").theme_name == "asdf"
         assert Settings().arrow_key_aliases == ""
+        assert Settings().render_on_screen == "default-monitor"
+        assert Settings().auto_resume is False
 
     def test_dash_to_underscore(self) -> None:
         s = Settings()

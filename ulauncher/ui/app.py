@@ -172,7 +172,9 @@ class UlauncherApp(Adw.Application):
         if first_run:
             if HotkeyController.is_supported():
                 if HotkeyController.setup_default(hotkey):
-                    display_name = Gtk.accelerator_get_label(*Gtk.accelerator_parse(hotkey))
+                    from ulauncher.ui import gtk4
+
+                    display_name = gtk4.accelerator_label(hotkey)
                     body = (
                         f"{app_display_name} has added a global keyboard shortcut: "
                         f'"{display_name}" to your desktop settings'
@@ -215,7 +217,7 @@ class UlauncherApp(Adw.Application):
 
     @events.on
     def show_launcher(self) -> None:
-        from ulauncher.modes.launcher.popup_gate import can_open_popup, should_close_on_session
+        from ulauncher.modes.launcher.popup_gate import can_open_popup, popup_open_entry_text, should_close_on_session
         from ulauncher.modes.launcher.session_state import session_popup_blockers
 
         locked, greeter, limits = session_popup_blockers()
@@ -226,6 +228,9 @@ class UlauncherApp(Adw.Application):
         if not can_open_popup(False, False, locked, greeter, limits):
             return
 
+        # goshos launcherPopup.open: invalidate then this._entry.set_text('').
+        self.query = popup_open_entry_text()
+
         if (main_window := self.windows.get("main")) and not main_window.get_mapped():
             logger.warning("Ignoring stale main window reference")
             del self.windows["main"]
@@ -234,6 +239,10 @@ class UlauncherApp(Adw.Application):
             main_window = UlauncherWindow(application=self)
             main_window.connect("destroy", self._on_window_destroyed, "main")
             self.windows["main"] = main_window
+        elif (main_window := self.windows.get("main")) is not None:
+            setter = getattr(main_window, "set_input", None)
+            if callable(setter):
+                setter(self.query)
 
     def _on_window_destroyed(self, _window: Gtk.Window, key: Literal["main", "preferences"]) -> None:
         self.windows.pop(key, None)
@@ -319,7 +328,7 @@ class UlauncherApp(Adw.Application):
         save_query = bool(self._popup_close_save_query)
         self._popup_close_save_query = False
         if main_window := self.windows.get("main"):
-            main_window.close(save_query=save_query)
+            cast("UlauncherWindow", main_window).close(save_query=save_query)
         else:
             self._popup_close_pending = False
 

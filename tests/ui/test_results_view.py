@@ -254,3 +254,16 @@ class TestResultsViewStreaming:
         view.render(self._update(names))
         assert len(view._widgets) == 40
         assert [widget.result.name for widget in view._widgets] == names
+
+    def test_bad_icon_row_does_not_empty_the_list(self, view: ResultsView, mocker: MockerFixture) -> None:
+        from ulauncher.ui.result_widget import ResultWidget as RealWidget
+
+        def ctor(result: Result, *args: Any, **kwargs: Any) -> Any:
+            if result.name == "bad":
+                message = "bad icon"
+                raise RuntimeError(message)
+            return RealWidget(result, *args, **kwargs)
+
+        mocker.patch("ulauncher.ui.result_widget.ResultWidget", ctor)
+        view.render(self._update(["ok-a", "bad", "ok-b"]))
+        assert [widget.result.name for widget in view._widgets] == ["ok-a", "ok-b"]

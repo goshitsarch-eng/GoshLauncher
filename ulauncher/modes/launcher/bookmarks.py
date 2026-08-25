@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlparse
 
 from ulauncher.modes.launcher.paths import (
     canonicalize_file_uri,
@@ -14,6 +13,7 @@ from ulauncher.modes.launcher.paths import (
     file_uri_from_absolute,
     path_from_file_uri,
 )
+from ulauncher.modes.launcher.urls import is_unsafe_launch_uri
 from ulauncher.modes.launcher.word_match import path_matches_query, text_matches_query
 
 BOOKMARK_FILES = (
@@ -36,6 +36,8 @@ _bookmark_lookup = _BookmarkLookup()
 def normalize_bookmark_uri(uri: str, home: str | None = None) -> str:
     uri = uri.strip()
     if not uri:
+        return ""
+    if is_unsafe_launch_uri(uri):
         return ""
     if uri.startswith("/"):
         return canonicalize_file_uri(file_uri_from_absolute(uri))
@@ -60,7 +62,7 @@ def parse_gtk_bookmarks(text: str, home: str | None = None) -> list[dict]:
         if not uri or uri in seen:
             continue
         seen.add(uri)
-        rows.append({"uri": uri, "title": label or _title_from_uri(uri)})
+        rows.append({"uri": uri, "title": bookmark_title(uri, label)})
     return rows
 
 
@@ -68,12 +70,24 @@ def merge_bookmark_files(texts: list[str], home: str | None = None) -> list[dict
     return parse_gtk_bookmarks("\n".join(texts), home)
 
 
-def _title_from_uri(uri: str) -> str:
-    path = path_from_file_uri(uri)
-    if path:
-        return Path(path).name or path
-    parsed = urlparse(uri)
-    return parsed.hostname or uri
+def host_from_uri(uri: str) -> str:
+    from ulauncher.modes.launcher.recents import remote_host_from_uri
+
+    return remote_host_from_uri(uri)
+
+
+def bookmark_title(uri: str, label: str = "") -> str:
+    if label:
+        return label
+    from ulauncher.modes.launcher.recents import basename_from_uri
+
+    base = basename_from_uri(uri)
+    if base and base != uri:
+        return base
+    host = host_from_uri(uri)
+    if host:
+        return host
+    return uri
 
 
 def bookmark_description(uri: str, home: str | None = None) -> str:
@@ -115,7 +129,20 @@ def load_bookmarks() -> list[dict]:
     return _described(merge_bookmark_files(_read_bookmark_texts_sync()))
 
 
+def bookmark_matches(title: str, description: str, query: str) -> bool:
+    if len(query) == 0:
+        return False
+    if text_matches_query(title, query) or path_matches_query(description, query):
+        return True
+    words = [word for word in query.lower().split() if word]
+    if len(words) < 2:
+        return False
+    return all(text_matches_query(title, word) or path_matches_query(description, word) for word in words)
+
+
 def match_bookmarks(query: str, rows: list[dict] | None = None, limit: int = 6) -> list[dict]:
+    if limit <= 0:
+        return []
     if rows is None:
         cached = _bookmark_lookup.rows
         if cached is None:
@@ -123,16 +150,8 @@ def match_bookmarks(query: str, rows: list[dict] | None = None, limit: int = 6) 
         rows = _described(cached)
     results: list[dict] = []
     for row in rows:
-        title = row["title"]
-        description = row.get("description") or ""
-        if text_matches_query(title, query) or path_matches_query(description, query):
+        if bookmark_matches(row["title"], row.get("description") or "", query):
             results.append(row)
-        elif len(query.split()) >= 2:
-            words = [w for w in query.lower().split() if w]
-            if words and all(
-                text_matches_query(title, word) or path_matches_query(description, word) for word in words
-            ):
-                results.append(row)
         if len(results) >= limit:
             break
     return results

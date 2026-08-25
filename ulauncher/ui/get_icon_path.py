@@ -6,6 +6,7 @@ from os.path import expanduser
 from gi.repository import Gdk, Gtk
 
 from ulauncher.gi import GLib
+from ulauncher.ui import gtk4
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ def get_icon_path(icon: str, size: int = 32) -> str | None:
             theme = _icon_theme()
             if not theme:
                 return None
-            paintable = theme.lookup_icon(icon, None, size, 1, Gtk.TextDirection.NONE, 0)
+            paintable = theme.lookup_icon(icon, None, size, 1, Gtk.TextDirection.NONE, gtk4.icon_lookup_flags())
             if paintable:
                 file = paintable.get_file()
                 if file:

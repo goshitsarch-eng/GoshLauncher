@@ -10,6 +10,7 @@ from ulauncher.modes.launcher.popup_gate import (
     next_open_error_action,
     next_reopen_after_close,
     next_toggle_action,
+    popup_open_entry_text,
     run_isolated_teardown,
     session_limits_reached,
     should_cancel_open_on_overview,
@@ -18,10 +19,17 @@ from ulauncher.modes.launcher.popup_gate import (
     should_close_on_session,
     should_close_on_shell_ui,
     should_close_on_toggle,
+    should_keep_query_on_close,
     should_schedule_close,
     should_schedule_open,
     time_limits_state,
 )
+
+
+def test_open_always_clears_the_entry_like_goshos() -> None:
+    assert popup_open_entry_text() == ""
+    assert should_keep_query_on_close(True, True) is False
+    assert should_keep_query_on_close(False, False) is False
 
 
 def test_popup_gate_open_and_toggle_actions() -> None:

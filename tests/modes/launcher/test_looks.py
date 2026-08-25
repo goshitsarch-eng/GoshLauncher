@@ -162,6 +162,15 @@ def test_search_icon_style_class_and_compact_icon_size() -> None:
     assert icon_size_for_look(get_look("popos")["look"], "comfortable") > icon_size_for_look(
         get_look("krunner")["look"], "comfortable"
     )
+    assert icon_size_for_look(get_look("popos")["look"], "compact") > icon_size_for_look(
+        get_look("krunner")["look"], "compact"
+    )
+    assert icon_size_for_look(get_look("synapse")["look"], "comfortable") > icon_size_for_look(
+        get_look("powertoys")["look"], "comfortable"
+    )
+    assert icon_size_for_look(get_look("raycast")["look"], "comfortable") > icon_size_for_look(
+        get_look("albert")["look"], "comfortable"
+    )
 
 
 def test_look_prefs_search_text_finds_walker_cosmic_and_titles() -> None:
@@ -208,6 +217,85 @@ def test_hidden_search_icon_inset_follows_goshos_order() -> None:
     assert compact < no_icon_20 < compact_no < rofi
     leftover_16 = text.find(".app.gosh-no-search-icon .input {\n  padding-left: 16px;")
     assert leftover_16 == -1
+
+
+def test_compact_row_padding_comes_after_every_look() -> None:
+    from pathlib import Path
+
+    # goshos: compact .gosh-result is last so it beats theme padding. Omarchy/Anyrun
+    # already reserve the 3px leading edge in their own .item-box blocks.
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    compact = text.rfind(".app.gosh-density-compact .item-box")
+    assert compact != -1
+    for look_id in look_ids():
+        theme_row = text.rfind(f".gosh-theme-{look_id} .item-box")
+        if theme_row == -1:
+            continue
+        assert compact > theme_row, look_id
+    assert "border-left: 3px solid transparent" in text
+    assert "border-left-color: #7aa2f7" in text
+    assert "border-left-color: #89b4fa" in text
+    assert "caret-color: #ff6363" in text
+    assert "caret-color: #60cdff" in text
+    assert "caret-color: #f07746" in text
+    assert "background-color: #000000" in text
+    assert "background-color: #fdf6e3" in text
+    assert "background-color: #1d99f3" in text
+    assert "background-color: #285577" in text
+    for look_id in (
+        "omarchy",
+        "popos",
+        "ulauncher",
+        "gnome",
+        "raycast",
+        "fuzzel",
+        "anyrun",
+        "powertoys",
+        "synapse",
+    ):
+        assert f".gosh-theme-{look_id} .item-box.selected .item-descr" in text, look_id
+
+
+def test_every_look_panel_fill_is_in_css() -> None:
+    from pathlib import Path
+
+    # Same fills as tests/ui/test_look_pixels.py LOOK_PANEL_HEX (goshos README).
+    fills = {
+        "spotlight": "rgb(28, 28, 30)",
+        "omarchy": "#1a1b26",
+        "popos": "#242426",
+        "ulauncher": "#2b2b2b",
+        "krunner": "#2a2e32",
+        "gnome": "#303030",
+        "rofi": "#111111",
+        "raycast": "#161618",
+        "albert": "#31363b",
+        "wofi": "#1d1f21",
+        "fuzzel": "#fdf6e3",
+        "anyrun": "#1e1e2e",
+        "tofi": "#000000",
+        "light": "#f6f5f4",
+        "powertoys": "#2c2c2c",
+        "synapse": "#3c3b37",
+        "onagre": "#1c1917",
+    }
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    for look_id, color in fills.items():
+        if look_id == "spotlight":
+            block = text.split(".gosh-theme-spotlight .prompt {", 1)[1].split("}", 1)[0]
+        else:
+            block = text.split(f".gosh-theme-{look_id}.app {{", 1)[1].split("}", 1)[0]
+        assert color in block, look_id
+
+
+def test_spotlight_prompt_owns_the_pill_fill() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    block = text.split(".gosh-theme-spotlight .prompt {", 1)[1].split("}", 1)[0]
+    assert "rgb(28, 28, 30)" in block
+    results = text.split(".gosh-theme-spotlight .result-box {", 1)[1].split("}", 1)[0]
+    assert "rgb(28, 28, 30)" in results
 
 
 def test_spotlight_shell_is_transparent_like_goshos() -> None:

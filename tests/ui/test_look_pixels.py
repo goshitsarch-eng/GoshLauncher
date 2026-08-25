@@ -11,6 +11,19 @@ from ulauncher.ui.helpers.theme import CSS_RESET, launcher_popup_css
 
 pytestmark = pytest.mark.skipif(not GTK4_AVAILABLE, reason="GTK 4 is not available")
 
+# WidgetPaintable + GskRenderer.render_texture SIGSEGVs under xvfb on GTK 4.6
+# (Ubuntu 22.04). Look fills are still asserted from CSS on that floor.
+_GSK_SNAPSHOT_OK = False
+if GTK4_AVAILABLE:
+    from gi.repository import Gtk
+
+    _GSK_SNAPSHOT_OK = (Gtk.MAJOR_VERSION, Gtk.MINOR_VERSION) >= (4, 10)
+
+requires_gsk_snapshot = pytest.mark.skipif(
+    not _GSK_SNAPSHOT_OK,
+    reason="GSK widget snapshot SIGSEGVs on GTK 4.6 xvfb",
+)
+
 if GTK4_AVAILABLE:
     from tests.ui.look_paint import (
         close_popup_window,
@@ -19,6 +32,7 @@ if GTK4_AVAILABLE:
         open_popup_window,
         sample_entry_selection,
         sample_look,
+        sample_placeholder,
         sample_popup_look,
     )
 
@@ -59,7 +73,24 @@ LOOK_SELECTED_HEX = {
     "onagre": "#f59e0b",
 }
 
+# Opaque goshos StLabel.hint-text colors. Spotlight/Pop!_OS/Ulauncher/KRunner/GNOME use rgba.
+LOOK_PLACEHOLDER_HEX = {
+    "omarchy": "#565f89",
+    "rofi": "#666666",
+    "raycast": "#6e6e73",
+    "albert": "#7f8c8d",
+    "wofi": "#707880",
+    "fuzzel": "#93a1a1",
+    "anyrun": "#6c7086",
+    "tofi": "#888888",
+    "light": "#9a9996",
+    "powertoys": "#9a9a9a",
+    "synapse": "#a39e93",
+    "onagre": "#78716c",
+}
+
 _PIXEL_TOLERANCE = 3
+_PLACEHOLDER_TOLERANCE = 8
 
 
 def _hex_rgb(value: str) -> tuple[int, int, int]:
@@ -94,6 +125,7 @@ def test_launcher_popup_css_parses_on_gtk4() -> None:
 
 
 @pytest.mark.parametrize("look_id", look_ids())
+@requires_gsk_snapshot
 def test_look_panel_pixels(look_id: str) -> None:
     if not display_available():
         pytest.skip("no Gdk display")
@@ -122,6 +154,7 @@ def popup_window() -> Iterator[object]:
     close_popup_window()
 
 
+@requires_gsk_snapshot
 def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
     win = popup_window
     assert win.has_css_class("gosh-popup")
@@ -136,6 +169,7 @@ def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
 
 
 @pytest.mark.parametrize("look_id", look_ids())
+@requires_gsk_snapshot
 def test_popup_look_panel_pixels(popup_window: object, look_id: str) -> None:
     assert popup_window.has_css_class("gosh-popup")  # type: ignore[union-attr]
     sampled = sample_popup_look(look_id)
@@ -149,9 +183,20 @@ def test_popup_look_panel_pixels(popup_window: object, look_id: str) -> None:
         )
 
 
+@requires_gsk_snapshot
 def test_entry_selection_paints_tofi_highlight() -> None:
     if not display_available():
         pytest.skip("no Gdk display")
     rgb = sample_entry_selection("tofi")
     expected = _hex_rgb("#555555")
     assert _near(rgb, expected, 24), f"tofi entry selection {rgb} != {expected}"
+
+
+@pytest.mark.parametrize("look_id", sorted(LOOK_PLACEHOLDER_HEX))
+@requires_gsk_snapshot
+def test_look_placeholder_pixels(look_id: str) -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    expected = _hex_rgb(LOOK_PLACEHOLDER_HEX[look_id])
+    rgb = sample_placeholder(look_id, expected)
+    assert _near(rgb, expected, _PLACEHOLDER_TOLERANCE), f"{look_id} placeholder {rgb} != {expected}"

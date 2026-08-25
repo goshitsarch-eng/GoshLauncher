@@ -58,6 +58,13 @@ def is_legacy_trigger_mode(mode: Mode) -> bool:
     return type(mode).__name__ in {"ShortcutMode", "ExtensionMode"}
 
 
+def reject_async_paints() -> None:
+    for mode in get_modes():
+        reject = getattr(mode, "reject_async_paint", None)
+        if callable(reject):
+            reject()
+
+
 def launcher_has_local_hits(results: Iterable[Result]) -> bool:
     from ulauncher.modes.launcher.results import SectionHeader
 
@@ -139,10 +146,13 @@ class UlauncherCore:
         self._mode = None
         self.query = Query(None, query_str)
 
-        # keyword match
+        # keyword match — skip leftover ShortcutMode/ExtensionMode so `g firefox`
+        # stays Spotlight-goshos search instead of a stock Google shortcut.
         keyword, argument = query_str.split(" ", 1) if " " in query_str else (query_str, None)
 
         for mode, keywords in self._keyword_cache.items():
+            if is_legacy_trigger_mode(mode):
+                continue
             if keyword in keywords and argument is not None:
                 self._mode = mode
                 self.query = Query(keyword, argument)
@@ -187,7 +197,8 @@ class UlauncherCore:
         return hits[:limit]
 
     def _should_merge_legacy(self, _valid_mode: Mode | None) -> bool:
-        # goshos has no keyword-shortcut or extension rows in typed search
+        # goshos has no keyword-shortcut or extension rows in typed search.
+        # set_query also skips those modes so leftover keywords cannot steal the query.
         return False
 
     def _merge_legacy_into_launcher(self, results: list[Result]) -> list[Result]:
@@ -322,7 +333,8 @@ class UlauncherCore:
                         {**effect_msg, "results": self._merge_legacy_into_launcher(list(effect_msg["results"]))},
                     )
                 self._result_buffer.enqueue(
-                    paint, lambda results, append: self._render_results(results, callback, append)
+                    cast("effects.RenderResults", paint),
+                    lambda results, append: self._render_results(results, callback, append),
                 )
             elif effect_msg["type"] == effects.EffectType.LEGACY_RUN_MANY:
                 # effect_utils.handle has no callback to render with, so route any nested render

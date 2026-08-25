@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ulauncher.modes.launcher.recents import (
+    basename_from_uri,
     ensure_recent_files,
     flush_recents_lookup,
     icon_for_basename,
@@ -86,16 +87,37 @@ def test_parse_recent_xbel_regex_unescapes_and_skips_web() -> None:
     assert "file:///tmp/single.txt" in uris
     assert "file:///tmp/spaced.txt" in uris
     assert "sftp://nas.local/share/notes.txt" in uris
+    assert parse_recent_xbel('<bookmark href="ftp://nas/a.txt"/>') == ["ftp://nas/a.txt"]
+    assert parse_recent_xbel('<bookmark href="davs://nas/a.txt"/>') == ["davs://nas/a.txt"]
     assert all("example.com" not in uri and "javascript" not in uri for uri in uris)
+
+
+def test_basename_from_uri_keeps_latin1_percent_bytes() -> None:
+    assert basename_from_uri("file:///home/user/My%20File.pdf") == "My File.pdf"
+    assert basename_from_uri("file:///tmp/a%") == "a%"
+    assert basename_from_uri("file:///tmp/caf%E9.txt") == "caf%E9.txt"
 
 
 def test_icon_for_basename_and_exists_budget() -> None:
     assert icon_for_basename("notes.pdf") == "x-office-document-symbolic"
     assert icon_for_basename("shot.png") == "image-x-generic-symbolic"
+    assert icon_for_basename("song.mp3") == "audio-x-generic-symbolic"
     assert icon_for_basename("README") == "document-open-recent-symbolic"
+    assert icon_for_basename(".bashrc") == "document-open-recent-symbolic"
     assert recent_exists_should_settle(0, 10, 800) is True
     assert recent_exists_should_settle(2, 100, 800) is False
     assert recent_exists_should_settle(2, 800, 800) is True
+
+
+def test_goshos_recent_file_match_needles() -> None:
+    from ulauncher.modes.launcher.recents import recent_file_matches
+
+    assert recent_file_matches("notes.txt", "~/Documents", "docu")
+    assert recent_file_matches("notes.txt", "~/Documents", "notes")
+    assert recent_file_matches("notes.txt", "~/Documents", "notes documents")
+    assert not recent_file_matches("notes.txt", "~/Documents", "chrome")
+    assert not recent_file_matches("notes.txt", "~/Documents", "o")
+    assert not recent_file_matches("notes.txt", "/home/u", "ome")
 
 
 def test_search_recents_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

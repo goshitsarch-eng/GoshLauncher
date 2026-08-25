@@ -72,11 +72,38 @@ def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     publish = (ROOT / ".github" / "workflows" / "publish-release.yml").read_text()
     assert "scripts/ci-install-gtk4.sh" in publish
     assert "ubuntu-22.04" in publish
+    assert "help2man" in publish
+    assert "help2man" in draft
+    makefile = (ROOT / "makefile").read_text()
+    assert "command -v help2man" in makefile
     assert "gir1.2-gtk-4.0" in script
     assert "gir1.2-adw-1" in script
     assert "libadwaita-1-0" in script
     makefile = (ROOT / "makefile").read_text()
     assert 'export PATH="/usr/sbin:/usr/bin:/sbin:/bin"' in makefile
+
+
+def test_pyrefly_typechecks_shipped_package() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert 'project-includes = ["ulauncher"]' in pyproject
+    assert 'project-includes = ["ulauncher", "tests"]' not in pyproject
+    assert "implicit-any-type-argument = false" in pyproject
+    assert "invalid-inheritance = false" in pyproject
+    assert "unnecessary-type-conversion = false" in pyproject
+    assert 'min-severity = "error"' in pyproject
+
+
+def test_venv_bootstraps_pip_before_pygobject_stubs() -> None:
+    makefile = (ROOT / "makefile").read_text()
+    venv = makefile[makefile.index("venv:") : makefile.index("-r requirements.txt")]
+    assert "pip install --ignore-installed --upgrade" in venv
+    assert "setuptools>=65" in venv
+    pins = [
+        line.split("#", 1)[0].strip()
+        for line in (ROOT / "requirements.txt").read_text().splitlines()
+        if line.split("#", 1)[0].strip()
+    ]
+    assert "pygobject-stubs==2.12.0" in pins
 
 
 def test_prerelease_banner_uses_goshlauncher() -> None:

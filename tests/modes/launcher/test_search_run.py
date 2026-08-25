@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.search_run import collect_search_results, safe_provider_results
+from ulauncher.modes.launcher.calculator import evaluate_arithmetic
+from ulauncher.modes.launcher.plan import plan_search
+from ulauncher.modes.launcher.search_run import collect_search_results, run_isolated, safe_provider_results
 
 
 def test_collect_search_results_runs_providers_and_web_fallback() -> None:
@@ -47,3 +49,38 @@ def test_safe_provider_results_rejects_non_lists() -> None:
     assert safe_provider_results(boom) == []
     assert safe_provider_results(lambda: [{"title": "App"}])[0]["title"] == "App"
     assert safe_provider_results(lambda: None) == []
+
+
+def test_run_isolated_swallows_provider_throw() -> None:
+    seen: list[str] = []
+
+    def boom() -> None:
+        message = "url vanished"
+        raise RuntimeError(message)
+
+    def later() -> None:
+        seen.append("later")
+
+    run_isolated(boom)
+    run_isolated(later)
+    assert seen == ["later"]
+
+
+def test_prefix_bare_number_evaluates_only_with_equals() -> None:
+    flags = {
+        "prefix_modes": True,
+        "calculator": True,
+        "apps": True,
+        "web": True,
+        "result_order": "default",
+    }
+
+    def calculator(query: str, _max: int, _settings: object, mode: object) -> list[dict[str, str]]:
+        n = evaluate_arithmetic(query, mode == "calculator")
+        return [] if n is None else [{"title": str(int(n))}]
+
+    providers = {"calculator": calculator}
+    prefix = collect_search_results(plan_search("=42", flags), 1, providers, None)
+    assert prefix[0]["title"] == "42"
+    bare = collect_search_results(plan_search("42", flags), 1, providers, None)
+    assert bare == []

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from ulauncher.modes.launcher import gio_launch
 from ulauncher.modes.launcher.gio_launch import find_in_user_path, open_uri, reset_program_path_cache, spawn_argv
 
 
@@ -59,3 +60,10 @@ def test_open_uri_rejects_unsafe_and_canonicalizes_file() -> None:
     open_uri("\u200bdata:text/html,hi", opener=opened.append)
     open_uri("file:///home/u/My Documents", opener=opened.append)
     assert opened == ["file:///home/u/My%20Documents"]
+
+
+def test_launch_uri_uses_gio_app_info() -> None:
+    source = Path(gio_launch.__file__).read_text()
+    assert "Gio.AppInfo.launch_default_for_uri_async" in source
+    assert "Gio.AppLaunchContext()" in source
+    assert "display.get_app_launch_context()" not in source

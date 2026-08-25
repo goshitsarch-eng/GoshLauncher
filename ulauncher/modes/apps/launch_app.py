@@ -44,7 +44,7 @@ def _load_app(desktop_entry_name: str) -> GioUnix.DesktopAppInfo | None:
     return app
 
 
-def launch_app(desktop_entry_name: str, action_name: str | None = None) -> bool:
+def launch_app(desktop_entry_name: str, action_name: str | None = None, *, raise_existing: bool = True) -> bool:
     app_id = Path(desktop_entry_name).stem if desktop_entry_name.endswith(".desktop") else desktop_entry_name
     settings = Settings.load()
     app = _load_app(desktop_entry_name)
@@ -63,7 +63,7 @@ def launch_app(desktop_entry_name: str, action_name: str | None = None) -> bool:
             launch_context.unsetenv("GDK_BACKEND")
         app.launch_action(action_name, launch_context)
         return True
-    if action_name is None and (settings.raise_if_started or app.get_boolean("SingleMainWindow")):
+    if raise_existing and action_name is None and (settings.raise_if_started or app.get_boolean("SingleMainWindow")):
         app_wm_id = (app.get_string("StartupWMClass") or (Path(app_exec).name if app_exec else app_id)).lower()
         if try_raise_app(app_wm_id):
             return True

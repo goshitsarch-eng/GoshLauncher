@@ -75,7 +75,10 @@ def _row_selected(row: Any) -> int:
         return int(row.selected)
     get_active = getattr(row, "get_active", None)
     if callable(get_active):
-        return int(get_active())
+        value = get_active()
+        if isinstance(value, (int, float, str, bool)):
+            return int(value)
+        return -1
     return -1
 
 

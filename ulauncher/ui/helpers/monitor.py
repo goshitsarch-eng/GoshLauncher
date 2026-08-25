@@ -12,10 +12,15 @@ logger = logging.getLogger(__name__)
 
 def _monitors(display: Gdk.Display) -> list[Gdk.Monitor]:
     model = display.get_monitors()
-    return [model.get_item(i) for i in range(model.get_n_items())]
+    monitors: list[Gdk.Monitor] = []
+    for index in range(model.get_n_items()):
+        item = model.get_item(index)
+        if isinstance(item, Gdk.Monitor):
+            monitors.append(item)
+    return monitors
 
 
-def get_monitor(use_mouse_position: bool = False) -> Gdk.Monitor | None:
+def get_monitor(use_mouse_position: bool = False) -> Gdk.Monitor | None:  # noqa: PLR0912
     display = Gdk.Display.get_default()
     if not display:
         logger.warning("Could not get default display")
@@ -34,16 +39,21 @@ def get_monitor(use_mouse_position: bool = False) -> Gdk.Monitor | None:
             surface_at = getattr(pointer, "get_surface_at_position", None)
             if callable(surface_at):
                 located = surface_at()
-                surface = located[0] if located else None
+                surface = located[0] if isinstance(located, tuple) and located else None
                 get_at = getattr(display, "get_monitor_at_surface", None)
-                if surface is not None and callable(get_at) and (monitor := get_at(surface)):
-                    return monitor
+                if surface is not None and callable(get_at):
+                    found = get_at(surface)
+                    if isinstance(found, Gdk.Monitor):
+                        return found
             position = getattr(pointer, "get_position", None)
             if callable(position):
                 coords = position()
                 # GTK4 may return (surface, x, y) or (x, y)
                 try:
-                    x, y = int(coords[-2]), int(coords[-1])
+                    if isinstance(coords, (tuple, list)) and len(coords) >= 2:  # noqa: PLR2004
+                        x, y = int(coords[-2]), int(coords[-1])
+                    else:
+                        x = y = None
                 except (TypeError, ValueError, IndexError):
                     x = y = None
                 if x is not None and y is not None:

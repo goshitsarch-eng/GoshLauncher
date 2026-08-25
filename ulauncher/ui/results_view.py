@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Callable
 
 from gi.repository import Gtk, Pango
@@ -51,7 +52,7 @@ class ResultsView(Gtk.ScrolledWindow):
         self._settings = settings
         self._apply_css = apply_css
         self._activate_result = activate_result
-        self._chrome: dict[str, Any] | None = None
+        self._chrome: Mapping[str, Any] | None = None
         self._widgets: list[ResultWidget] = []
         self._painting = False
         self._hover_suppressed_until_us = 0
@@ -75,7 +76,7 @@ class ResultsView(Gtk.ScrolledWindow):
     def set_max_height(self, height: int) -> None:
         self.set_max_content_height(height)
 
-    def set_chrome(self, chrome: dict[str, Any] | None) -> None:
+    def set_chrome(self, chrome: Mapping[str, Any] | None) -> None:
         """Look chrome for new rows. None falls back to Settings.load() in ResultWidget."""
         self._chrome = chrome
 
@@ -214,17 +215,21 @@ class ResultsView(Gtk.ScrolledWindow):
             jump_index = jump_i if result.highlightable else -1
             if jump_index >= 0:
                 jump_i += 1
-            widget = ResultWidget(
-                result,
-                start_index + offset,
-                query,
-                self.select,
-                self._select_and_activate,
-                jump_index,
-                chrome=self._chrome,
-            )
+            try:
+                widget = ResultWidget(
+                    result,
+                    start_index + offset,
+                    query,
+                    self.select,
+                    self._select_and_activate,
+                    jump_index,
+                    chrome=self._chrome,
+                )
+                self._box.append(widget)
+            except Exception:  # noqa: BLE001, S112
+                # a bad icon must not leave the list empty
+                continue
             self._widgets.append(widget)
-            self._box.append(widget)
 
     def _select_and_activate(self, index: int, alt: bool) -> None:
         self.select(index)

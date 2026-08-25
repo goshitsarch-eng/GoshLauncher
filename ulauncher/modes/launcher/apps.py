@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from ulauncher.modes.apps.app_mode import AppMode
 from ulauncher.modes.apps.app_rankings import AppRankings
 from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
+from ulauncher.modes.launcher.app_usage import gnome_app_usage_score
 from ulauncher.modes.launcher.word_match import (
     SUBSTRING_MIN,
     id_matches_query,
@@ -108,7 +110,7 @@ def app_matches(app: AppResult, query: str) -> bool:
     return app_match_tier(app, query) >= 0
 
 
-def _usage_rank(app_id: str) -> int:
+def _launcher_rank(app_id: str) -> int:
     ids = AppRankings.load().get_app_ids()
     try:
         return ids.index(app_id)
@@ -116,8 +118,18 @@ def _usage_rank(app_id: str) -> int:
         return len(ids) + 1
 
 
+def _usage_sort_key(app_id: str) -> tuple[int, float, int]:
+    # goshos searchApps: AppUsage.compare after match tier. Missing usage ranks
+    # below any scored id; launcher rankings break ties and cover non-GNOME.
+    gnome = gnome_app_usage_score(app_id)
+    launcher = _launcher_rank(app_id)
+    if gnome is None:
+        return (1, 0.0, launcher)
+    return (0, -float(gnome), launcher)
+
+
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
-    scored: list[tuple[int, int, AppResult]] = []
+    scored: list[tuple[int, tuple[int, float, int], AppResult]] = []
     for app in iter_apps():
         try:
             tier = app_match_tier(app, query)
@@ -125,7 +137,7 @@ def match_apps(query: str, limit: int = 6) -> list[AppResult]:
             continue
         if tier < 0:
             continue
-        scored.append((tier, _usage_rank(getattr(app, "app_id", "")), app))
+        scored.append((tier, _usage_sort_key(getattr(app, "app_id", "")), app))
     scored.sort(key=lambda item: (item[0], item[1]))
     return unique_by_base_name([app for _tier, _rank, app in scored], limit)
 
@@ -150,54 +162,122 @@ def _app_class_needles(app: Any) -> set[str]:
     return {needle for needle in needles if needle and needle != "desktop"}
 
 
+def _window_class_tokens(win: Any) -> set[str]:
+    cls = str(getattr(win, "wm_class", "") or "").lower()
+    return {part for part in re.split(r"[./\s]", cls) if part}
+
+
+def _app_matches_window(app: Any, win: Any) -> bool:
+    needles = _app_class_needles(app)
+    if needles & _window_class_tokens(win):
+        return True
+    gtk = str(getattr(win, "gtk_app_id", "") or getattr(win, "app_id", "") or "").lower()
+    if gtk.endswith(".desktop"):
+        gtk = gtk[:-8]
+    app_id = str(getattr(app, "app_id", "") or "").lower()
+    if app_id.endswith(".desktop"):
+        app_id = app_id[:-8]
+    return bool(gtk and app_id and gtk == app_id)
+
+
 def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     from ulauncher.modes.launcher.windows import activate_window, list_windows
 
     open_windows = list_windows() if windows is None else windows
     if app_window_count(app, open_windows) <= 0:
         return False
-    needles = _app_class_needles(app)
+    # goshos Shell.App.activate still raises skip-taskbar-only apps. Prefer a
+    # listed window so an IBus panel is not focused when a normal one exists.
+    target = None
     for win in open_windows:
-        cls = str(getattr(win, "wm_class", "") or "").lower()
-        tokens = {part for part in re.split(r"[./]", cls) if part}
-        if needles & tokens:
-            activate_window(
-                {
-                    "kind": "focus",
-                    "wid": getattr(win, "wid", ""),
-                    "pid": getattr(win, "pid", 0),
-                    "payload": getattr(win, "wid", ""),
-                }
-            )
-            return True
-    return False
+        if not _app_matches_window(app, win):
+            continue
+        if getattr(win, "skip_taskbar", False):
+            if target is None:
+                target = win
+            continue
+        target = win
+        break
+    if target is None:
+        return False
+    activate_window(
+        {
+            "kind": "focus",
+            "wid": getattr(target, "wid", ""),
+            "pid": getattr(target, "pid", 0),
+            "payload": getattr(target, "wid", ""),
+        }
+    )
+    return True
 
 
-def app_window_count(app: Any, windows: list[Any] | None = None) -> int:
+def matching_window_app(win: Any, apps: Sequence[Any] | None = None) -> Any | None:
+    try:
+        scan = apps if apps is not None else iter_apps()
+    except Exception:
+        return None
+    for app in scan:
+        try:
+            if _app_matches_window(app, win):
+                return app
+        except Exception:  # noqa: S112
+            continue
+    return None
+
+
+def window_app_icon(win: Any, apps: Sequence[Any] | None = None) -> str:
+    """goshos windowSearch._windowIcon via Shell.WindowTracker.get_window_app."""
+    app = matching_window_app(win, apps)
+    icon = str(getattr(app, "icon", "") or "") if app is not None else ""
+    return icon or "focus-windows-symbolic"
+
+
+def window_app_id(win: Any, apps: Sequence[Any] | None = None) -> str:
+    existing = str(getattr(win, "app_id", "") or getattr(win, "gtk_app_id", "") or "")
+    if existing:
+        return existing
+    app = matching_window_app(win, apps)
+    ident = str(getattr(app, "app_id", "") or "") if app is not None else ""
+    if ident.endswith(".desktop"):
+        ident = ident[:-8]
+    return ident
+
+
+def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:
     if windows is None:
         from ulauncher.modes.launcher.windows import list_windows
 
         windows = list_windows()
-    needles = _app_class_needles(app)
-    if not needles:
-        return 0
-    count = 0
+    return sum(1 for win in windows if _app_matches_window(app, win))
+
+
+def app_is_unique_gtk(app: Any, windows: Sequence[Any] | None) -> bool:
+    if not windows:
+        return False
+    from ulauncher.modes.launcher.windows import is_unique_gtk_window
+
+    matched = False
     for win in windows:
-        cls = str(getattr(win, "wm_class", "") or "").lower()
-        tokens = {part for part in re.split(r"[./]", cls) if part}
-        if needles & tokens:
-            count += 1
-    return count
+        if not _app_matches_window(app, win):
+            continue
+        matched = True
+        if is_unique_gtk_window(win):
+            return True
+    if not matched:
+        return False
+    # Wayland Introspect does not export gtk unique bus names. A reachable
+    # org.gtk.Actions muxer on the well-known desktop id is a unique GtkApplication.
+    for bus_name, object_path in _app_gtk_muxer_targets(app, windows):
+        if probe_gtk_actions(bus_name, object_path) is not None:
+            return True
+    return False
 
 
 def home_apps(limit: int) -> list[AppResult]:
     # goshos searchFrequentApps: all usable apps, AppUsage order, then
     # takeUniqueByBaseName. Rankings-only lists hid unused apps and kept
     # Firefox plus Firefox ESR as two empty-state rows.
-    ranked = AppRankings.load().get_app_ids()
-    rank_index = {app_id: index for index, app_id in enumerate(ranked)}
-    fallback = len(rank_index)
-    usable: list[tuple[int, int, AppResult]] = []
+    usable: list[tuple[tuple[int, float, int], int, AppResult]] = []
     for index, app in enumerate(iter_apps()):
         try:
             app_id = str(getattr(app, "app_id", "") or "")
@@ -205,7 +285,7 @@ def home_apps(limit: int) -> list[AppResult]:
             continue
         if not app_id:
             continue
-        usable.append((rank_index.get(app_id, fallback), index, app))
+        usable.append((_usage_sort_key(app_id), index, app))
     usable.sort(key=lambda item: (item[0], item[1]))
     return unique_by_base_name([app for _rank, _index, app in usable], limit)
 
@@ -233,23 +313,175 @@ def take_app_actions(actions: list[Any], max_results: int) -> list[Any]:
     return actions[:max_results]
 
 
-def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[str, Any]]:
+def has_desktop_new_window_action(app: Any) -> bool:
+    for key in getattr(app, "actions", None) or {}:
+        if key == "launch" or not str(key).startswith(ACTION_PREFIX):
+            continue
+        if is_new_window_action(str(key)[len(ACTION_PREFIX) :]):
+            return True
+    return False
+
+
+def muxer_has_new_window_action(action_names: Sequence[str] | None) -> bool:
+    # gnome-shell checks g_action_group_has_action(muxer, "app.new-window")
+    # before SingleMainWindow. The remote org.gtk.Actions names omit the prefix.
+    for name in action_names or ():
+        normalized = str(name).lower().replace("_", "-")
+        if normalized in {"new-window", "app.new-window"}:
+            return True
+    return False
+
+
+def probe_gtk_actions(bus_name: str, object_path: str) -> list[str] | None:
+    """List org.gtk.Actions on a muxer. None means the name is not a Gtk app."""
+    if not bus_name or not object_path:
+        return None
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        result = bus.call_sync(
+            bus_name,
+            object_path,
+            "org.gtk.Actions",
+            "List",
+            None,
+            GLib.VariantType.new("(as)"),
+            Gio.DBusCallFlags.NONE,
+            80,
+            None,
+        )
+        return [str(item) for item in result.unpack()[0]]
+    except Exception:
+        return None
+
+
+def list_gtk_action_names(bus_name: str, object_path: str) -> list[str]:
+    names = probe_gtk_actions(bus_name, object_path)
+    return [] if names is None else names
+
+
+def _app_gtk_muxer_targets(app: Any, windows: Sequence[Any] | None) -> list[tuple[str, str]]:
+    from ulauncher.modes.launcher.windows import application_bus_name, application_object_path
+
+    seen: set[tuple[str, str]] = set()
+    targets: list[tuple[str, str]] = []
+
+    def add(bus_name: str, object_path: str) -> None:
+        if not bus_name or not object_path or (bus_name, object_path) in seen:
+            return
+        seen.add((bus_name, object_path))
+        targets.append((bus_name, object_path))
+
+    for win in windows or ():
+        if not _app_matches_window(app, win):
+            continue
+        add(
+            str(getattr(win, "gtk_unique_bus_name", "") or ""),
+            str(getattr(win, "gtk_application_object_path", "") or ""),
+        )
+    bus_name = application_bus_name(str(getattr(app, "app_id", "") or ""))
+    add(bus_name, application_object_path(bus_name))
+    return targets
+
+
+def app_muxer_has_new_window(app: Any, windows: Sequence[Any] | None) -> bool:
+    if not windows or not any(_app_matches_window(app, win) for win in windows):
+        return False
+    for bus_name, object_path in _app_gtk_muxer_targets(app, windows):
+        if muxer_has_new_window_action(list_gtk_action_names(bus_name, object_path)):
+            return True
+    return False
+
+
+def can_open_new_window(
+    window_count: int,
+    app: Any = None,
+    unique_gtk: bool | None = None,
+    windows: Sequence[Any] | None = None,
+    muxer_new_window: bool | None = None,
+) -> bool:
+    # goshos: get_n_windows() > 0 && shellApp.can_open_new_window().
+    # Port of gnome-shell shell_app_can_open_new_window while running:
+    # muxer app.new-window, SingleMainWindow / X-GNOME-SingleWindow, a
+    # desktop new-window action, then unique GtkApplication windows.
+    if window_count <= 0:
+        return False
+    if muxer_new_window is None:
+        muxer_new_window = app_muxer_has_new_window(app, windows)
+    if muxer_new_window:
+        return True
+    if bool(getattr(app, "single_window", False)):
+        return False
+    if has_desktop_new_window_action(app):
+        return True
+    if unique_gtk is None:
+        unique_gtk = app_is_unique_gtk(app, windows)
+    return not unique_gtk
+
+
+def open_new_window(app: Any) -> bool:
+    from ulauncher.modes.apps.launch_app import launch_app
+
+    app_id = str(getattr(app, "app_id", "") or "")
+    if not app_id:
+        return False
+    for key in getattr(app, "actions", None) or {}:
+        if not str(key).startswith(ACTION_PREFIX):
+            continue
+        action_id = str(key)[len(ACTION_PREFIX) :]
+        if is_new_window_action(action_id):
+            return launch_app(app_id, action_name=action_id)
+    return launch_app(app_id, raise_existing=False)
+
+
+def app_action_rows(
+    app: Any,
+    limit: int,
+    window_count: int = 0,
+    windows: Sequence[Any] | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        return _app_action_rows(app, limit, window_count, windows)
+    except Exception:
+        # a bad action list must not drop the app rows already scored
+        return []
+
+
+def _app_action_rows(
+    app: Any,
+    limit: int,
+    window_count: int,
+    windows: Sequence[Any] | None,
+) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     rows: list[dict[str, Any]] = []
+    if can_open_new_window(window_count, app, windows=windows):
+        rows.append(
+            {
+                "title": new_window_title(app.name),
+                "description": "Application action",
+                "icon": "application-x-executable-symbolic",
+                "app_id": getattr(app, "app_id", ""),
+                "action_name": "new-window",
+                "synthetic_new_window": True,
+            }
+        )
+        if len(rows) >= limit:
+            return take_app_actions(rows, limit)
     for key, meta in (getattr(app, "actions", None) or {}).items():
         if key == "launch" or not str(key).startswith(ACTION_PREFIX):
             continue
         action_id = str(key)[len(ACTION_PREFIX) :]
-        if is_new_window_action(action_id) and window_count <= 0:
+        if is_new_window_action(action_id):
             continue
         name = (meta or {}).get("name") or action_id
-        title = new_window_title(app.name) if is_new_window_action(action_id) else desktop_action_title(name, app.name)
         rows.append(
             {
-                "title": title,
+                "title": desktop_action_title(name, app.name),
                 "description": "Application action",
-                "icon": getattr(app, "icon", "") or "application-x-executable",
+                "icon": "application-x-executable-symbolic",
                 "app_id": getattr(app, "app_id", ""),
                 "action_name": action_id,
             }

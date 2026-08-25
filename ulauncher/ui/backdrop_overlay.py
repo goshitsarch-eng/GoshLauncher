@@ -56,8 +56,9 @@ class PopupBackdrop:
         geometries = get_monitor_geometries()
         display = Gdk.Display.get_default()
         monitors = display.get_monitors() if display is not None else None
-        for item in overlay_plan(geometries, skip_index):
-            monitor = monitors.get_item(int(item["index"])) if monitors is not None else None
+        for plan in overlay_plan(geometries, skip_index):
+            raw = monitors.get_item(int(plan["index"])) if monitors is not None else None
+            monitor = raw if isinstance(raw, Gdk.Monitor) else None
             window = self._make_window(monitor)
             self._windows.append(window)
             window.present()

@@ -26,7 +26,10 @@ CSS_RESET = """
 }
 """
 # Unscoped `*` would restyle Adwaita prefs if this sheet is on the display.
-POPUP_CSS_RESET = CSS_RESET.replace("* {", ".gosh-popup, .gosh-popup * {")
+# Do not reset `.gosh-popup *`: that selector (class + universal) beats Spotlight's
+# `.prompt { background-color }` on GTK 4.6, so the pill snapshots transparent on
+# Ubuntu 22.04. Looks own child fills; `.app *` already clears Adwaita borders.
+POPUP_CSS_RESET = CSS_RESET.replace("* {", ".gosh-popup {")
 
 
 def _load_legacy_theme(manifest_path: Path) -> LegacyTheme | None:

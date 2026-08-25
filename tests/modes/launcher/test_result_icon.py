@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ulauncher.modes.launcher.result_icon import (
     app_icon_or_fallback,
+    result_icon_name,
     result_icon_source,
     should_build_result_icon,
     window_icon_or_fallback,
@@ -31,3 +32,5 @@ def test_app_icon_falls_back_when_missing() -> None:
     assert window_icon_or_fallback(None) == "focus-windows-symbolic"
     assert result_icon_source({"icon": "utilities-terminal-symbolic"}) == {"icon_name": "utilities-terminal-symbolic"}
     assert result_icon_source({}) == {"icon_name": "application-x-executable-symbolic"}
+    assert result_icon_name({}) == "application-x-executable-symbolic"
+    assert result_icon_name({"icon": "firefox"}) == "firefox"

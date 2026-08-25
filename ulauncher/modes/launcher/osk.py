@@ -10,6 +10,7 @@ Visible repositions the popup and must not close it.
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Mapping
 from typing import Any, Callable
 
 PHOSH_OSK_DEST = "sm.puri.OSK0"
@@ -71,7 +72,7 @@ def osk_visible_from_properties_changed(_interface_name: str, signal_name: str, 
     return None
 
 
-def osk_height_for_work_area(work_area: dict[str, float], height: float | None = None) -> float:
+def osk_height_for_work_area(work_area: Mapping[str, float], height: float | None = None) -> float:
     if height is not None and height > 0:
         return float(height)
     work_height = float(work_area.get("height") or 0)
@@ -81,7 +82,7 @@ def osk_height_for_work_area(work_area: dict[str, float], height: float | None =
 
 
 def osk_keyboard_for_work_area(
-    work_area: dict[str, float],
+    work_area: Mapping[str, float],
     visible: bool,
     height: float | None = None,
     monitor_index: int = 0,

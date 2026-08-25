@@ -7,7 +7,7 @@ from ulauncher.modes.launcher.color import parse_color
 from ulauncher.modes.launcher.plan import flags_from_settings, plan_search
 from ulauncher.modes.launcher.units import convert_query
 from ulauncher.modes.launcher.urls import match_url
-from ulauncher.modes.launcher.web import SEARCH_ENGINES, engine_prefs_search_text, get_engine, web_result
+from ulauncher.modes.launcher.web import SEARCH_ENGINES, engine_prefs_search_text, get_engine, search_web, web_result
 
 
 def _flags(**overrides: object) -> dict:
@@ -48,10 +48,14 @@ def test_at_prefix_plans_web_only() -> None:
     assert planned["providers"] == ["web"]
     assert planned["web_fallback"] is False
     hit = web_result("ulauncher", "google")
+    assert hit is not None
     assert "ulauncher" in hit["url"]
     assert hit["title"] == 'Search Google for "ulauncher"'
     assert hit["description"] == "Open Google in your browser"
     assert hit["icon"] == "web-browser-symbolic"
+    assert search_web("", "google") == []
+    assert web_result("", "google") is None
+    assert search_web("cats", "google")[0]["url"].endswith("cats")
 
 
 def test_color_hex_parses() -> None:

@@ -37,3 +37,16 @@ class TestAppResult:
 
     def test_search_score(self, app1: AppResult) -> None:
         assert app1.search_score("true") > app1.search_score("trivago")
+
+    def test_single_window_desktop_key(self, app1: AppResult) -> None:
+        assert app1.single_window is False
+        single = AppResult.from_id("singleapp.desktop")
+        assert single is not None
+        assert single.single_window is True
+
+    def test_from_id_swallows_invalid_desktop_encoding(self, mocker: MockerFixture) -> None:
+        mocker.patch(
+            "ulauncher.modes.apps.app_result.GioUnix.DesktopAppInfo.new",
+            side_effect=RuntimeError("invalid desktop encoding"),
+        )
+        assert AppResult.from_id("broken.desktop") is None

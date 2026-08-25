@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 from pytest_mock import MockerFixture
 
-from ulauncher.core import UlauncherCore, is_legacy_trigger_mode, launcher_has_local_hits
+from ulauncher.core import UlauncherCore, is_legacy_trigger_mode, launcher_has_local_hits, reject_async_paints
 from ulauncher.internals import effects
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import KeywordTrigger, Result
@@ -75,6 +75,17 @@ def test_launcher_has_local_hits_skips_headers_and_web() -> None:
     assert launcher_has_local_hits([LauncherResult(name="Firefox", kind="app")]) is True
 
 
+def test_reject_async_paints_forwards_to_launcher(mocker: MockerFixture) -> None:
+    launcher = MagicMock()
+
+    class Other:
+        pass
+
+    mocker.patch("ulauncher.core.get_modes", return_value=[launcher, Other()])
+    reject_async_paints()
+    launcher.reject_async_paint.assert_called_once_with()
+
+
 def test_launcher_paint_does_not_merge_shortcut_triggers(mocker: MockerFixture) -> None:
     class ShortcutMode:
         pass
@@ -139,6 +150,23 @@ def test_set_query_does_not_treat_g_as_a_keyword_without_shortcuts(mocker: Mocke
     launcher = LauncherMode()
     mocker.patch("ulauncher.core.get_modes", return_value=[launcher])
     mocker.patch.object(launcher, "handle_query")
+    core.set_query("g firefox", MagicMock())
+    assert isinstance(core._mode, LauncherMode)
+    assert core.query.keyword is None
+    assert str(core.query) == "g firefox"
+
+
+def test_set_query_does_not_let_shortcut_keywords_steal_goshos_search(mocker: MockerFixture) -> None:
+    class ShortcutMode:
+        def matches_query_str(self, _query_str: str) -> bool:
+            return False
+
+    core = UlauncherCore()
+    launcher = LauncherMode()
+    shortcut_mode = ShortcutMode()
+    mocker.patch("ulauncher.core.get_modes", return_value=[launcher, shortcut_mode])
+    mocker.patch.object(launcher, "handle_query")
+    core._keyword_cache[shortcut_mode]["g"] = KeywordTrigger(name="Google", keyword="g")  # type: ignore[index]
     core.set_query("g firefox", MagicMock())
     assert isinstance(core._mode, LauncherMode)
     assert core.query.keyword is None

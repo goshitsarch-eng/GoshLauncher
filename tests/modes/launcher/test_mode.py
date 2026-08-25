@@ -22,6 +22,122 @@ def test_matches_any_non_empty_query() -> None:
     assert not mode.matches_query_str("")
 
 
+def test_reject_async_paint_blocks_in_flight_gio(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.async_paint import should_run_async_paint, should_schedule_async_paint
+
+    invalidated: list[str] = []
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.invalidate_path_lookup",
+        lambda: invalidated.append("path"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.commands.invalidate_command_lookup",
+        lambda: invalidated.append("command"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.bookmarks.invalidate_bookmarks",
+        lambda: invalidated.append("bookmarks"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.recents.invalidate_recent_files",
+        lambda: invalidated.append("recents"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.invalidate_windows",
+        lambda: invalidated.append("windows"),
+    )
+    mode = LauncherMode()
+    painted: list[object] = []
+    cancelled: list[str] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "x", "providers": [], "mode": "all"}
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._lookup_idle = SimpleNamespace(cancel=lambda: cancelled.append("cancel"))
+    mode.reject_async_paint()
+    assert mode._accept_paint is False
+    assert cancelled == ["cancel"]
+    assert mode._lookup_idle is None
+    assert should_schedule_async_paint(False, mode._accept_paint) is False
+    assert should_run_async_paint(True, mode._accept_paint) is False
+    mode._run_repaint()
+    assert painted == []
+    assert invalidated == ["path", "command", "bookmarks", "recents"]
+    mode.handle_query(Query(None, "2+2"), lambda *_args: None)
+    assert mode._accept_paint is True
+
+
+def test_empty_state_drops_in_flight_path_paint(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    invalidated: list[str] = []
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.invalidate_path_lookup",
+        lambda: invalidated.append("path"),
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.commands.invalidate_command_lookup",
+        lambda: invalidated.append("command"),
+    )
+    settings = Settings()
+    settings.enable_empty_suggestions = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    mode = LauncherMode()
+    painted: list[object] = []
+    cancelled: list[str] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "~/foo", "providers": ["path"], "mode": "all"}
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._lookup_idle = SimpleNamespace(cancel=lambda: cancelled.append("cancel"))
+    assert list(mode.get_home_results(6)) == []
+    assert cancelled == ["cancel"]
+    assert mode._lookup_idle is None
+    assert mode._paint_planned is None
+    assert mode._paint_query == ""
+    mode._run_repaint()
+    assert painted == []
+    assert invalidated == ["path", "command"]
+    mode.handle_query(Query(None, "2+2"), lambda *_args: None)
+    assert mode._accept_paint is True
+
+
+def test_prefix_only_entry_still_runs_async_paint() -> None:
+    """goshos shouldRunAsyncPaint uses the entry text, not plan.query.
+
+    `.` and `$` strip to an empty plan query but are still a search. A Gio
+    xbel or window-list finish must replace the empty first paint.
+    """
+    mode = LauncherMode()
+    painted: list[object] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "", "providers": ["files"], "mode": "files"}
+    mode._paint_query = "."
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._results_for_plan = lambda *_args: []  # type: ignore[method-assign]
+    mode._run_repaint()
+    assert painted
+
+
+def test_empty_entry_drops_async_paint_even_if_plan_remains() -> None:
+    """goshos onTextChanged empty: _lastQuery is '' so a leftover ~/ plan cannot paint."""
+    mode = LauncherMode()
+    painted: list[object] = []
+    mode._accept_paint = True
+    mode._paint_callback = painted.append
+    mode._paint_planned = {"query": "~/foo", "providers": ["path"], "mode": "all"}
+    mode._paint_query = ""
+    mode._paint_settings = SimpleNamespace()
+    mode._paint_chrome = {}
+    mode._results_for_plan = lambda *_args: []  # type: ignore[method-assign]
+    mode._run_repaint()
+    assert painted == []
+
+
 def test_launcher_result_has_activate_action() -> None:
     result = LauncherResult(name="Test", kind="app", payload={"app_id": "x.desktop"})
     assert "activate" in result.actions
@@ -47,6 +163,13 @@ def test_url_query_does_not_force_web() -> None:
     kinds = _kinds(_handle("example.com"))
     assert "url" in kinds
     assert "web" not in kinds
+    url = next(row for row in _handle("example.com") if getattr(row, "kind", "") == "url")
+    assert url.name == "https://example.com"
+
+
+def test_empty_at_prefix_has_no_web_row() -> None:
+    assert _kinds(_handle("@")) == []
+    assert _kinds(_handle("@ ")) == []
 
 
 def test_at_prefix_is_web() -> None:
@@ -71,6 +194,44 @@ def test_hash_wifi_is_settings_not_color() -> None:
     kinds = _kinds(_handle("# wifi"))
     assert "settings" in kinds
     assert "color" not in kinds
+
+
+def test_hash_prefix_honors_max_per_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.max_per_category = 8
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    rows = [row for row in _handle("#") if getattr(row, "kind", "") == "settings"]
+    assert len(rows) == 8
+
+
+def test_settings_and_system_search_pass_max_per_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.settings_panels import settings_panel_available
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.max_per_category = 8
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    seen: dict[str, object] = {}
+    wifi = {"id": "wifi", "title": "Wi-Fi", "icon": "network-wireless-symbolic", "keywords": []}
+
+    def fake_settings(_query: str, limit: int = 6, is_available: object = None) -> list:
+        seen["settings_limit"] = limit
+        seen["settings_available"] = is_available
+        return [wifi]
+
+    def fake_system(_query: str, limit: int = 6, **_kwargs: object) -> list:
+        seen["system_limit"] = limit
+        return [{"id": "lock", "title": "Lock Screen", "icon": "system-lock-screen-symbolic"}]
+
+    monkeypatch.setattr("ulauncher.modes.launcher.settings_panels.match_settings_panels", fake_settings)
+    monkeypatch.setattr("ulauncher.modes.launcher.system_actions.match_system_actions", fake_system)
+    _handle("#")
+    assert seen["settings_limit"] == 8
+    assert seen["settings_available"] is settings_panel_available
+    _handle("lock the screen")
+    assert seen["system_limit"] == 8
 
 
 def test_hex_color_without_space() -> None:
@@ -169,8 +330,42 @@ def test_empty_state_puts_windows_first_for_popos(monkeypatch: pytest.MonkeyPatc
     window = next(row for row in results if row.kind == "window")
     app = next(row for row in results if row.kind == "app")
     assert window.description == "Workspace 1"
-    assert window.icon == "focus-windows-symbolic"
+    assert window.icon == "firefox"
+    assert window.payload.get("app_id") == "firefox"
+    assert window.payload.get("window_title") == "Mozilla Firefox"
+    assert window.payload.get("id") == "0x1"
+    assert window.payload.get("wid") == "0x1"
     assert app.description == "Switch to application"
+
+
+def test_empty_state_window_icon_uses_installed_app_outside_home_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    firefox = SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop", _executable="firefox")
+    terminal = SimpleNamespace(name="Terminal", icon="utilities-terminal", app_id="org.gnome.Terminal.desktop")
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [terminal],
+        [
+            WindowInfo(
+                wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11, app_id="firefox"
+            )
+        ],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.iter_apps", lambda: [firefox, terminal])
+    results = list(LauncherMode().get_home_results(6))
+    window = next(row for row in results if row.kind == "window")
+    assert window.icon == "firefox"
+    assert window.payload["app_id"] == "firefox"
 
 
 def _patch_empty_state(
@@ -265,10 +460,175 @@ def test_empty_suggestions_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> N
     assert list(LauncherMode().get_home_results(6)) == []
 
 
+def test_empty_state_isolates_windows_from_frequent_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "spotlight"
+    settings.applied_look = "spotlight"
+    settings.result_order = "default"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+
+    def boom_apps(_limit: int) -> list:
+        msg = "desktop list failed"
+        raise RuntimeError(msg)
+
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")],
+        [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.home_apps", boom_apps)
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["window"]
+
+    def boom_windows() -> list:
+        msg = "window list failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.apps.home_apps",
+        lambda limit: [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")][:limit],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", boom_windows)
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["app"]
+
+
+def test_empty_state_skips_one_vanished_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    class Vanished:
+        wid = "0xbad"
+        wm_class = "gone"
+        desktop = 0
+        pid = 1
+        sticky = False
+
+        @property
+        def title(self) -> str:
+            msg = "window closed"
+            raise RuntimeError(msg)
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Notes", icon="notes", app_id="notes.desktop")],
+        [
+            Vanished(),
+            WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11),
+        ],
+    )
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["window", "app"]
+    assert [row.name for row in results] == ["Mozilla Firefox", "Notes"]
+
+
+def test_typed_search_skips_one_vanished_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    class Vanished:
+        wid = "0xbad"
+        wm_class = "gone"
+        desktop = 0
+        pid = 1
+        sticky = False
+
+        @property
+        def title(self) -> str:
+            message = "window closed"
+            raise RuntimeError(message)
+
+    settings = Settings()
+    settings.enable_window_search = True
+    settings.enable_application_mode = False
+    settings.enable_calculator = False
+    settings.enable_unit_convert = False
+    settings.enable_color_hex = False
+    settings.enable_time_date = False
+    settings.show_web_search = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.cached_windows",
+        lambda: [
+            Vanished(),
+            WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11),
+        ],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    results = _handle("firefox")
+    assert [row.name for row in results if getattr(row, "kind", "") == "window"] == ["Mozilla Firefox"]
+
+
+def test_empty_state_hides_skip_taskbar_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")],
+        [
+            WindowInfo(
+                wid="0x2",
+                title="Top Bar",
+                wm_class="firefox.Firefox",
+                desktop=0,
+                pid=11,
+                skip_taskbar=True,
+            ),
+            WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11),
+        ],
+    )
+    capped = list(LauncherMode().get_home_results(1))
+    assert [row.name for row in capped] == ["Mozilla Firefox"]
+    results = list(LauncherMode().get_home_results(6))
+    kinds = _kinds(results)
+    assert kinds[0] == "window"
+    assert [row.name for row in results if row.kind == "window"] == ["Mozilla Firefox"]
+    app = next(row for row in results if row.kind == "app")
+    assert app.description == "Switch to application"
+
+
 def test_settings_row_copy_matches_goshos() -> None:
     results = _handle("# wifi")
     settings_row = next(row for row in results if getattr(row, "kind", "") == "settings")
     assert settings_row.description == "GNOME Settings"
+
+
+def test_settings_without_launcher_are_not_activatable(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.settings_panels import settings_result_meta
+
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.settings_panels.settings_argv",
+        lambda *_a, **_k: None,
+    )
+    wifi = next(row for row in _handle("# wifi") if getattr(row, "kind", "") == "settings")
+    assert wifi.name == "Wi-Fi"
+    assert wifi.activatable is False
+    assert wifi.actions == {}
+    panel = {"id": "wifi", "title": "Wi-Fi", "icon": "network-wireless-symbolic", "keywords": []}
+    assert settings_result_meta(panel, None)["activatable"] is False
 
 
 def test_clock_and_units_copy_prompt_enter() -> None:
@@ -279,6 +639,21 @@ def test_clock_and_units_copy_prompt_enter() -> None:
     assert "system" in _kinds(_handle("lock the screen"))
     assert "units" in _kinds(_handle("convert 10 km to mi"))
     assert "calculator" in _kinds(_handle("half of 80"))
+
+
+def test_places_rows_keep_folder_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.terminal_command",
+        lambda directory, **_kwargs: {"argv": ["xdg-terminal-exec"], "cwd": directory},
+    )
+    results = _handle("docs")
+    places = [row for row in results if getattr(row, "kind", "") == "place"]
+    assert places
+    docs = next(row for row in places if row.name == "Documents")
+    assert docs.description
+    assert docs.icon == "folder-documents-symbolic"
+    term = next(row for row in places if row.name == "Open in Terminal")
+    assert term.kind == "place"
 
 
 def test_compact_density_still_shows_descriptions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -295,7 +670,11 @@ def test_compact_density_still_shows_descriptions(monkeypatch: pytest.MonkeyPatc
     assert calc.compact is False
 
 
-def test_path_query_returns_path_results() -> None:
+def test_path_query_returns_path_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.terminal_command",
+        lambda directory, **_kwargs: {"argv": ["xdg-terminal-exec"], "cwd": directory},
+    )
     results = _handle("/tmp")
     assert "path" in _kinds(results)
     assert any(row.name == "Open in Terminal" for row in results)
@@ -311,10 +690,12 @@ def test_path_first_paint_is_checking_until_flush() -> None:
     first = captured[0]["results"]
     path = next(row for row in first if getattr(row, "kind", "") == "path")
     assert path.description == "Checking path"
+    assert path.activatable is False
     mode.flush_lookups()
     last = captured[-1]["results"]
     path = next(row for row in last if getattr(row, "kind", "") == "path" and not row.payload.get("in_terminal"))
     assert path.description == "Open path"
+    assert path.activatable is True
 
 
 def test_bookmark_first_paint_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -376,6 +757,48 @@ def test_search_order_windows_first_puts_windows_before_apps(monkeypatch: pytest
     assert "window" in kinds
     assert "app" in kinds
     assert kinds.index("window") < kinds.index("app")
+
+
+def test_close_window_row_keeps_muxer_and_atspi_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_window_search = True
+    settings.enable_application_mode = False
+    settings.enable_calculator = False
+    settings.enable_unit_convert = False
+    settings.enable_color_hex = False
+    settings.enable_time_date = False
+    settings.show_web_search = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.match_windows",
+        lambda _query, _limit: [
+            {
+                "kind": "close",
+                "title": "Close Mozilla Firefox",
+                "window_title": "Mozilla Firefox",
+                "description": "Workspace 1",
+                "icon": "firefox",
+                "wid": "ext:abc",
+                "pid": 0,
+                "wm_class": "firefox",
+                "app_id": "firefox",
+                "gtk_unique_bus_name": ":1.9",
+                "gtk_application_object_path": "/org/mozilla/firefox",
+                "atspi_ref": "bus\0/w/1",
+                "payload": "ext:abc",
+                "id": "close-firefox",
+            }
+        ],
+    )
+    row = next(result for result in _handle("close firefox") if getattr(result, "kind", "") == "window-close")
+    assert row.icon == "firefox"
+    assert row.payload["kind"] == "close"
+    assert row.payload["window_title"] == "Mozilla Firefox"
+    assert row.payload["atspi_ref"] == "bus\0/w/1"
+    assert row.payload["gtk_unique_bus_name"] == ":1.9"
+    assert row.payload["app_id"] == "firefox"
 
 
 def test_get_modes_launcher_owns_typed_search() -> None:
@@ -479,6 +902,109 @@ def test_running_app_offers_new_window_action(monkeypatch: pytest.MonkeyPatch) -
     assert any(row.name == "Private — Firefox" for row in results)
     assert any(row.name == "Applications" for row in results)
     assert any(row.description == "Switch to application" for row in results)
+
+
+def _stub_typed_firefox(monkeypatch: pytest.MonkeyPatch, settings: object) -> None:
+    from ulauncher.utils.settings import Settings
+
+    app = SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        _executable="firefox",
+        actions={"launch": {"name": "Launch"}, "action:private": {"name": "Private"}},
+    )
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.match_apps", lambda _query, _limit: [app])
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", list)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.match_windows", lambda *_args, **_kwargs: [])
+
+
+def test_throwing_url_provider_still_shows_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    _stub_typed_firefox(monkeypatch, settings)
+
+    def boom(_query: str) -> None:
+        message = "url vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.urls.match_url", boom)
+    assert "app" in _kinds(_handle("firefox"))
+
+
+def test_throwing_window_list_still_shows_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    _stub_typed_firefox(monkeypatch, settings)
+
+    def boom() -> list:
+        message = "windows vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", boom)
+    kinds = _kinds(_handle("firefox"))
+    assert "app" in kinds
+    assert "app-action" in kinds
+
+
+def test_throwing_app_actions_keep_app_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    settings.enable_app_actions = True
+    _stub_typed_firefox(monkeypatch, settings)
+
+    def boom(*_args: object, **_kwargs: object) -> list:
+        message = "actions vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.app_action_rows", boom)
+    kinds = _kinds(_handle("firefox"))
+    assert "app" in kinds
+    assert "app-action" not in kinds
+
+
+def test_throwing_apps_still_show_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    settings.show_web_search = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+
+    def boom(_query: str, _limit: int) -> list:
+        message = "apps vanished"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.match_apps", boom)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.match_windows",
+        lambda _query, _limit: [
+            {
+                "title": "Mozilla Firefox",
+                "description": "Workspace 1",
+                "icon": "firefox",
+                "wid": "0x1",
+                "pid": 11,
+                "wm_class": "firefox",
+                "kind": "focus",
+                "payload": "0x1",
+            }
+        ],
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", list)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+    assert "window" in _kinds(_handle("firefox"))
+    assert "app" not in _kinds(_handle("firefox"))
 
 
 def test_calculator_activate_copies_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:

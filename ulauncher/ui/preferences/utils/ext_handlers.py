@@ -45,7 +45,7 @@ class ExtensionHandlers:
         # Note: Spinners will respect /org/gnome/desktop/interface/enable-animations
         # So people who disabled animations in Gnome thinking it will only apply to the DE's
         # own animations will get static spinners :'(
-        spinner = Gtk.Spinner(active=True)
+        spinner = gtk4.start_spinner()
         gtk4.pack_start(header_box, spinner, False, False, 0)
 
         title_label = styled(Gtk.Label(label=title), "title-4")

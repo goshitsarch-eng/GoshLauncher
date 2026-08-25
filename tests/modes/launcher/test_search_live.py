@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from ulauncher.modes.launcher.search_live import (
+    live_search_fingerprint,
     next_live_search_action,
     should_track_live_window,
     windows_fingerprint,
@@ -36,3 +37,25 @@ def test_windows_fingerprint_changes_with_title() -> None:
     first = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x")]
     second = [SimpleNamespace(wid="1", title="B", desktop=0, wm_class="x")]
     assert windows_fingerprint(first) != windows_fingerprint(second)
+
+
+def test_windows_fingerprint_changes_with_user_time() -> None:
+    first = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x", user_time=1)]
+    second = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x", user_time=9)]
+    assert windows_fingerprint(first) != windows_fingerprint(second)
+
+
+def test_live_search_fingerprint_includes_workspace_count() -> None:
+    windows = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x")]
+    same_windows = live_search_fingerprint(windows, 2)
+    assert same_windows == live_search_fingerprint(windows, 2)
+    assert live_search_fingerprint(windows, 3) != same_windows
+    assert live_search_fingerprint([], 2) != same_windows
+
+
+def test_live_search_fingerprint_includes_current_desktop() -> None:
+    windows = [SimpleNamespace(wid="1", title="A", desktop=0, wm_class="x")]
+    same_windows = live_search_fingerprint(windows, 2, 0)
+    assert same_windows == live_search_fingerprint(windows, 2, 0)
+    assert live_search_fingerprint(windows, 2, 1) != same_windows
+    assert live_search_fingerprint(windows, 2, "code") != same_windows

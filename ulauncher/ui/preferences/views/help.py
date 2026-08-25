@@ -37,7 +37,7 @@ _PREFIX_ROWS = (
 
 
 def add_usage_groups(page: Adw.PreferencesPage) -> None:
-    """Keyboard and prefix docs on About. Goshos prefs.js has no Help page."""
+    """Keyboard and prefix docs on Desktop. Goshos About is only title, Looks, and host."""
     keyboard = Adw.PreferencesGroup(
         title="Keyboard",
         description="Open with Ctrl+Space and begin typing. Navigation matches Spotlight-goshos.",

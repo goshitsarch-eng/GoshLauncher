@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.urls import FILE_EXTS, match_url
+from ulauncher.modes.launcher.paths import canonicalize_file_uri
+from ulauncher.modes.launcher.urls import FILE_EXTS, is_file_url_query, is_unsafe_launch_uri, match_url
 
 # Exact denylist from spotlight-goshos urlMatch.js (Version 2026.08.20).
 GOSHOS_FILE_EXTS = frozenset(
@@ -114,7 +115,8 @@ def test_file_extensions_are_not_urls() -> None:
 def test_real_domains_match() -> None:
     hit = match_url("example.com")
     assert hit is not None
-    assert hit["url"].startswith("https://")
+    assert hit["url"] == "https://example.com"
+    assert hit["label"] == "https://example.com"
     assert hit["icon"] == "web-browser-symbolic"
     assert match_url("https://ulauncher.io") is not None
 
@@ -124,6 +126,18 @@ def test_javascript_scheme_is_rejected() -> None:
     assert match_url("vbscript:alert(1)") is None
     assert match_url("java\u200bscript:alert(1)") is None
     assert match_url("data:text/html,hi") is None
+
+
+def test_is_unsafe_launch_uri_matches_goshos() -> None:
+    assert is_unsafe_launch_uri("javascript:alert(1)")
+    assert is_unsafe_launch_uri("DATA:text/html,hi")
+    assert not is_unsafe_launch_uri("https://example.com")
+    assert is_unsafe_launch_uri("\u200bdata:text/html,hi")
+    assert is_unsafe_launch_uri("java\u200bscript:alert(1)")
+    assert is_unsafe_launch_uri("\0vbscript:msgbox(1)")
+    assert is_unsafe_launch_uri("  javascript:alert(1)")
+    assert not is_unsafe_launch_uri("file:///home/u/data")
+    assert not is_unsafe_launch_uri("mailto:a@b.c")
 
 
 def test_trailing_fqdn_dot_and_private_hosts() -> None:
@@ -181,3 +195,10 @@ def test_mailto_magnet_localhost_and_https_with_space() -> None:
     assert match_url("localhostx") is None
     assert match_url("magnet:?xt=urn:btih:abc") is not None
     assert match_url("magnet:xt=urn:btih:abc") is not None
+
+
+def test_latin1_file_uri_is_still_a_location() -> None:
+    assert is_file_url_query("file:///") is True
+    assert is_file_url_query("file://") is False
+    assert is_file_url_query("file:///home/u/caf%E9") is True
+    assert canonicalize_file_uri("file:///home/u/caf%E9") == "file:///home/u/caf%E9"

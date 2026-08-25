@@ -83,9 +83,60 @@ def test_goshos_unit_conversion_battery() -> None:
     assert convert_query("200 kcal to kj")["title"] == "836.8 kj"
     assert convert_query("1 kwh to kj")["title"] == "3600 kj"
     assert convert_query("100 w to kw")["title"] == "0.1 kw"
+    hp_kw = convert_query("1 hp to kw")
+    assert hp_kw is not None
+    assert hp_kw["title"].split()[1] == "kw"
+    assert abs(float(hp_kw["title"].split()[0]) - 0.746) < 0.001
     assert convert_query("1 cup to tbsp")["title"] == "16 tbsp"
     assert convert_query("3 tsp to tbsp")["title"] == "1 tbsp"
     assert round(float(convert_query("1 floz to ml")["title"].split()[0])) == 30
     assert convert_query("5 km to km") is None
     assert convert_query("1 kg to km") is None
     assert convert_query("1 min to m") is None
+
+
+def test_goshos_pressure_energy_and_angle() -> None:
+    import math
+
+    from ulauncher.modes.launcher.units import convert_units, parse_unit_query
+
+    assert convert_query("32 psi to bar")["title"].split()[1] == "bar"
+    assert convert_query("760 mmhg to atm")["title"].split()[1] == "atm"
+    assert convert_query("10 m/s to kph")["title"].split()[1] == "kph"
+    assert parse_unit_query("1 m² to ft2")["from"] == "m2"
+    assert convert_query("1 m² to ft2") is not None
+    assert convert_query("200 calories to kj")["title"] == "836.8 kj"
+    cal = convert_units(1, "cal", "j")
+    assert cal is not None
+    assert cal["value"] == 4.184
+    hp = convert_units(1, "hp", "w")
+    assert hp is not None
+    assert round(hp["value"]) == 746
+    deg = convert_units(180, "deg", "rad")
+    assert deg is not None
+    assert abs(deg["value"] - math.pi) < 1e-10
+    nmi = convert_units(1, "nmi", "m")
+    assert nmi is not None
+    assert nmi["value"] == 1852
+    stone = convert_units(1, "st", "kg")
+    assert stone is not None
+    assert round(stone["value"] * 1000) / 1000 == 6.35
+    assert parse_unit_query("180° to rad")["from"] == "deg"
+    assert parse_unit_query("180 degrees to rad")["from"] == "degrees"
+    assert parse_unit_query("1 fl oz to ml")["from"] == "floz"
+
+
+def test_goshos_unit_as_how_many_and_articles() -> None:
+    from ulauncher.modes.launcher.units import parse_unit_query
+
+    assert parse_unit_query("10 km as miles")["to"] == "miles"
+    assert parse_unit_query("how many miles is 10 km")["to"] == "miles"
+    assert parse_unit_query("how many miles are in 10 km")["to"] == "miles"
+    assert parse_unit_query("how many miles are 10 km")["from"] == "km"
+    assert parse_unit_query("an inch to cm")["value"] == 1
+    assert parse_unit_query("10 km to a mile")["from"] == "km"
+    assert parse_unit_query("10 km to a mile")["to"] == "mile"
+    assert parse_unit_query("1.5e2 f to c")["value"] == 150
+    assert parse_unit_query("how many km are in a mile")["value"] == 1
+    assert parse_unit_query("a mile to km")["value"] == 1
+    assert parse_unit_query("180° into rad")["from"] == "deg"

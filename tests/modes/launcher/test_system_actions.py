@@ -5,7 +5,10 @@ import pytest
 from ulauncher.modes.launcher.system_actions import (
     SYSTEM_ACTIONS,
     action_is_available,
+    action_matches,
     match_system_actions,
+    orientation_icon,
+    orientation_title,
     run_system_action,
     screenshot_commands,
     show_screenshot_ui,
@@ -27,6 +30,39 @@ def test_spoken_lock_sign_out_and_power_off() -> None:
     assert shutdown[0]["id"] == "shutdown"
     assert match_system_actions("lock now")
     assert match_system_actions("sleep")
+    assert match_system_actions("sign off")[0]["id"] == "logout"
+    assert match_system_actions("lock orientation")[0]["id"] == "lock-orientation"
+    assert match_system_actions("unlock")[0]["id"] == "lock-orientation"
+
+
+def test_orientation_title_follows_lock_state() -> None:
+    assert orientation_title(False) == "Lock Screen Rotation"
+    assert orientation_icon(False) == "rotation-allowed-symbolic"
+    assert orientation_title(True) == "Unlock Screen Rotation"
+    assert orientation_icon(True) == "rotation-locked-symbolic"
+    unlocked = match_system_actions("lock orientation", orientation_locked=False)
+    assert unlocked[0]["title"] == "Lock Screen Rotation"
+    assert unlocked[0]["icon"] == "rotation-allowed-symbolic"
+    locked = match_system_actions("unlock", orientation_locked=True)
+    assert locked[0]["id"] == "lock-orientation"
+    assert locked[0]["title"] == "Unlock Screen Rotation"
+    assert locked[0]["icon"] == "rotation-locked-symbolic"
+
+
+def test_orientation_action_toggles(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"locked": False}
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.system_actions.get_orientation_locked",
+        lambda: state["locked"],
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.system_actions.set_orientation_locked",
+        lambda locked: state.update(locked=locked) or True,
+    )
+    run_system_action("lock-orientation")
+    assert state["locked"] is True
+    run_system_action("lock-orientation")
+    assert state["locked"] is False
 
 
 def test_logind_no_hides_power_actions_screenshot_stays() -> None:
@@ -64,3 +100,15 @@ def test_screenshot_portal_runs_before_argv(monkeypatch: pytest.MonkeyPatch) -> 
     run_system_action("screenshot", screenshot_ui=lambda: False)
     assert launched
     assert launched[0] == ["gtk-launch", "org.gnome.Screenshot"]
+
+
+def test_goshos_lock_o_is_not_a_match() -> None:
+    lock = {"title": "Lock Screen", "keywords": ["lock"]}
+    assert action_matches(lock, "loc") is True
+    assert action_matches(lock, "lock") is True
+    assert action_matches(lock, "firefox") is False
+    assert action_matches(lock, "clock") is False
+    assert action_matches(lock, "een") is False
+    assert action_matches(lock, "o") is False
+    assert action_matches({"title": "Shut Down", "keywords": ["turn off"]}, "off") is True
+    assert action_matches({"title": "Take a Screenshot", "keywords": ["record"]}, "record") is True

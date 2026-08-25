@@ -45,7 +45,8 @@ def _event_time_us(controller: Any) -> int:
     getter = getattr(controller, "get_current_event_time", None)
     if not callable(getter):
         return 0
-    time_ms = int(getter() or 0)
+    raw = getter() or 0
+    time_ms = int(raw) if isinstance(raw, (int, float, str)) else 0
     if time_ms <= 0:
         return 0
     return time_ms * 1000
@@ -169,9 +170,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self._sync_gnome_wayland_overlay()
         self.present()
         super().set_visible(True)
-
-        if self.query_str:
-            self.set_input(self.query_str)
 
     def apply_styling(self) -> None:
         if self._styled:
@@ -364,13 +362,22 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.get_app().query_changed(self.prompt_input.get_text())
 
     def activate_result(self, alt: bool, fallback: bool = True) -> None:
-        from ulauncher.modes.launcher.activate import activatable_result, indexed_activatable_result
+        from ulauncher.modes.launcher.activate import (
+            activatable_result,
+            activate_popup_result,
+            indexed_activatable_result,
+        )
 
         results = self.results_view.get_result_objects()
         index = self.results_view.selected_index
         chosen = activatable_result(results, index) if fallback else indexed_activatable_result(results, index)
-        if chosen:
-            self.get_app().activate_result(chosen, alt)
+        app = self.get_app()
+        if activate_popup_result(
+            chosen,
+            lambda: app.request_close(save_query=True),
+            app.activate_result,
+            alt,
+        ):
             return
         self._refocus_entry_soon()
 
@@ -378,11 +385,18 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.activate_result(alt, fallback=False)
 
     def _activate_numbered(self, index: int) -> None:
-        from ulauncher.modes.launcher.activate import indexed_activatable_result
+        from ulauncher.modes.launcher.activate import activate_popup_result, indexed_activatable_result
 
         chosen = indexed_activatable_result(self.results_view.numbered_results(), index)
-        if chosen:
-            self.get_app().activate_result(chosen, False)
+        if not chosen:
+            return
+        app = self.get_app()
+        activate_popup_result(
+            chosen,
+            lambda: app.request_close(save_query=True),
+            app.activate_result,
+            False,
+        )
 
     def _apply_move(self, delta: int) -> None:
         if delta <= -999:  # noqa: PLR2004
@@ -518,19 +532,17 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self._refocus_entry_soon()
 
     def _widget_rect_in_prompt(self, widget: Gtk.Widget) -> tuple[float, float, float, float]:
-        compute = getattr(widget, "compute_bounds", None)
-        if callable(compute):
-            ok, bounds = compute(self.prompt)
-            if ok and bounds is not None:
-                get_x = getattr(bounds, "get_x", None)
-                if callable(get_x):
-                    return (
-                        float(bounds.get_x()),
-                        float(bounds.get_y()),
-                        float(bounds.get_width()),
-                        float(bounds.get_height()),
-                    )
-                return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
+        ok, bounds = gtk4.widget_bounds(widget, self.prompt)
+        if ok and bounds is not None:
+            get_x = getattr(bounds, "get_x", None)
+            if callable(get_x):
+                return (
+                    float(bounds.get_x()),
+                    float(bounds.get_y()),
+                    float(bounds.get_width()),
+                    float(bounds.get_height()),
+                )
+            return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
         return (0.0, 0.0, 0.0, 0.0)
 
     def _prompt_click_target(self, x: float, y: float) -> str:
@@ -565,16 +577,22 @@ class UlauncherWindow(Gtk.ApplicationWindow):
     def _click_outside_card(self, x: float, y: float) -> bool:
         from ulauncher.modes.launcher.click_outside import click_is_outside_card
 
-        compute = getattr(self.theme_root, "compute_bounds", None)
-        if callable(compute):
-            ok, bounds = compute(self)
-            if ok:
+        ok, bounds = gtk4.widget_bounds(self.theme_root, self)
+        if ok and bounds is not None:
+            get_x = getattr(bounds, "get_x", None)
+            if callable(get_x):
                 return click_is_outside_card(
-                    x - bounds.get_x(),
-                    y - bounds.get_y(),
-                    bounds.get_width(),
-                    bounds.get_height(),
+                    x - float(bounds.get_x()),
+                    y - float(bounds.get_y()),
+                    float(bounds.get_width()),
+                    float(bounds.get_height()),
                 )
+            return click_is_outside_card(
+                x - float(bounds.x),
+                y - float(bounds.y),
+                float(bounds.width),
+                float(bounds.height),
+            )
         width = float(self.theme_root.get_width() or 0)
         height = float(self.theme_root.get_height() or 0)
         return click_is_outside_card(x, y, width, height)
@@ -878,6 +896,11 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             idle.cancel()
             self._live_idle = None
 
+    def _reject_async_paints(self) -> None:
+        from ulauncher.core import reject_async_paints
+
+        reject_async_paints()
+
     def _on_live_search_change(self) -> None:
         from ulauncher.modes.launcher.async_paint import should_schedule_async_paint
 
@@ -910,9 +933,12 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self._stop_session_watch,
                 self._stop_osk_watch,
                 self._stop_limits_timer,
+                self._reject_async_paints,
             )
         )
-        if not save_query or not self.settings.auto_resume:
+        from ulauncher.modes.launcher.popup_gate import should_keep_query_on_close
+
+        if not should_keep_query_on_close(save_query, self.settings.auto_resume):
             self.get_app().set_query("", update_input=False)
         if self.settings.grab_mouse_pointer:
             self.toggle_grab_pointer_device(False)

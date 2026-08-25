@@ -118,6 +118,8 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     chosen, alt = popup.app.activated
     assert alt is False
     assert chosen.name == "Firefox"
+    assert popup.app.closed is True
+    popup.app.closed = False
     assert popup.press(Gdk.KEY_Escape)
     assert popup.app.closed is True
 
@@ -154,6 +156,7 @@ def test_enter_activates_calculator_row(popup: SearchPopup) -> None:
     chosen, alt = popup.app.activated
     assert alt is False
     assert chosen.kind == "calculator"
+    assert popup.app.closed is True
     with patch("ulauncher.modes.launcher.mode._events.emit", emit):
         LauncherMode().activate_result("activate", chosen, Query(None, "2+2"), lambda *_args: None)
     assert copied == ["4"]
@@ -300,6 +303,11 @@ def test_more_goshos_queries(popup: SearchPopup) -> None:
     assert "color" in popup.type_query("red")
     color = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "color")
     assert color.name == "#ff0000"
+    assert "color" in popup.type_query("rebeccapurple")
+    purple = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "color")
+    assert purple.name == "#663399"
+    assert "system" in popup.type_query("sign off")
+    assert "system" in popup.type_query("lock orientation")
     assert "url" in popup.type_query("sftp://nas.example/share")
     assert "url" in popup.type_query("smb://nas/Public")
     assert "url" in popup.type_query("::1")
@@ -414,7 +422,7 @@ def test_no_results_copy_when_web_fallback_is_off() -> None:
         probe.close()
 
 
-def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup) -> None:
+def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup, monkeypatch: pytest.MonkeyPatch) -> None:
     if not display_available():
         pytest.skip("no Gdk display")
     hits = [
@@ -442,6 +450,10 @@ def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup) -> None
         assert "file" in probe.type_query("UniqueRecentNotesXYZ")
     finally:
         probe.close()
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.terminal_command",
+        lambda directory, **_kwargs: {"argv": ["xdg-terminal-exec"], "cwd": directory},
+    )
     assert "path" in popup.type_query("/tmp")
     assert "Open in Terminal" in popup.names()
     popup.type_query("/no/such/goshlauncher/path-xyz")

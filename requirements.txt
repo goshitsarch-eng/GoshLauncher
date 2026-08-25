@@ -2,6 +2,8 @@
 # It's used as the source of truth to determine if a .venv is outdated
 #
 # NOTE: pygobject-stubs needs PYGOBJECT_STUB_CONFIG=Gtk4,Gdk4,Soup2
+# Stay on 2.12.0: 2.17.0 requires Python 3.10+ and PyGObject>=3.55 (Ubuntu 22.04
+# python3-gi is older). makefile venv bootstraps pip/setuptools before this file.
 
 build
 git-cliff >= 2.13, < 3

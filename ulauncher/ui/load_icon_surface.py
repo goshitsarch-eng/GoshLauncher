@@ -18,13 +18,15 @@ DEFAULT_EXE_ICON = f"{paths.ASSETS}/icons/executable.png"
 def _paintable_from_named_icon(icon: str, size: int, scale: int) -> Gdk.Paintable | None:
     from gi.repository import Gdk, Gtk
 
+    from ulauncher.ui import gtk4
+
     display = Gdk.Display.get_default()
     if display is None:
         return None
     theme = Gtk.IconTheme.get_for_display(display)
     if theme is None:
         return None
-    return theme.lookup_icon(icon, None, size, scale, Gtk.TextDirection.NONE, 0)
+    return theme.lookup_icon(icon, None, size, scale, Gtk.TextDirection.NONE, gtk4.icon_lookup_flags())
 
 
 def _paintable_from_file(path: str, size: int, scale: int) -> Gdk.Paintable:

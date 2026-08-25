@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Iterator
+from typing import Any, Iterator, cast
 
 from gi.repository import Gdk, GLib, Gtk
 
@@ -72,10 +72,10 @@ def iter_children(widget: Gtk.Widget) -> Iterator[Gtk.Widget]:
     get_first = getattr(widget, "get_first_child", None)
     if not callable(get_first):
         return
-    child = get_first()
+    child = cast("Gtk.Widget | None", get_first())
     while child is not None:
         yield child
-        child = child.get_next_sibling()
+        child = cast("Gtk.Widget | None", child.get_next_sibling())
 
 
 def list_children(widget: Gtk.Widget) -> list[Gtk.Widget]:
@@ -83,8 +83,11 @@ def list_children(widget: Gtk.Widget) -> list[Gtk.Widget]:
 
 
 def remove_all_children(widget: Gtk.Widget) -> None:
+    remover = getattr(widget, "remove", None)
+    if not callable(remover):
+        return
     for child in list_children(widget):
-        widget.remove(child)
+        remover(child)
 
 
 def show_all(widget: Gtk.Widget) -> None:
@@ -121,22 +124,82 @@ def add_provider_to_display(provider: Gtk.CssProvider, priority: int = Gtk.STYLE
 
 def clipboard_set_text(text: str) -> None:
     # Gdk.Clipboard.set() is GTK 4.8+. Ubuntu 22.04 ships 4.6, which only has set_content().
+    # Goshos writes calculator/units/color/clock to CLIPBOARD and PRIMARY.
     display = Gdk.Display.get_default()
     if not display:
         return
-    clipboard = display.get_clipboard()
-    data = GLib.Bytes.new((text or "").encode())
-    provider = Gdk.ContentProvider.new_for_bytes("text/plain;charset=utf-8", data)
-    clipboard.set_content(provider)
-    store_async = getattr(clipboard, "store_async", None)
-    if callable(store_async):
-        store_async(0, None, None, None)
+    encoded = (text or "").encode()
+
+    def _store(clipboard: Any) -> None:
+        if clipboard is None:
+            return
+        provider = Gdk.ContentProvider.new_for_bytes("text/plain;charset=utf-8", GLib.Bytes.new(encoded))
+        clipboard.set_content(provider)
+        store_async = getattr(clipboard, "store_async", None)
+        if callable(store_async):
+            store_async(0, None, None, None)
+
+    _store(display.get_clipboard())
+    get_primary = getattr(display, "get_primary_clipboard", None)
+    if callable(get_primary):
+        _store(get_primary())
 
 
 def measure_height_for_width(widget: Gtk.Widget, width: int) -> tuple[int, int]:
     """GTK3 get_preferred_height_for_width equivalent using GTK4 measure()."""
     min_h, nat_h, _min_b, _nat_b = widget.measure(Gtk.Orientation.VERTICAL, width)
     return min_h, nat_h
+
+
+def icon_lookup_flags() -> Any:
+    """GTK4 lookup_icon wants IconLookupFlags, not a bare 0."""
+    flags_type = getattr(Gtk, "IconLookupFlags", None)
+    if flags_type is None:
+        return 0
+    none = getattr(flags_type, "NONE", None)
+    if none is not None:
+        return none
+    return flags_type(0)
+
+
+def accelerator_label(accel: str) -> str:
+    """GTK4 accelerator_parse returns (found, key, mods); GTK3 returned (key, mods)."""
+    parsed = Gtk.accelerator_parse(accel)
+    if not isinstance(parsed, tuple) or not parsed:
+        return accel
+    if len(parsed) == 3:  # noqa: PLR2004
+        found, keyval, mods = parsed
+        if not found:
+            return accel
+    else:
+        keyval, mods = parsed[0], parsed[1]
+    mod_type = getattr(Gdk, "ModifierType", None)
+    if mod_type is not None and not isinstance(mods, mod_type):
+        mods = mod_type(int(mods))
+    return str(Gtk.accelerator_get_label(keyval, mods) or accel)
+
+
+def widget_bounds(widget: Gtk.Widget, target: Gtk.Widget) -> tuple[bool, Any]:
+    """Gtk.Widget.compute_bounds is typed as object in pygobject-stubs 2.12."""
+    compute = getattr(widget, "compute_bounds", None)
+    if not callable(compute):
+        return False, None
+    result = compute(target)
+    if isinstance(result, tuple) and len(result) >= 2:  # noqa: PLR2004
+        return bool(result[0]), result[1]
+    return False, None
+
+
+def start_spinner() -> Gtk.Spinner:
+    spinner = Gtk.Spinner()
+    starter = getattr(spinner, "start", None)
+    if callable(starter):
+        starter()
+        return spinner
+    spinning = getattr(spinner, "set_spinning", None)
+    if callable(spinning):
+        spinning(True)
+    return spinner
 
 
 def run_dialog(dialog: Gtk.Dialog) -> int:

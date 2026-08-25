@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import os
-import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import TypedDict
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 
-SETTINGS_PANELS = [
+
+class SettingsPanel(TypedDict):
+    id: str
+    title: str
+    icon: str
+    keywords: list[str]
+
+
+SETTINGS_PANELS: list[SettingsPanel] = [
     {
         "id": "wifi",
         "title": "Wi-Fi",
@@ -134,15 +142,31 @@ SETTINGS_PANELS = [
 ]
 
 
-def settings_argv(panel_id: str) -> list[str] | None:
+def settings_argv(panel_id: str, find_in_path: Callable[[str], str | None] | None = None) -> list[str] | None:
     panel_id = "background" if panel_id == "appearance" else panel_id
-    if shutil.which("gnome-control-center"):
+    locate = find_in_path
+    if locate is None:
+        from ulauncher.modes.launcher.gio_launch import find_in_user_path
+
+        locate = find_in_user_path
+    if locate("gnome-control-center"):
         return ["gnome-control-center", panel_id]
-    if shutil.which("gio"):
+    if locate("gio"):
         return ["gio", "launch", f"gnome-{panel_id}-panel.desktop"]
-    if shutil.which("gapplication"):
+    if locate("gapplication"):
         return ["gapplication", "launch", "org.gnome.Settings", panel_id]
     return None
+
+
+def settings_result_meta(panel: SettingsPanel, argv: list[str] | None) -> dict:
+    return {
+        "type": "settings",
+        "title": panel["title"],
+        "description": "GNOME Settings",
+        "icon": panel.get("icon") or "preferences-system-symbolic",
+        "id": panel["id"],
+        "activatable": argv is not None,
+    }
 
 
 def settings_panel_desktop(panel_id: str) -> str:
@@ -166,28 +190,30 @@ def settings_panel_available(panel_id: str, has_desktop: Callable[[str], bool] |
         return True
 
 
-def match_settings_panels(query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None) -> list[dict]:
-    available = is_available or settings_panel_available
+def match_settings_panels(
+    query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None
+) -> list[SettingsPanel]:
+    # goshos matchSettingsPanels: omitted isAvailable lists the whole catalog,
+    # including wellbeing. Live search passes settings_panel_available.
+    catalog = (
+        SETTINGS_PANELS if is_available is None else [panel for panel in SETTINGS_PANELS if is_available(panel["id"])]
+    )
     lower = query.lower()
     normalized = lower.replace("-", "").replace("_", "").replace(" ", "")
-    matches: list[dict] = []
-    for panel in SETTINGS_PANELS:
-        if not available(panel["id"]):
-            continue
+    if not normalized:
+        return catalog[:limit]
+    matches: list[SettingsPanel] = []
+    for panel in catalog:
         title_lower = panel["title"].lower()
         normalized_title = title_lower.replace("-", "").replace("_", "").replace(" ", "")
         normalized_id = panel["id"].replace("-", "").replace("_", "")
-        hit = False
-        if (
-            not normalized
-            or normalized_title.startswith(normalized)
+        hit = (
+            normalized_title.startswith(normalized)
             or normalized_id.startswith(normalized)
             or title_lower.startswith(lower)
             or word_prefix_match(title_lower, lower)
-        ):
-            hit = True
-        else:
-            hit = any(keyword_matches_query(keyword, lower) for keyword in panel["keywords"])
+            or any(keyword_matches_query(keyword, lower) for keyword in panel["keywords"])
+        )
         if hit:
             matches.append(panel)
         if len(matches) >= limit:

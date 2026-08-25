@@ -14,7 +14,7 @@ jobs:
           sudo bash scripts/ci-install-gtk4.sh
           sudo apt-get install -y --no-install-recommends \
             debhelper dh-python python3-all python3-setuptools \
-            devscripts dput gnupg
+            devscripts dput gnupg help2man
       - name: Publish to Launchpad
         env:
           LAUNCHPAD_SSH_TAR: ${{ secrets.LAUNCHPAD_SSH_TAR }}

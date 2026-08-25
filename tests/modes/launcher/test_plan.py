@@ -57,6 +57,9 @@ def test_at_prefix_is_web_only() -> None:
     planned = plan_search("@ cats", _flags())
     assert planned["mode"] == "web"
     assert planned["providers"] == ["web"]
+    empty = plan_search("@", _flags())
+    assert empty["query"] == ""
+    assert empty["providers"] == ["web"]
 
 
 def test_command_prefix_respects_flag() -> None:
@@ -76,6 +79,10 @@ def test_merge_empty_suggestions_windows_first() -> None:
     assert merged == ["w1", "w2", "a1"]
     merged_apps = merge_empty_suggestions("default", ["w1"], ["a1", "a2"], 2)
     assert merged_apps == ["a1", "a2"]
+    assert merge_empty_suggestions("default", ["w"], ["a"], 6) == ["a", "w"]
+    assert merge_empty_suggestions("windows-first", ["w"], ["a"], 6) == ["w", "a"]
+    assert merge_empty_suggestions("windows-first", ["w1", "w2"], ["a1", "a2"], 2) == ["w1", "w2"]
+    assert merge_empty_suggestions("default", ["w1"], ["a1"], 0) == []
 
 
 def test_should_refresh_path_only_for_path_queries() -> None:
@@ -122,6 +129,15 @@ def test_should_refresh_recent_files_for_dot_prefix_and_all() -> None:
     planned = plan_search("@ notes", _flags())
     assert should_refresh_recent_files(True, planned) is False
     assert should_refresh_recent_files(False, plan_search(". notes", _flags())) is False
+    lone = plan_search(".", _flags())
+    assert lone["mode"] == "files"
+    assert lone["query"] == ""
+    assert lone["providers"] == ["files"]
+    assert should_refresh_recent_files(True, lone) is True
+    windows = plan_search("$", _flags())
+    assert windows["query"] == ""
+    assert windows["providers"] == ["windows"]
+    assert should_refresh_windows(True, False, windows) is True
 
 
 def test_spoken_open_firefox_strips_verb() -> None:
@@ -147,6 +163,63 @@ def test_spoken_open_firefox_strips_verb() -> None:
     assert strip_leading_verb("fire up steam") == "steam"
     assert strip_leading_verb("the") == "the"
     assert strip_leading_verb("can you") == "can you"
+
+
+def test_goshos_spoken_verbs_battery() -> None:
+    from ulauncher.modes.launcher.plan import strip_leading_verb
+
+    expected = (
+        ("please lock", "lock"),
+        ("could you launch gimp", "gimp"),
+        ("can you please open firefox", "firefox"),
+        ("please can you open firefox", "firefox"),
+        ("will you open firefox", "firefox"),
+        ("what is the time", "time"),
+        ("calculate 2+2", "2+2"),
+        ("please convert 10 km to mi", "10 km to mi"),
+        ("show me firefox", "firefox"),
+        ("can you tell me the time", "time"),
+        ("please tell me the date", "date"),
+        ("tell me firefox", "firefox"),
+        ("my downloads", "downloads"),
+        ("open the", "the"),
+        ("launch code", "code"),
+        ("go to downloads", "downloads"),
+        ("find firefox", "firefox"),
+        ("search for wifi", "wifi"),
+        ("look up hex", "hex"),
+        ("lookup hex", "hex"),
+        ("help me open firefox", "firefox"),
+        ("just open firefox", "firefox"),
+        ("i want to open firefox", "firefox"),
+        ("navigate to downloads", "downloads"),
+        ("navigate to wifi settings", "wifi"),
+        ("help me", "help me"),
+        ("just", "just"),
+        ("search settings wifi", "wifi"),
+        ("launch firefox", "firefox"),
+        ("run firefox", "firefox"),
+        ("start firefox", "firefox"),
+        ("open up firefox", "firefox"),
+        ("start up firefox", "firefox"),
+        ("execute firefox", "firefox"),
+        ("search for firefox", "firefox"),
+        ("open display preferences", "display"),
+        ("open my documents folder", "documents"),
+        ("find files notes", "notes"),
+        ("search for app firefox", "firefox"),
+        ("windows", "windows"),
+        ("folder", "folder"),
+        ("search for open source", "open source"),
+        ("please open source", "open source"),
+        ("open up terminal", "terminal"),
+        ("execute vscode", "vscode"),
+        ("run steam", "steam"),
+        ("launch up code", "code"),
+        ("open", "open"),
+    )
+    for query, stripped in expected:
+        assert strip_leading_verb(query) == stripped, query
 
 
 def test_goshos_plan_search_battery() -> None:

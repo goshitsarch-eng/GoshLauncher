@@ -17,6 +17,21 @@ from ulauncher.utils.settings import Settings
 logger = logging.getLogger(__name__)
 
 
+def _installed_app_result(app: GioUnix.DesktopAppInfo, settings: Settings) -> AppResult | None:
+    executable = app.get_executable()
+    if not executable or not app.get_display_name():
+        return None
+    if not app.get_show_in() and not settings.disable_desktop_filters:
+        return None
+    # Make an exception for gnome-control-center, because all the very useful specific settings
+    # like "Keyboard", "Wi-Fi", "Sound" etc have NoDisplay=true
+    if app.get_nodisplay() and executable != "gnome-control-center":
+        return None
+    if app.get_id() == f"{app_id}.desktop":
+        return None
+    return AppResult(app)
+
+
 class AppMode(Mode):
     def handle_query(self, _query: Query, callback: Callable[[effects.EffectMessage], None]) -> None:
         # App mode contributes search triggers but does not handle direct query-mode execution.
@@ -28,22 +43,15 @@ class AppMode(Mode):
         if not settings.enable_application_mode:
             return
 
-        apps: list[GioUnix.DesktopAppInfo] = GioUnix.DesktopAppInfo.get_all()
-        for app in apps:
-            executable = app.get_executable()
-            if not executable or not app.get_display_name():
+        for app in GioUnix.DesktopAppInfo.get_all():
+            try:
+                result = _installed_app_result(app, settings)
+            except Exception:  # noqa: BLE001, S112
+                # goshos: skip a desktop file whose get_id() throws so one bad
+                # encoding cannot hide the rest of the app list.
                 continue
-            if not app.get_show_in() and not settings.disable_desktop_filters:
-                continue
-            # Make an exception for gnome-control-center, because all the very useful specific settings
-            # like "Keyboard", "Wi-Fi", "Sound" etc have NoDisplay=true
-            if app.get_nodisplay() and executable != "gnome-control-center":
-                continue
-            # Don't show Ulauncher app in own list
-            if app.get_id() == f"{app_id}.desktop":
-                continue
-
-            yield AppResult(app)
+            if result is not None:
+                yield result
 
     def get_home_results(self, limit: int) -> list[AppResult]:
         """Get the top {N} apps (by recency-weighted score) to show when the query is empty"""

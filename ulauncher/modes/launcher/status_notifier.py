@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from ulauncher import app_display_name, show_launcher_label
 
@@ -270,7 +270,8 @@ def pack_menu_node(node: Any) -> Any:
 def pack_get_layout_result(revision: int, node: Any) -> Any:
     from ulauncher.gi import GLib
 
-    return GLib.Variant.new_tuple(_variant("u", revision), pack_menu_node(node))
+    new_tuple = cast("Any", GLib.Variant.new_tuple)
+    return new_tuple(_variant("u", revision), pack_menu_node(node))
 
 
 def pack_group_properties(rows: list[tuple[int, dict[str, Any]]]) -> Any:

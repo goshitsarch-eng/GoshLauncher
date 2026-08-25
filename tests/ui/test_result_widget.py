@@ -25,6 +25,18 @@ class TestResultWidget:
         assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 2
         res = Result(description="descr", compact=True)
         assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 1
+        # Look density compact shrinks icons/rows. Result.compact is only for headers.
+        chrome = {"show_numbers": False, "show_result_icons": True, "density": "compact", "icon_size": 20}
+        described = Result(description="descr")
+        widget = ResultWidget(described, 0, Query("", None), noop, noop, chrome=chrome)
+        assert described.compact is False
+        assert len(gtk4.list_children(widget.text_container)) == 2
+        from ulauncher.modes.launcher.results import LauncherResult
+
+        launched = LauncherResult(name="Firefox", description="Application", kind="app")
+        compact_row = ResultWidget(launched, 0, Query("", None), noop, noop, chrome=chrome)
+        assert launched.compact is False
+        assert len(gtk4.list_children(compact_row.text_container)) == 2
 
     def test_select(self) -> None:
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop)
@@ -131,3 +143,12 @@ class TestResultWidget:
         widget = ResultWidget(Result(icon="image-missing"), 0, Query("", None), noop, noop, chrome=chrome)
         assert widget.item_icon is not None
         assert widget.item_icon.get_pixel_size() == icon_size_for_look(chrome, "compact") == 32
+
+    def test_throwing_icon_still_paints_the_row(self, mocker: MockerFixture) -> None:
+        from gi.repository import Gtk
+
+        mocker.patch("ulauncher.ui.result_widget.load_icon_paintable", side_effect=RuntimeError("bad icon"))
+        widget = ResultWidget(Result(name="Firefox", icon="gone"), 0, Query("", None), noop, noop)
+        name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
+        assert name_label.get_text() == "Firefox"
+        assert widget.item_icon is not None

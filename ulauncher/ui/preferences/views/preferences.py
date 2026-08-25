@@ -5,7 +5,6 @@ from typing import Any
 
 from gi.repository import Adw, Gdk, Gtk
 
-from ulauncher import api_version, version
 from ulauncher.modes.launcher.looks import LOOKS, look_about_subtitle, look_prefs_search_text
 from ulauncher.modes.launcher.prefs_combo import (
     DENSITY_ITEMS,
@@ -189,7 +188,7 @@ class PreferencesView:
         page = Adw.PreferencesPage(title="Shortcut", icon_name="preferences-desktop-keyboard-symbolic")
         group = Adw.PreferencesGroup(
             title="Keyboard Shortcut",
-            description="Set the shortcut to open GoshLauncher",
+            description="Set the shortcut to open Gosh Is Launcher",
         )
 
         shortcut_row = plain_action_row("Toggle shortcut", "Click here, then press a key combination")
@@ -441,16 +440,9 @@ class PreferencesView:
             self.settings.grab_mouse_pointer,
             self._on_grab_mouse_toggled,
         )
-        add_switch_row(
-            session,
-            "Auto-resume unfinished sessions",
-            "If you close without running the query, restore it next time.",
-            self.settings.auto_resume,
-            self._on_auto_resume_toggled,
-        )
         screen_items = (
+            {"id": "default-monitor", "label": "The primary screen"},
             {"id": "mouse-pointer-monitor", "label": "The screen with the mouse pointer"},
-            {"id": "default-monitor", "label": "The default screen"},
         )
         self._screen_combo = add_combo_row(
             session,
@@ -495,6 +487,9 @@ class PreferencesView:
             self._on_terminal_changed,
         )
         page.add(desktop)
+        from ulauncher.ui.preferences.views.help import add_usage_groups
+
+        add_usage_groups(page)
         return page
 
     def _build_web_search_page(self) -> Adw.PreferencesPage:
@@ -517,22 +512,18 @@ class PreferencesView:
         return page
 
     def _build_about_page(self) -> Adw.PreferencesPage:
-        from ulauncher.ui.preferences.views.help import add_usage_groups
-
         page = Adw.PreferencesPage(title="About", icon_name="dialog-information-symbolic")
         group = Adw.PreferencesGroup(title="About")
-        group.add(plain_action_row("GoshLauncher", "A compact GTK4/Adwaita launcher with interchangeable looks."))
+        # goshos prefs/aboutPage.js is title, Looks, host toolkit. Keyboard docs live on Desktop.
+        group.add(plain_action_row("Gosh Is Launcher", "A compact launcher with interchangeable looks."))
         group.add(plain_action_row("Looks", look_about_subtitle()))
         group.add(
             plain_action_row(
-                "Toolkit",
-                "GTK 4 and libadwaita 1.1+ (Ubuntu 22.04). Looks follow Spotlight-goshos.",
+                "GTK 4",
+                "libadwaita 1.1+ (Ubuntu 22.04). Looks follow Spotlight-goshos.",
             )
         )
-        about_version = f"{version} (Extension API v{api_version})"
-        group.add(plain_action_row("Version", about_version))
         page.add(group)
-        add_usage_groups(page)
         return page
 
     def _bind_settings_follow(self) -> None:
@@ -666,11 +657,6 @@ class PreferencesView:
         is_enabled = switch.get_active()
         self.settings.save({"show_tray_icon": is_enabled})
         events.emit("app:toggle_tray_icon", is_enabled)
-
-    def _on_auto_resume_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        if self._updating_chrome:
-            return
-        self.settings.save({"auto_resume": switch.get_active()})
 
     def _on_close_focus_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         if self._updating_chrome:
