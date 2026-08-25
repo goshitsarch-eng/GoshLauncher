@@ -29,7 +29,7 @@ python-platform = "linux"
 python-version = "3.8"
 # tests/ is GTK mocks and fixtures, not the shipped type surface.
 project-includes = ["ulauncher"]
-min-severity = "info"
+min-severity = "error"
 preset = "strict"
 
 [tool.pyrefly.errors]
@@ -41,6 +41,9 @@ implicit-any-type-argument = false
 implicit-any-empty-container = false
 implicit-any-attribute = false
 invalid-inheritance = false
+# GTK getters are already bool/int/str; wrapping them trips this on Ubuntu 22.04 stubs.
+unnecessary-type-conversion = false
+redundant-cast = false
 
 # Pylint is not checked in CI or included in `make check` due to being slow.
 # Run occasional manual audit with `make pylint`

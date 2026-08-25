@@ -89,6 +89,8 @@ def test_pyrefly_typechecks_shipped_package() -> None:
     assert 'project-includes = ["ulauncher", "tests"]' not in pyproject
     assert "implicit-any-type-argument = false" in pyproject
     assert "invalid-inheritance = false" in pyproject
+    assert "unnecessary-type-conversion = false" in pyproject
+    assert 'min-severity = "error"' in pyproject
 
 
 def test_venv_bootstraps_pip_before_pygobject_stubs() -> None:

@@ -41,8 +41,10 @@ def get_monitor(use_mouse_position: bool = False) -> Gdk.Monitor | None:  # noqa
                 located = surface_at()
                 surface = located[0] if isinstance(located, tuple) and located else None
                 get_at = getattr(display, "get_monitor_at_surface", None)
-                if surface is not None and callable(get_at) and (monitor := get_at(surface)):
-                    return monitor
+                if surface is not None and callable(get_at):
+                    found = get_at(surface)
+                    if isinstance(found, Gdk.Monitor):
+                        return found
             position = getattr(pointer, "get_position", None)
             if callable(position):
                 coords = position()
