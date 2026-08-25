@@ -125,7 +125,7 @@ def open_search_popup(
         def show_preferences(self, *_args: object, **_kwargs: object) -> None:
             self.preferences_shown = True
 
-        def request_close(self, _save_query: bool = False) -> None:
+        def request_close(self, save_query: bool = False) -> None:  # noqa: ARG002
             self.closed = True
 
         def close_launcher(self, *_args: object, **_kwargs: object) -> None:
