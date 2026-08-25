@@ -523,13 +523,15 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
         except (TypeError, ValueError):
             wid = str(xid)
         gtk_app_id, gtk_bus, gtk_path = gtk_unique_props_from_mapping(props)
+        desktop, sticky = _introspect_desktop(props)
         windows.append(
             WindowInfo(
                 wid=wid,
                 title=title,
                 wm_class=wm_class,
-                desktop=0,
+                desktop=desktop,
                 pid=pid,
+                sticky=sticky,
                 app_id=app_id,
                 gtk_app_id=gtk_app_id,
                 gtk_unique_bus_name=gtk_bus,
@@ -537,6 +539,15 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
             )
         )
     return windows
+
+
+def _introspect_desktop(props: Mapping[str, Any]) -> tuple[int, bool]:
+    """Mutter GetWindows currently omits workspace; keep integer indexes when present."""
+    sticky = bool(props.get("on-all-workspaces") or props.get("is-on-all-workspaces"))
+    raw = props.get("workspace", True)
+    if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0:
+        return raw, sticky
+    return 0, sticky
 
 
 def tab_ranks_from_introspect_payload(payload: Any) -> dict[str, int]:

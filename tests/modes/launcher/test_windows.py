@@ -285,6 +285,7 @@ def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
         6: {"title": "Stand-in", "wm-class": "y", "workspace": {}},
         7: {"title": "First ws", "wm-class": "z", "workspace": 0},
         8: {"title": "Enum", "wm-class": "e", "window-type": 2},
+        9: {"title": "Second ws", "wm-class": "w", "workspace": 1},
     }
     assert [row.title for row in windows_from_introspect_payload(payload)] == [
         "Firefox",
@@ -292,7 +293,16 @@ def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
         "Stand-in",
         "First ws",
         "Enum",
+        "Second ws",
     ]
+    by_title = {row.title: row for row in windows_from_introspect_payload(payload)}
+    assert by_title["First ws"].desktop == 0
+    assert by_title["Second ws"].desktop == 1
+    assert window_matches(by_title["Second ws"], "workspace 2")
+    assert by_title["Firefox"].sticky is False
+    sticky = windows_from_introspect_payload({9: {"title": "Notes", "wm-class": "gedit", "on-all-workspaces": True}})
+    assert sticky[0].sticky is True
+    assert window_matches(sticky[0], "sticky")
 
 
 def test_unique_gtk_window_needs_bus_path_and_app_id() -> None:
