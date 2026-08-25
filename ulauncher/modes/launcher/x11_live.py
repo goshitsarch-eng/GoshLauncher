@@ -9,6 +9,7 @@ open a Display do not need it installed.
 from __future__ import annotations
 
 import contextlib
+import importlib
 from collections.abc import Mapping
 from typing import Any, Callable
 
@@ -70,26 +71,22 @@ class X11LiveWatch:
         if self._display is not None:
             return True
         try:
-            from Xlib import X  # pyrefly: ignore[missing-import]
-            from Xlib import display as xdisplay  # pyrefly: ignore[missing-import]
-            from Xlib import error as xerror  # pyrefly: ignore[missing-import]
+            # importlib so pyrefly does not require python-xlib in every venv
+            # (CI images have it; some local venvs do not).
+            x_mod = importlib.import_module("Xlib.X")
+            xdisplay = importlib.import_module("Xlib.display")
         except ImportError:
             return False
-        x11_errors: tuple[type[BaseException], ...] = (
-            OSError,
-            RuntimeError,
-            TypeError,
-            ValueError,
-            xerror.DisplayError,
-        )
         dpy = None
         try:
             dpy = xdisplay.Display()
-            dpy.screen().root.change_attributes(event_mask=X.PropertyChangeMask)
+            dpy.screen().root.change_attributes(event_mask=x_mod.PropertyChangeMask)
             dpy.flush()
             atoms = intern_x11_live_atoms(dpy)
             fd = x11_display_fileno(dpy)
-        except x11_errors:
+        except Exception:
+            # Xlib DisplayError is a bare Exception; a failed probe must not
+            # take down popup open.
             if dpy is not None:
                 with contextlib.suppress(OSError, RuntimeError, TypeError):
                     dpy.close()
