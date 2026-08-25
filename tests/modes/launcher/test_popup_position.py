@@ -12,6 +12,8 @@ from ulauncher.modes.launcher.popup_position import (
     offset_from_origin,
     place_popup,
     popup_origin,
+    popup_surface_can_move,
+    popup_surface_move,
     popup_width_for_work_area,
     resolve_monitor_work_area,
     results_max_height_for_work_area,
@@ -233,3 +235,19 @@ def test_layer_shell_offset_keeps_panel_inset() -> None:
     assert output["y"] == int(placed["y"])
     assert output["y"] - overlay["y"] == 32
     assert output["x"] == int(placed["x"])
+
+
+def test_popup_surface_move_requires_callable_move() -> None:
+    class _Surface:
+        def __init__(self) -> None:
+            self.pos: tuple[int, int] | None = None
+
+        def move(self, x: int, y: int) -> None:
+            self.pos = (x, y)
+
+    surface = _Surface()
+    assert popup_surface_can_move(surface) is True
+    assert popup_surface_can_move(object()) is False
+    assert popup_surface_can_move(None) is False
+    popup_surface_move(surface, 24, 48)
+    assert surface.pos == (24, 48)

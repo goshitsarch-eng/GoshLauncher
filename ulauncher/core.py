@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import logging
 from collections import defaultdict
-from typing import Callable, Iterable
+from typing import Callable, Iterable, cast
 from weakref import WeakKeyDictionary
 
 from ulauncher.internals import effect_utils, effects
@@ -49,6 +49,25 @@ def get_modes() -> list[Mode]:
         ExtensionMode(ext_service),
         get_app_mode(),
     ]
+
+
+def is_legacy_trigger_mode(mode: Mode) -> bool:
+    # LauncherMode is a catch-all, so keyword-less ShortcutMode/ExtensionMode
+    # triggers never win set_query. Merge those two by class name so AppMode
+    # desktop entries stay out (apps are already searched by LauncherMode).
+    return type(mode).__name__ in {"ShortcutMode", "ExtensionMode"}
+
+
+def launcher_has_local_hits(results: Iterable[Result]) -> bool:
+    from ulauncher.modes.launcher.results import SectionHeader
+
+    for result in results:
+        if isinstance(result, SectionHeader):
+            continue
+        if getattr(result, "kind", "") == "web":
+            continue
+        return True
+    return False
 
 
 class UlauncherCore:
@@ -149,6 +168,44 @@ class UlauncherCore:
         flattened_ = itertools.chain.from_iterable(self._trigger_cache.values())
         sorted_ = sorted(flattened_, key=lambda i: i.search_score(query_str), reverse=True)[:limit]
         return list(filter(lambda searchable: searchable.search_score(query_str) > min_score, sorted_))
+
+    def search_legacy_triggers(self, min_score: int = 50, limit: int = 50) -> list[Result]:
+        self.load_triggers()
+        query_str = self.query.argument or ""
+        if not query_str:
+            return []
+
+        hits: list[Result] = []
+        for mode, triggers in self._trigger_cache.items():
+            if not is_legacy_trigger_mode(mode):
+                continue
+            for trigger in triggers:
+                if trigger.search_score(query_str) > min_score:
+                    hits.append(trigger)
+                    self._mode_map[trigger] = mode
+        hits.sort(key=lambda item: item.search_score(query_str), reverse=True)
+        return hits[:limit]
+
+    def _legacy_fallback_results(self) -> list[Result]:
+        results: list[Result] = []
+        query_str = str(self.query)
+        for mode in get_modes():
+            if not is_legacy_trigger_mode(mode):
+                continue
+            for fallback_result in mode.get_fallback_results(query_str):
+                results.append(fallback_result)
+                self._mode_map[fallback_result] = mode
+        return results
+
+    def _should_merge_legacy(self, valid_mode: Mode | None) -> bool:
+        return valid_mode is not None and type(valid_mode).__name__ == "LauncherMode" and self.query.keyword is None
+
+    def _merge_legacy_into_launcher(self, results: list[Result]) -> list[Result]:
+        merged = list(results)
+        merged.extend(self.search_legacy_triggers())
+        if not launcher_has_local_hits(results):
+            merged.extend(self._legacy_fallback_results())
+        return merged
 
     def get_home_results(self) -> Iterable[Result]:
         # LauncherMode owns goshos empty-state (frequent apps + windows).
@@ -270,8 +327,14 @@ class UlauncherCore:
 
             self._clear_placeholder_timer()
             if effect_msg["type"] == effects.EffectType.RENDER_RESULTS:
+                paint: effects.EffectMessage = effect_msg
+                if not effect_msg.get("append") and self._should_merge_legacy(valid_mode):
+                    paint = cast(
+                        "effects.RenderResults",
+                        {**effect_msg, "results": self._merge_legacy_into_launcher(list(effect_msg["results"]))},
+                    )
                 self._result_buffer.enqueue(
-                    effect_msg, lambda results, append: self._render_results(results, callback, append)
+                    paint, lambda results, append: self._render_results(results, callback, append)
                 )
             elif effect_msg["type"] == effects.EffectType.LEGACY_RUN_MANY:
                 # effect_utils.handle has no callback to render with, so route any nested render

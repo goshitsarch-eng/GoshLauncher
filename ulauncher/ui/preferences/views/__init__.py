@@ -19,9 +19,45 @@ SPINNER_MIN_ANIMATION = 0.25
 
 
 def get_window_for_widget(widget: Gtk.Widget) -> Gtk.Window | None:
-    if (toplevel := widget.get_toplevel()) and isinstance(toplevel, Gtk.Window):
-        return toplevel
+    root = None
+    get_root = getattr(widget, "get_root", None)
+    if callable(get_root):
+        root = get_root()
+    if root is None:
+        get_toplevel = getattr(widget, "get_toplevel", None)
+        if callable(get_toplevel):
+            root = get_toplevel()
+    if root and isinstance(root, Gtk.Window):
+        return root
     return None
+
+
+def _in_destruction(widget: Any) -> bool:
+    probe = getattr(widget, "in_destruction", None)
+    return bool(probe()) if callable(probe) else False
+
+
+def prefs_view_reload_action(toplevel: Any, widget: Any) -> str:
+    """Return stop/skip/reload for a periodic prefs-view refresh.
+
+    GTK 4 removed Gtk.Window.get_window(). An unmapped widget is not
+    destroyed — Adw.PreferencesWindow hides stack pages that way.
+    """
+    if toplevel is None:
+        return "stop"
+    if _in_destruction(toplevel) or _in_destruction(widget):
+        return "stop"
+    mapped = False
+    get_mapped = getattr(widget, "get_mapped", None)
+    if callable(get_mapped):
+        mapped = bool(get_mapped())
+    native = None
+    get_native = getattr(widget, "get_native", None)
+    if callable(get_native):
+        native = get_native()
+    if mapped or native is not None:
+        return "reload"
+    return "skip"
 
 
 def styled(widget: T, *class_names: str) -> T:

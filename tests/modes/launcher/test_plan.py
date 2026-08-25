@@ -10,6 +10,7 @@ from ulauncher.modes.launcher.plan import (
     should_refresh_command,
     should_refresh_path,
     should_refresh_recent_files,
+    should_refresh_windows,
 )
 
 
@@ -98,6 +99,19 @@ def test_should_refresh_bookmarks_only_in_all_mode() -> None:
     planned = plan_search("=42", _flags())
     assert should_refresh_bookmarks(True, planned) is False
     assert should_refresh_bookmarks(False, plan_search("docs", _flags())) is False
+
+
+def test_should_refresh_windows_for_apps_and_window_providers() -> None:
+    planned = plan_search("firefox", _flags())
+    assert should_refresh_windows(True, True, planned) is True
+    assert should_refresh_windows(True, False, planned) is True
+    assert should_refresh_windows(False, True, planned) is True
+    assert should_refresh_windows(False, False, planned) is False
+    planned = plan_search("@ firefox", _flags())
+    assert should_refresh_windows(True, True, planned) is False
+    planned = plan_search("$ firefox", _flags())
+    assert should_refresh_windows(True, False, planned) is True
+    assert should_refresh_windows(False, True, planned) is False
 
 
 def test_should_refresh_recent_files_for_dot_prefix_and_all() -> None:

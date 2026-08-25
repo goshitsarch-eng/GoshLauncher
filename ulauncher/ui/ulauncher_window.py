@@ -672,6 +672,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             gtk_window_owns_popup_width,
             offset_from_origin,
             place_popup,
+            popup_surface_can_move,
+            popup_surface_move,
             popup_width_for_work_area,
             work_area_avoiding_keyboard,
         )
@@ -720,8 +722,15 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self.frame.set_margin_end(max(0, int(work["width"] - pos_x - frame_width)))
             elif self.layer_shell_enabled:
                 layer_shell.set_position(self, pos_x, pos_y)
-            elif hasattr(self, "move"):
-                self.move(origin_minus_inset(placed["x"], inset), origin_minus_inset(placed["y"], inset))
+            else:
+                native = self.get_native()
+                gdk_surface = native.get_surface() if native is not None else None
+                if popup_surface_can_move(gdk_surface):
+                    popup_surface_move(
+                        gdk_surface,
+                        origin_minus_inset(placed["x"], inset),
+                        origin_minus_inset(placed["y"], inset),
+                    )
 
     def _ensure_monitor_watch(self) -> None:
         if getattr(self, "_monitors_watched", False):

@@ -15,6 +15,7 @@ from ulauncher.modes.launcher.plan import (
     should_refresh_command,
     should_refresh_path,
     should_refresh_recent_files,
+    should_refresh_windows,
 )
 from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
 from ulauncher.modes.launcher.search_run import safe_provider_results
@@ -52,6 +53,7 @@ class LauncherMode(Mode):
         )
         from ulauncher.modes.launcher.paths import ensure_path, invalidate_path_lookup, path_is_resolved
         from ulauncher.modes.launcher.recents import ensure_recent_files, recents_are_ready
+        from ulauncher.modes.launcher.windows import ensure_windows, windows_cache_is_fresh
 
         settings = Settings.load()
         flags = flags_from_settings(settings)
@@ -68,15 +70,17 @@ class LauncherMode(Mode):
         want_command = should_refresh_command(bool(flags.get("command")), planned)
         want_bookmarks = should_refresh_bookmarks(bool(flags.get("bookmarks")), planned)
         want_recents = should_refresh_recent_files(bool(flags.get("files")), planned)
+        want_windows = should_refresh_windows(bool(flags.get("windows")), bool(flags.get("apps")), planned)
         slash_command = want_command and command_needs_async(planned["query"])
         path_async = want_path and not path_is_resolved(planned["query"])
         command_async = slash_command and not command_is_resolved(planned["query"])
         bookmarks_async = want_bookmarks and not bookmarks_are_ready()
         recents_async = want_recents and not recents_are_ready()
+        windows_async = want_windows and not windows_cache_is_fresh()
         callback(
             effects.render_results(
                 self._results_for_plan(planned, settings, chrome),
-                final=not (path_async or command_async or bookmarks_async or recents_async),
+                final=not (path_async or command_async or bookmarks_async or recents_async or windows_async),
             )
         )
         if want_path:
@@ -91,6 +95,8 @@ class LauncherMode(Mode):
             ensure_bookmarks(self._schedule_repaint)
         if want_recents:
             ensure_recent_files(self._schedule_repaint)
+        if want_windows:
+            ensure_windows(self._schedule_repaint)
 
     def _schedule_repaint(self) -> None:
         from ulauncher.modes.launcher.async_paint import should_schedule_async_paint
@@ -119,11 +125,13 @@ class LauncherMode(Mode):
         from ulauncher.modes.launcher.commands import flush_command_lookup
         from ulauncher.modes.launcher.paths import flush_path_lookup
         from ulauncher.modes.launcher.recents import flush_recents_lookup
+        from ulauncher.modes.launcher.windows import flush_windows_lookup
 
         flush_path_lookup()
         flush_command_lookup()
         flush_bookmarks_lookup()
         flush_recents_lookup()
+        flush_windows_lookup()
         if self._lookup_idle:
             self._lookup_idle.cancel()
             self._run_repaint()
@@ -133,7 +141,7 @@ class LauncherMode(Mode):
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []
         from ulauncher.modes.launcher.apps import app_row_description, app_window_count, home_apps
-        from ulauncher.modes.launcher.windows import list_windows
+        from ulauncher.modes.launcher.windows import cached_windows, ensure_windows
 
         chrome = chrome_from_settings(settings)
         flags = flags_from_settings(settings)
@@ -141,7 +149,10 @@ class LauncherMode(Mode):
         if order == "default":
             order = chrome.get("result_order") or "default"
         recent_cap = int(getattr(settings, "max_recent_apps", 6) or 0)
-        open_windows = list_windows() if flags.get("windows") or flags.get("apps") else []
+        need_windows = bool(flags.get("windows") or flags.get("apps"))
+        open_windows = cached_windows() if need_windows else []
+        if need_windows:
+            ensure_windows(lambda: _events.emit("app:reload_query"))
         app_rows: list[dict[str, Any]] = []
         if flags.get("apps") and recent_cap > 0:
             for app in home_apps(min(limit, recent_cap)):
@@ -374,10 +385,10 @@ class LauncherMode(Mode):
 
         if "apps" in providers:
             from ulauncher.modes.launcher.apps import app_action_rows, app_row_description, app_window_count, match_apps
-            from ulauncher.modes.launcher.windows import list_windows
+            from ulauncher.modes.launcher.windows import cached_windows
 
             matched = safe_provider_results(lambda: match_apps(q, cap))
-            open_windows = safe_provider_results(list_windows)
+            open_windows = cached_windows()
             for app in matched:
                 actions = dict(app.actions) if app.actions else {"activate": {"name": "Activate"}}
                 if not getattr(settings, "enable_app_actions", True):

@@ -340,3 +340,12 @@ def work_area_avoiding_keyboard(work_area: dict[str, float], keyboard: Any) -> d
         "width": work_area["width"],
         "height": top - work_area["y"],
     }
+
+
+def popup_surface_can_move(surface: Any) -> bool:
+    """GTK 4 dropped Gtk.Window.move; GdkX11.X11Surface.move is the X11 stand-in."""
+    return callable(getattr(surface, "move", None))
+
+
+def popup_surface_move(surface: Any, x: int, y: int) -> None:
+    surface.move(x, y)

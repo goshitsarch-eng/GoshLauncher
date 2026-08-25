@@ -159,9 +159,10 @@ def test_empty_state_puts_windows_first_for_popos(monkeypatch: pytest.MonkeyPatc
         lambda limit: [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")][:limit],
     )
     monkeypatch.setattr(
-        "ulauncher.modes.launcher.windows.list_windows",
+        "ulauncher.modes.launcher.windows.cached_windows",
         lambda: [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
     )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
     results = list(LauncherMode().get_home_results(6))
     kinds = _kinds(results)
     assert kinds[:2] == ["window", "app"]
@@ -190,9 +191,10 @@ def test_empty_state_hides_apps_when_recent_cap_is_zero(monkeypatch: pytest.Monk
         lambda limit: [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")][:limit],
     )
     monkeypatch.setattr(
-        "ulauncher.modes.launcher.windows.list_windows",
+        "ulauncher.modes.launcher.windows.cached_windows",
         lambda: [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
     )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
     results = list(LauncherMode().get_home_results(6))
     assert _kinds(results) == ["window"]
 
@@ -294,7 +296,8 @@ def test_search_order_windows_first_puts_windows_before_apps(monkeypatch: pytest
             }
         ],
     )
-    monkeypatch.setattr("ulauncher.modes.launcher.windows.list_windows", list)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", list)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
     kinds = _kinds(_handle("fire"))
     assert "window" in kinds
     assert "app" in kinds

@@ -20,6 +20,7 @@ from ulauncher.ui.preferences.views import (
     BaseView,
     TextArea,
     get_window_for_widget,
+    prefs_view_reload_action,
     start_spinner_button_animation,
     styled,
 )
@@ -65,13 +66,16 @@ class ExtensionsView(BaseView):
         reload_loop: scheduling.Context | None = None
 
         def reload_extension_list() -> None:
-            # Stop the loop once the view or its toplevel window is destroyed
+            # GTK 4 dropped Window.get_window(). Hidden Adw stack pages are
+            # unmapped but still live, so only stop when the toplevel is gone.
             toplevel = get_window_for_widget(self)
-            if not toplevel or not toplevel.get_window():
+            action = prefs_view_reload_action(toplevel, self)
+            if action == "stop":
                 if reload_loop:
                     reload_loop.cancel()
                 return
-
+            if action == "skip":
+                return
             self._load_extension_list()
 
         # We need to reload extension state periodically to reflect changes
