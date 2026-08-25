@@ -654,6 +654,14 @@ def niri_workspace_idx_by_id(workspaces: Any) -> dict[Any, int]:
     return mapping
 
 
+def niri_workspace_count(payload: Any) -> int | None:
+    """Highest 1-based niri idx, or None when the dump has no numbered workspaces."""
+    mapping = niri_workspace_idx_by_id(payload)
+    if not mapping:
+        return None
+    return max(mapping.values())
+
+
 def _niri_window_desktop(workspace_id: Any, idx_by_id: Mapping[Any, int]) -> int:
     if not idx_by_id:
         return _compositor_workspace_desktop(workspace_id)
@@ -1410,12 +1418,68 @@ def _ewmh_desktop_count() -> int | None:
     return number if number >= 0 else None
 
 
+def i3ipc_workspace_count(payload: Any) -> int | None:
+    """Highest 1-based Sway/i3 workspace number. Named-only dumps are unknown."""
+    if not isinstance(payload, list) or not payload:
+        return None
+    highest = 0
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        if name.startswith("__"):
+            continue
+        desktop = workspace_desktop_from_name(name, item.get("num"))
+        if desktop >= 0:
+            highest = max(highest, desktop + 1)
+    return highest or None
+
+
+def hypr_workspace_count(payload: Any) -> int | None:
+    """Highest 1-based Hypr workspace id. Special (negative) ids do not count."""
+    if not isinstance(payload, list) or not payload:
+        return None
+    highest = 0
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        desktop = _compositor_workspace_desktop(item.get("id"))
+        if desktop >= 0:
+            highest = max(highest, desktop + 1)
+    return highest or None
+
+
+def _session_workspace_count(environ: Mapping[str, str] | None = None) -> int | None:
+    """Count workspaces from the compositor that owns this session's socket."""
+    env = os.environ if environ is None else environ
+    if env.get("NIRI_SOCKET") and shutil.which("niri"):
+        count = niri_workspace_count(_json_command(["niri", "msg", "--json", "workspaces"]))
+        if count is not None:
+            return count
+    if env.get("SWAYSOCK") and shutil.which("swaymsg"):
+        count = i3ipc_workspace_count(_json_command(["swaymsg", "-t", "get_workspaces"]))
+        if count is not None:
+            return count
+    if env.get("I3SOCK") and shutil.which("i3-msg"):
+        count = i3ipc_workspace_count(_json_command(["i3-msg", "-t", "get_workspaces"]))
+        if count is not None:
+            return count
+    if env.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        count = hypr_workspace_count(_json_command(["hyprctl", "-j", "workspaces"]))
+        if count is not None:
+            return count
+    return None
+
+
 def _probe_workspace_count() -> int | None:
     from ulauncher.modes.launcher.wayland_workspaces import list_ext_workspaces
 
     rows = list_ext_workspaces()
     if rows is not None:
         return len([row for row in rows if not row.get("removed")])
+    compositor = _session_workspace_count()
+    if compositor is not None:
+        return compositor
     if shutil.which("wmctrl"):
         parsed = parse_wmctrl_desktops(_text_command(["wmctrl", "-d"]) or "")
         if parsed is not None:

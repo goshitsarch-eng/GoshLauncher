@@ -16,9 +16,12 @@ from ulauncher.modes.launcher.windows import (
     filter_listed_windows,
     gtk_unique_props_from_mapping,
     gtk_unique_props_from_xprop,
+    hypr_workspace_count,
+    i3ipc_workspace_count,
     is_unique_gtk_window,
     listed_workspace_count,
     match_windows,
+    niri_workspace_count,
     parse_window_close_query,
     parse_window_intent,
     parse_wmctrl_desktops,
@@ -651,6 +654,32 @@ def test_listed_workspace_count_prefers_ext_then_wmctrl(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         "ulauncher.modes.launcher.windows._text_command",
         lambda _argv: "0  * DG: 1x1  VP: 0,0  WA: 0,0 1x1  1\n1  - DG: 1x1  VP: 0,0  WA: 0,0 1x1  2\n",
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_desktop_count", lambda: 9)
+    assert listed_workspace_count() == 2
+    invalidate_workspace_count()
+
+
+def test_compositor_workspace_count_uses_max_index() -> None:
+    assert niri_workspace_count([{"id": 8, "idx": 1}, {"id": 9, "idx": 2}]) == 2
+    assert niri_workspace_count([]) is None
+    assert i3ipc_workspace_count([{"name": "1", "num": 1}, {"name": "5", "num": 5}]) == 5
+    assert i3ipc_workspace_count([{"name": "2:www", "num": 2}, {"name": "code"}]) == 2
+    assert i3ipc_workspace_count([{"name": "code"}, {"name": "__i3_scratch"}]) is None
+    assert hypr_workspace_count([{"id": 1}, {"id": 3}, {"id": -98, "name": "special"}]) == 3
+    assert hypr_workspace_count([{"id": -98}]) is None
+
+
+def test_listed_workspace_count_uses_niri_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setenv("NIRI_SOCKET", "/run/niri.sock")
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.shutil.which", lambda name: name if name == "niri" else None)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._json_command",
+        lambda argv: [{"id": 8, "idx": 1}, {"id": 9, "idx": 2}] if argv[-1] == "workspaces" else None,
     )
     monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_desktop_count", lambda: 9)
     assert listed_workspace_count() == 2
