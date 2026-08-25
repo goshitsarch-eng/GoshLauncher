@@ -210,6 +210,38 @@ def test_hidden_search_icon_inset_follows_goshos_order() -> None:
     assert leftover_16 == -1
 
 
+def test_every_look_panel_fill_is_in_css() -> None:
+    from pathlib import Path
+
+    # Same fills as tests/ui/test_look_pixels.py LOOK_PANEL_HEX (goshos README).
+    fills = {
+        "spotlight": "rgb(28, 28, 30)",
+        "omarchy": "#1a1b26",
+        "popos": "#242426",
+        "ulauncher": "#2b2b2b",
+        "krunner": "#2a2e32",
+        "gnome": "#303030",
+        "rofi": "#111111",
+        "raycast": "#161618",
+        "albert": "#31363b",
+        "wofi": "#1d1f21",
+        "fuzzel": "#fdf6e3",
+        "anyrun": "#1e1e2e",
+        "tofi": "#000000",
+        "light": "#f6f5f4",
+        "powertoys": "#2c2c2c",
+        "synapse": "#3c3b37",
+        "onagre": "#1c1917",
+    }
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    for look_id, color in fills.items():
+        if look_id == "spotlight":
+            block = text.split(".gosh-theme-spotlight .prompt {", 1)[1].split("}", 1)[0]
+        else:
+            block = text.split(f".gosh-theme-{look_id}.app {{", 1)[1].split("}", 1)[0]
+        assert color in block, look_id
+
+
 def test_spotlight_prompt_owns_the_pill_fill() -> None:
     from pathlib import Path
 

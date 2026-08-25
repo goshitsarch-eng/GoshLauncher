@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import gc
-
 from ulauncher.ui.gtk4 import load_css_provider
 from ulauncher.ui.helpers.theme import launcher_popup_css
 
@@ -94,23 +92,7 @@ def _native_renderer(widget: object) -> object | None:
         queue = getattr(surface, "queue_render", None)
         if callable(queue):
             queue()
-    renderer = native.get_renderer()
-    if renderer is not None:
-        return renderer
-    # GTK 4.6 on xvfb often has a mapped window before GskRenderer exists.
-    from gi.repository import Gsk
-
-    cairo_renderer = getattr(Gsk, "CairoRenderer", None)
-    if cairo_renderer is None or surface is None:
-        return None
-    renderer = cairo_renderer()
-    realize = getattr(renderer, "realize", None)
-    if callable(realize):
-        try:
-            realize(surface)
-        except (TypeError, ValueError, RuntimeError, OSError):
-            return None
-    return renderer
+    return native.get_renderer()
 
 
 def widget_pixbuf(widget: object) -> object:
@@ -204,9 +186,6 @@ def _destroy_tree(win: object) -> None:
     if callable(closer):
         closer()
     pump(8)
-    # Collect GI wrappers while the display is still valid. Pytest source
-    # formatting otherwise GCs cairo objects mid-traceback and can SIGSEGV.
-    gc.collect()
 
 
 def _nearest_colored_rgb(pixbuf: object, expected: tuple[int, int, int]) -> tuple[int, int, int]:

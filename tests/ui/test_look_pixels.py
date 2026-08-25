@@ -11,6 +11,19 @@ from ulauncher.ui.helpers.theme import CSS_RESET, launcher_popup_css
 
 pytestmark = pytest.mark.skipif(not GTK4_AVAILABLE, reason="GTK 4 is not available")
 
+# WidgetPaintable + GskRenderer.render_texture SIGSEGVs under xvfb on GTK 4.6
+# (Ubuntu 22.04). Look fills are still asserted from CSS on that floor.
+_GSK_SNAPSHOT_OK = False
+if GTK4_AVAILABLE:
+    from gi.repository import Gtk
+
+    _GSK_SNAPSHOT_OK = (Gtk.MAJOR_VERSION, Gtk.MINOR_VERSION) >= (4, 10)
+
+requires_gsk_snapshot = pytest.mark.skipif(
+    not _GSK_SNAPSHOT_OK,
+    reason="GSK widget snapshot SIGSEGVs on GTK 4.6 xvfb",
+)
+
 if GTK4_AVAILABLE:
     from tests.ui.look_paint import (
         close_popup_window,
@@ -112,6 +125,7 @@ def test_launcher_popup_css_parses_on_gtk4() -> None:
 
 
 @pytest.mark.parametrize("look_id", look_ids())
+@requires_gsk_snapshot
 def test_look_panel_pixels(look_id: str) -> None:
     if not display_available():
         pytest.skip("no Gdk display")
@@ -140,6 +154,7 @@ def popup_window() -> Iterator[object]:
     close_popup_window()
 
 
+@requires_gsk_snapshot
 def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
     win = popup_window
     assert win.has_css_class("gosh-popup")
@@ -154,6 +169,7 @@ def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
 
 
 @pytest.mark.parametrize("look_id", look_ids())
+@requires_gsk_snapshot
 def test_popup_look_panel_pixels(popup_window: object, look_id: str) -> None:
     assert popup_window.has_css_class("gosh-popup")  # type: ignore[union-attr]
     sampled = sample_popup_look(look_id)
@@ -167,6 +183,7 @@ def test_popup_look_panel_pixels(popup_window: object, look_id: str) -> None:
         )
 
 
+@requires_gsk_snapshot
 def test_entry_selection_paints_tofi_highlight() -> None:
     if not display_available():
         pytest.skip("no Gdk display")
@@ -176,6 +193,7 @@ def test_entry_selection_paints_tofi_highlight() -> None:
 
 
 @pytest.mark.parametrize("look_id", sorted(LOOK_PLACEHOLDER_HEX))
+@requires_gsk_snapshot
 def test_look_placeholder_pixels(look_id: str) -> None:
     if not display_available():
         pytest.skip("no Gdk display")
