@@ -2050,6 +2050,7 @@ def match_windows(
                 "pid": win.pid,
                 "wm_class": win.wm_class,
                 "app_id": win.app_id,
+                "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
                 "atspi_ref": getattr(win, "atspi_ref", "") or "",
                 "id": window_result_id(win.wid, title, win.wm_class, description),
             }
@@ -2090,6 +2091,35 @@ def session_has_x11_window_control(is_x11: bool | None = None) -> bool:
     return bool(is_x11)
 
 
+def bus_pid_for_window(
+    payload: Mapping[str, Any],
+    probe: Callable[[str], int | None] | None = None,
+) -> int:
+    """Unix pid of the window's D-Bus name. ext-foreign-toplevel-list has no pid."""
+    names = [
+        str(payload.get("gtk_unique_bus_name") or ""),
+        application_bus_name(str(payload.get("app_id") or "")),
+    ]
+    getter = probe or _connection_unix_pid
+    for name in names:
+        if not name:
+            continue
+        try:
+            pid = getter(name)
+        except Exception:
+            logger.debug("D-Bus pid lookup failed for %s", name, exc_info=True)
+            continue
+        if pid:
+            return int(pid)
+    return 0
+
+
+def _connection_unix_pid(name: str) -> int | None:
+    from ulauncher.utils.dbus import get_app_pid
+
+    return get_app_pid(name)
+
+
 def activate_window(payload: dict, application_activate: Callable[[str], bool] | None = None) -> None:
     kind = payload.get("kind")
     if kind == "workspace":
@@ -2101,6 +2131,9 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
     compositor_can_focus = compositor_window_argv(str(wid), "focus") is not None
     compositor_can_close = compositor_window_argv(str(wid), "close") is not None
     if kind == "kill":
+        # goshos win.kill(). ext-foreign rows have pid 0; the session bus name is the process.
+        if pid <= 0:
+            pid = bus_pid_for_window(payload)
         if pid:
             _signal_pid(pid, signal.SIGKILL)
         return

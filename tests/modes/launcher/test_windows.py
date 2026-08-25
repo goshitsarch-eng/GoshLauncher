@@ -10,6 +10,7 @@ from ulauncher.modes.launcher.windows import (
     activate_window,
     application_bus_name,
     application_object_path,
+    bus_pid_for_window,
     compositor_list_commands,
     compositor_window_argv,
     ewmh_window_type,
@@ -762,6 +763,38 @@ def test_activate_window_skips_app_activate_when_atspi_grabs(monkeypatch: pytest
         application_activate=lambda app: calls.append(("app", app)) or True,
     )
     assert calls == [("x11", "ext:ident")]
+
+
+def test_kill_uses_session_bus_pid_when_ext_foreign_has_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    def probe(name: str) -> int | None:
+        if name == "firefox":
+            return 88
+        if name == ":1.9":
+            return 7
+        return None
+
+    assert bus_pid_for_window({"app_id": "firefox.desktop"}, probe=probe) == 88
+    assert bus_pid_for_window({"gtk_unique_bus_name": ":1.9", "app_id": "x"}, probe=probe) == 7
+    assert bus_pid_for_window({"app_id": "missing"}, probe=probe) == 0
+    calls: list[tuple[object, ...]] = []
+
+    def pid_from_payload(payload: object, probe: object = None) -> int:
+        del probe
+        data = payload if isinstance(payload, dict) else {}
+        return 42 if str(data.get("app_id")) == "firefox" else 0
+
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.bus_pid_for_window", pid_from_payload)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._signal_pid",
+        lambda pid, sig: calls.append(("sig", pid, sig)),
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._close_window", lambda wid: calls.append(("close", wid)))
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
+    activate_window({"kind": "kill", "wid": "ext:abc", "pid": 0, "app_id": "firefox"})
+    assert calls == [("sig", 42, signal.SIGKILL)]
+    calls.clear()
+    activate_window({"kind": "close", "wid": "ext:abc", "pid": 0, "app_id": "firefox"})
+    assert calls == [("close", "ext:abc")]
 
 
 def test_listed_workspace_count_prefers_ext_then_wmctrl(monkeypatch: pytest.MonkeyPatch) -> None:
