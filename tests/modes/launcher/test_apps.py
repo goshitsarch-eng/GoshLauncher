@@ -378,7 +378,7 @@ def test_home_apps_prefers_gnome_app_usage(monkeypatch: pytest.MonkeyPatch) -> N
             return ["firefox.desktop"]
 
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda app_id: scores.get(app_id))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", scores.get)
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [firefox, notes])
     assert [app.name for app in home_apps(6)] == ["Notes", "Firefox"]
     alpha = SimpleNamespace(
@@ -397,5 +397,5 @@ def test_home_apps_prefers_gnome_app_usage(monkeypatch: pytest.MonkeyPatch) -> N
     )
     editor_scores = {"beta.desktop": 80.0, "alpha.desktop": 1.0}
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [alpha, beta])
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda app_id: editor_scores.get(app_id))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", editor_scores.get)
     assert [app.name for app in match_apps("editor", 6)] == ["Beta Editor", "Alpha Editor"]

@@ -16,9 +16,9 @@ from ulauncher.modes.launcher.windows import (
     gtk_unique_props_from_mapping,
     is_unique_gtk_window,
     match_windows,
-    parse_wmctrl_lx,
     parse_window_close_query,
     parse_window_intent,
+    parse_wmctrl_lx,
     parse_workspace_query,
     parse_workspace_switch_query,
     pick_window_list,
@@ -278,7 +278,13 @@ def test_unique_gtk_window_needs_bus_path_and_app_id() -> None:
         gtk_application_object_path="/org/app",
     )
     assert is_unique_gtk_window(missing_id) is False
-    wayland_only = WindowInfo(wid="0x3", title="Term", wm_class="org.gnome.Console", desktop=0, app_id="org.gnome.Console")
+    wayland_only = WindowInfo(
+        wid="0x3",
+        title="Term",
+        wm_class="org.gnome.Console",
+        desktop=0,
+        app_id="org.gnome.Console",
+    )
     assert is_unique_gtk_window(wayland_only) is False
     gtk_app_id, gtk_bus, gtk_path = gtk_unique_props_from_mapping(
         {
