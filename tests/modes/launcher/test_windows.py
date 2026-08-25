@@ -13,6 +13,7 @@ from ulauncher.modes.launcher.windows import (
     bus_pid_for_window,
     compositor_list_commands,
     compositor_window_argv,
+    desktop_bus_names_for_app_id,
     ewmh_window_type,
     filter_listed_windows,
     gtk_action_names_for_close,
@@ -768,6 +769,23 @@ def test_activate_window_skips_app_activate_when_atspi_grabs(monkeypatch: pytest
     assert calls == [("x11", "ext:ident")]
 
 
+def test_kill_resolves_undotted_wayland_app_id_to_desktop_bus() -> None:
+    assert desktop_bus_names_for_app_id("firefox", ["org.mozilla.firefox.desktop", "firefox.desktop"]) == [
+        "firefox",
+        "org.mozilla.firefox",
+    ]
+    assert desktop_bus_names_for_app_id("org.gnome.Console", ["org.gnome.Console.desktop"]) == ["org.gnome.Console"]
+    assert desktop_bus_names_for_app_id("x", ["org.gnome.Console.desktop"]) == ["x"]
+    assert (
+        bus_pid_for_window(
+            {"app_id": "firefox"},
+            probe=lambda name: 99 if name == "org.mozilla.firefox" else None,
+            desktop_ids=["org.mozilla.firefox.desktop"],
+        )
+        == 99
+    )
+
+
 def test_kill_uses_session_bus_pid_when_ext_foreign_has_none(monkeypatch: pytest.MonkeyPatch) -> None:
     def probe(name: str) -> int | None:
         if name == "firefox":
@@ -776,9 +794,9 @@ def test_kill_uses_session_bus_pid_when_ext_foreign_has_none(monkeypatch: pytest
             return 7
         return None
 
-    assert bus_pid_for_window({"app_id": "firefox.desktop"}, probe=probe) == 88
-    assert bus_pid_for_window({"gtk_unique_bus_name": ":1.9", "app_id": "x"}, probe=probe) == 7
-    assert bus_pid_for_window({"app_id": "missing"}, probe=probe) == 0
+    assert bus_pid_for_window({"app_id": "firefox.desktop"}, probe=probe, desktop_ids=()) == 88
+    assert bus_pid_for_window({"gtk_unique_bus_name": ":1.9", "app_id": "x"}, probe=probe, desktop_ids=()) == 7
+    assert bus_pid_for_window({"app_id": "missing"}, probe=probe, desktop_ids=()) == 0
     calls: list[tuple[object, ...]] = []
 
     def pid_from_payload(payload: object, probe: object = None) -> int:

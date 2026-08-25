@@ -11,7 +11,7 @@ import shutil
 import signal
 import subprocess
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 from urllib.parse import quote, unquote
@@ -2166,19 +2166,73 @@ def _gtk_actions_activate(bus_name: str, object_path: str, action: str) -> bool:
     return True
 
 
+def desktop_bus_names_for_app_id(app_id: str, desktop_ids: Sequence[str] | None = None) -> list[str]:
+    """Well-known names to try. Wayland app_id is often ``firefox``, not ``org.mozilla.firefox``."""
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: str) -> None:
+        name = application_bus_name(raw)
+        if name and name not in seen:
+            seen.add(name)
+            names.append(name)
+
+    add(app_id)
+    needle = application_bus_name(app_id).lower()
+    if len(needle) < 2 or "." in needle:
+        return names
+    ids = list(desktop_ids) if desktop_ids is not None else _list_desktop_ids()
+    for ident in ids:
+        bus = application_bus_name(str(ident or ""))
+        if not bus:
+            continue
+        lower = bus.lower()
+        if lower == needle or lower.rsplit(".", 1)[-1] == needle:
+            add(bus)
+    return names
+
+
+def _list_desktop_ids() -> list[str]:
+    try:
+        from ulauncher.gi import GioUnix
+    except (ImportError, AttributeError, RuntimeError, OSError):
+        return []
+    try:
+        infos = GioUnix.DesktopAppInfo.get_all()
+    except Exception:
+        logger.debug("DesktopAppInfo.get_all failed", exc_info=True)
+        return []
+    ids: list[str] = []
+    for info in infos or []:
+        try:
+            ident = str(info.get_id() or "")
+        except Exception:
+            logger.debug("DesktopAppInfo.get_id failed", exc_info=True)
+            continue
+        if ident:
+            ids.append(ident)
+    return ids
+
+
 def bus_pid_for_window(
     payload: Mapping[str, Any],
     probe: Callable[[str], int | None] | None = None,
+    desktop_ids: Sequence[str] | None = None,
 ) -> int:
     """Unix pid of the window's D-Bus name. ext-foreign-toplevel-list has no pid."""
-    names = [
-        str(payload.get("gtk_unique_bus_name") or ""),
-        application_bus_name(str(payload.get("app_id") or "")),
-    ]
+    names: list[str] = []
+    seen: set[str] = set()
+    unique = str(payload.get("gtk_unique_bus_name") or "")
+    if unique:
+        names.append(unique)
+        seen.add(unique)
+    app_id = str(payload.get("app_id") or payload.get("wm_class") or "")
+    for name in desktop_bus_names_for_app_id(app_id, desktop_ids):
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
     getter = probe or _connection_unix_pid
     for name in names:
-        if not name:
-            continue
         try:
             pid = getter(name)
         except Exception:
