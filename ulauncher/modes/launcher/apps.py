@@ -191,9 +191,23 @@ def app_window_count(app: Any, windows: list[Any] | None = None) -> int:
 
 
 def home_apps(limit: int) -> list[AppResult]:
-    from ulauncher.modes.launcher.parental import app_is_allowed
-
-    return [app for app in _app_mode.get_home_results(limit * 2) if app_is_allowed(app)][:limit]
+    # goshos searchFrequentApps: all usable apps, AppUsage order, then
+    # takeUniqueByBaseName. Rankings-only lists hid unused apps and kept
+    # Firefox plus Firefox ESR as two empty-state rows.
+    ranked = AppRankings.load().get_app_ids()
+    rank_index = {app_id: index for index, app_id in enumerate(ranked)}
+    fallback = len(rank_index)
+    usable: list[tuple[int, int, AppResult]] = []
+    for index, app in enumerate(iter_apps()):
+        try:
+            app_id = str(getattr(app, "app_id", "") or "")
+        except Exception:  # noqa: S112
+            continue
+        if not app_id:
+            continue
+        usable.append((rank_index.get(app_id, fallback), index, app))
+    usable.sort(key=lambda item: (item[0], item[1]))
+    return unique_by_base_name([app for _rank, _index, app in usable], limit)
 
 
 def is_new_window_action(action_id: str) -> bool:

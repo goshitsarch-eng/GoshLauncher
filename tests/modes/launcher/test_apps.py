@@ -11,6 +11,7 @@ from ulauncher.modes.launcher.apps import (
     app_row_description,
     app_window_count,
     desktop_action_title,
+    home_apps,
     is_new_window_action,
     match_apps,
     new_window_title,
@@ -217,3 +218,41 @@ def test_match_apps_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), good])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
     assert [app.name for app in match_apps("notes")] == ["Notes"]
+
+
+def test_home_apps_lists_unused_apps_and_collapses_variants(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    esr = SimpleNamespace(name="Firefox ESR", app_id="firefox-esr.desktop")
+    stable = SimpleNamespace(name="Firefox", app_id="firefox.desktop")
+    notes = SimpleNamespace(name="Notes", app_id="notes.desktop")
+
+    class _Rankings:
+        def get_app_ids(self) -> list[str]:
+            return ["firefox.desktop"]
+
+    monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, notes, stable])
+    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    assert [app.name for app in home_apps(6)] == ["Firefox", "Notes"]
+    assert [app.name for app in home_apps(1)] == ["Firefox"]
+    assert home_apps(0) == []
+
+
+def test_home_apps_skips_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    class _Bad:
+        @property
+        def app_id(self) -> str:
+            message = "invalid desktop encoding"
+            raise RuntimeError(message)
+
+    notes = SimpleNamespace(name="Notes", app_id="notes.desktop")
+
+    class _Rankings:
+        def get_app_ids(self) -> list[str]:
+            return []
+
+    monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), notes])
+    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    assert [app.name for app in home_apps(6)] == ["Notes"]
