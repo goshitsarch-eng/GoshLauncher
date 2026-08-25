@@ -784,6 +784,30 @@ def test_kill_resolves_undotted_wayland_app_id_to_desktop_bus() -> None:
         )
         == 99
     )
+    assert desktop_bus_names_for_app_id(
+        "kgx",
+        ["org.gnome.Console.desktop"],
+        [("org.gnome.Console.desktop", "kgx")],
+    ) == ["kgx", "org.gnome.Console"]
+    assert desktop_bus_names_for_app_id("Google-chrome", (), [("google-chrome.desktop", "Google-chrome")]) == [
+        "Google-chrome",
+        "google-chrome",
+    ]
+    assert (
+        bus_pid_for_window(
+            {"app_id": "kgx"},
+            probe=lambda name: 5 if name == "org.gnome.Console" else None,
+            desktop_ids=["org.gnome.Console.desktop"],
+            startup_classes=[("org.gnome.Console.desktop", "kgx")],
+        )
+        == 5
+    )
+    targets = gtk_muxer_targets_from_payload(
+        {"app_id": "kgx"},
+        desktop_ids=["org.gnome.Console.desktop"],
+        startup_classes=[("org.gnome.Console.desktop", "kgx")],
+    )
+    assert ("org.gnome.Console", "/org/gnome/Console") in targets
 
 
 def test_kill_uses_session_bus_pid_when_ext_foreign_has_none(monkeypatch: pytest.MonkeyPatch) -> None:

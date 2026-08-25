@@ -2112,21 +2112,24 @@ def gtk_action_names_for_close(intent: str) -> tuple[str, ...]:
     return ("close", "win.close")
 
 
-def gtk_muxer_targets_from_payload(payload: Mapping[str, Any]) -> list[tuple[str, str]]:
+def gtk_muxer_targets_from_payload(
+    payload: Mapping[str, Any],
+    desktop_ids: Sequence[str] | None = None,
+    startup_classes: Sequence[tuple[str, str]] | None = None,
+) -> list[tuple[str, str]]:
     targets: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    pairs = (
-        (str(payload.get("gtk_unique_bus_name") or ""), str(payload.get("gtk_application_object_path") or "")),
-        (
-            application_bus_name(str(payload.get("app_id") or "")),
-            application_object_path(application_bus_name(str(payload.get("app_id") or ""))),
-        ),
-    )
-    for bus_name, object_path in pairs:
+
+    def add(bus_name: str, object_path: str) -> None:
         if not bus_name or not object_path or (bus_name, object_path) in seen:
-            continue
+            return
         seen.add((bus_name, object_path))
         targets.append((bus_name, object_path))
+
+    add(str(payload.get("gtk_unique_bus_name") or ""), str(payload.get("gtk_application_object_path") or ""))
+    app_id = str(payload.get("app_id") or payload.get("wm_class") or "")
+    for bus_name in desktop_bus_names_for_app_id(app_id, desktop_ids, startup_classes):
+        add(bus_name, application_object_path(bus_name))
     return targets
 
 
@@ -2166,7 +2169,11 @@ def _gtk_actions_activate(bus_name: str, object_path: str, action: str) -> bool:
     return True
 
 
-def desktop_bus_names_for_app_id(app_id: str, desktop_ids: Sequence[str] | None = None) -> list[str]:
+def desktop_bus_names_for_app_id(
+    app_id: str,
+    desktop_ids: Sequence[str] | None = None,
+    startup_classes: Sequence[tuple[str, str]] | None = None,
+) -> list[str]:
     """Well-known names to try. Wayland app_id is often ``firefox``, not ``org.mozilla.firefox``."""
     names: list[str] = []
     seen: set[str] = set()
@@ -2181,18 +2188,33 @@ def desktop_bus_names_for_app_id(app_id: str, desktop_ids: Sequence[str] | None 
     needle = application_bus_name(app_id).lower()
     if len(needle) < 2 or "." in needle:
         return names
-    ids = list(desktop_ids) if desktop_ids is not None else _list_desktop_ids()
-    for ident in ids:
+    compact = needle.replace("-", "").replace("_", "")
+    for ident, wm_class in _desktop_hints(desktop_ids, startup_classes):
         bus = application_bus_name(str(ident or ""))
         if not bus:
             continue
         lower = bus.lower()
+        klass = str(wm_class or "").strip().lower()
         if lower == needle or lower.rsplit(".", 1)[-1] == needle:
+            add(bus)
+            continue
+        if klass and (klass == needle or klass.replace("-", "").replace("_", "") == compact):
             add(bus)
     return names
 
 
-def _list_desktop_ids() -> list[str]:
+def _desktop_hints(
+    desktop_ids: Sequence[str] | None,
+    startup_classes: Sequence[tuple[str, str]] | None,
+) -> list[tuple[str, str]]:
+    if desktop_ids is not None or startup_classes is not None:
+        hints = [(str(ident), "") for ident in desktop_ids or ()]
+        hints.extend((str(ident), str(klass)) for ident, klass in startup_classes or ())
+        return hints
+    return _list_desktop_hints()
+
+
+def _list_desktop_hints() -> list[tuple[str, str]]:
     try:
         from ulauncher.gi import GioUnix
     except (ImportError, AttributeError, RuntimeError, OSError):
@@ -2202,22 +2224,29 @@ def _list_desktop_ids() -> list[str]:
     except Exception:
         logger.debug("DesktopAppInfo.get_all failed", exc_info=True)
         return []
-    ids: list[str] = []
+    hints: list[tuple[str, str]] = []
     for info in infos or []:
         try:
             ident = str(info.get_id() or "")
         except Exception:
             logger.debug("DesktopAppInfo.get_id failed", exc_info=True)
             continue
-        if ident:
-            ids.append(ident)
-    return ids
+        if not ident:
+            continue
+        wm_class = ""
+        try:
+            wm_class = str(info.get_string("StartupWMClass") or "")
+        except Exception:
+            logger.debug("DesktopAppInfo StartupWMClass failed", exc_info=True)
+        hints.append((ident, wm_class))
+    return hints
 
 
 def bus_pid_for_window(
     payload: Mapping[str, Any],
     probe: Callable[[str], int | None] | None = None,
     desktop_ids: Sequence[str] | None = None,
+    startup_classes: Sequence[tuple[str, str]] | None = None,
 ) -> int:
     """Unix pid of the window's D-Bus name. ext-foreign-toplevel-list has no pid."""
     names: list[str] = []
@@ -2227,7 +2256,7 @@ def bus_pid_for_window(
         names.append(unique)
         seen.add(unique)
     app_id = str(payload.get("app_id") or payload.get("wm_class") or "")
-    for name in desktop_bus_names_for_app_id(app_id, desktop_ids):
+    for name in desktop_bus_names_for_app_id(app_id, desktop_ids, startup_classes):
         if name not in seen:
             seen.add(name)
             names.append(name)
