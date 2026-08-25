@@ -9,6 +9,7 @@ from ulauncher.modes.launcher.apps import (
     app_base_name,
     app_is_unique_gtk,
     app_match_tier,
+    app_muxer_has_new_window,
     app_row_description,
     app_window_count,
     can_open_new_window,
@@ -178,6 +179,7 @@ def test_single_window_apps_skip_synthetic_new_window() -> None:
 def test_unique_gtk_apps_skip_synthetic_new_window_unless_desktop_action(monkeypatch: pytest.MonkeyPatch) -> None:
     from ulauncher.modes.launcher import apps as apps_mod
 
+    monkeypatch.setattr(apps_mod, "probe_gtk_actions", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: [])
     settings = SimpleNamespace(
         name="Settings",
@@ -226,9 +228,53 @@ def test_unique_gtk_apps_skip_synthetic_new_window_unless_desktop_action(monkeyp
     assert running[0]["synthetic_new_window"] is True
 
 
+def test_well_known_gtk_muxer_works_without_window_unique_bus(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    settings = SimpleNamespace(
+        name="Settings",
+        icon="settings",
+        app_id="org.gnome.Settings.desktop",
+        actions={"launch": {"name": "Launch"}, "action:about": {"name": "About"}},
+        single_window=False,
+    )
+    wayland = WindowInfo(
+        wid="0x3",
+        title="Settings",
+        wm_class="org.gnome.Settings",
+        desktop=0,
+        app_id="org.gnome.Settings",
+    )
+    monkeypatch.setattr(apps_mod, "probe_gtk_actions", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: [])
+    assert app_is_unique_gtk(settings, [wayland]) is True
+    assert app_muxer_has_new_window(settings, [wayland]) is False
+    assert can_open_new_window(1, settings, windows=[wayland]) is False
+    assert [row["action_name"] for row in app_action_rows(settings, 6, window_count=1, windows=[wayland])] == ["about"]
+
+    monkeypatch.setattr(apps_mod, "probe_gtk_actions", lambda *_args, **_kwargs: ["new-window"])
+    monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: ["new-window"])
+    assert app_muxer_has_new_window(settings, [wayland]) is True
+    assert can_open_new_window(1, settings, windows=[wayland]) is True
+
+    firefox = SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        actions={"launch": {"name": "Launch"}},
+        single_window=False,
+    )
+    firefox_win = WindowInfo(wid="0x4", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0)
+    monkeypatch.setattr(apps_mod, "probe_gtk_actions", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: [])
+    assert app_is_unique_gtk(firefox, [firefox_win]) is False
+    assert can_open_new_window(1, firefox, windows=[firefox_win]) is True
+
+
 def test_muxer_new_window_beats_single_window_and_unique_gtk(monkeypatch: pytest.MonkeyPatch) -> None:
     from ulauncher.modes.launcher import apps as apps_mod
 
+    monkeypatch.setattr(apps_mod, "probe_gtk_actions", lambda *_args, **_kwargs: ["new-window"])
     monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: ["new-window"])
     settings = SimpleNamespace(
         name="Settings",

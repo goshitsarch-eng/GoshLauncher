@@ -14,6 +14,7 @@ from ulauncher.modes.launcher.windows import (
     ewmh_window_type,
     filter_listed_windows,
     gtk_unique_props_from_mapping,
+    gtk_unique_props_from_xprop,
     is_unique_gtk_window,
     match_windows,
     parse_window_close_query,
@@ -21,6 +22,7 @@ from ulauncher.modes.launcher.windows import (
     parse_wmctrl_lx,
     parse_workspace_query,
     parse_workspace_switch_query,
+    parse_xprop_window,
     pick_window_list,
     should_force_quit_window,
     should_list_window,
@@ -30,6 +32,7 @@ from ulauncher.modes.launcher.windows import (
     take_window_results,
     window_class_text,
     window_close_title,
+    window_inspect_from_xprop,
     window_matches,
     window_recency_value,
     window_result_id,
@@ -225,6 +228,27 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     assert rows[1].app_id == "org.gnome.Console"
     ranks = tab_ranks_from_introspect_payload(payload)
     assert ranks["firefox"] == 0
+    focused = tab_ranks_from_introspect_payload(
+        {
+            1: {"title": "Back", "wm-class": "old"},
+            2: {"title": "Front", "wm-class": "new", "has-focus": True},
+        }
+    )
+    assert focused["new"] == 0
+    assert focused["old"] == 1
+    sandboxed = windows_from_introspect_payload(
+        {
+            5: {
+                "title": "Mozilla Firefox",
+                "wm-class": "firefox",
+                "sandboxed-app-id": "org.mozilla.firefox",
+                "app-id": "firefox.desktop",
+            }
+        }
+    )
+    assert sandboxed[0].wm_class == "firefox org.mozilla.firefox"
+    assert sandboxed[0].app_id == "firefox.desktop"
+    assert window_matches(sandboxed[0], "mozilla")
     native = [WindowInfo(wid="0x1", title="Only X11", wm_class="x", desktop=0)]
     wayland = windows_from_introspect_payload(payload)
     picked = pick_window_list(native, [], wayland)
@@ -332,6 +356,48 @@ def test_wmctrl_list_drops_skip_taskbar_when_inspect_knows() -> None:
     assert filter_listed_windows(rows, None) == rows
     unknown = filter_listed_windows(rows, lambda _wid: None)
     assert [row.title for row in unknown] == ["Mozilla Firefox", "Top Bar", "Dock"]
+
+    def inspect_gtk(wid: str) -> tuple[bool | None, str | None, str, str, str] | None:
+        if wid == "0x01a00001":
+            return False, "normal", "org.mozilla.firefox", ":1.9", "/org/mozilla/Firefox"
+        if wid == "0x01a00002":
+            return True, "normal", "", "", ""
+        if wid == "0x01a00003":
+            return False, "dock", "", "", ""
+        return None
+
+    enriched = filter_listed_windows(rows, inspect_gtk)
+    assert len(enriched) == 1
+    assert enriched[0].gtk_app_id == "org.mozilla.firefox"
+    assert enriched[0].gtk_unique_bus_name == ":1.9"
+    assert "org.mozilla.firefox" in enriched[0].wm_class
+    assert is_unique_gtk_window(enriched[0]) is True
+
+
+def test_xprop_window_parse_skip_taskbar_and_gtk_unique() -> None:
+    skip = window_inspect_from_xprop(
+        "_NET_WM_STATE(ATOM) = _NET_WM_STATE_SKIP_TASKBAR, _NET_WM_STATE_SKIP_PAGER\n"
+        "_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_DOCK\n"
+    )
+    assert skip is not None
+    assert skip[0] is True
+    assert skip[1] == "dock"
+    missing = window_inspect_from_xprop("_NET_WM_STATE:  not found.\n_NET_WM_WINDOW_TYPE:  not found.\n")
+    assert missing is None
+    gtk = (
+        '_GTK_APPLICATION_ID(UTF8_STRING) = "org.gnome.Settings"\n'
+        '_GTK_UNIQUE_BUS_NAME(UTF8_STRING) = ":1.42"\n'
+        '_GTK_APPLICATION_OBJECT_PATH(UTF8_STRING) = "/org/gnome/Settings"\n'
+        "_NET_WM_STATE(ATOM) = \n"
+        "_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_NORMAL\n"
+    )
+    flags = window_inspect_from_xprop(gtk)
+    assert flags is not None
+    assert flags[0] is False
+    assert flags[1] == "normal"
+    assert flags[2:] == ("org.gnome.Settings", ":1.42", "/org/gnome/Settings")
+    assert gtk_unique_props_from_xprop(gtk) == ("org.gnome.Settings", ":1.42", "/org/gnome/Settings")
+    assert parse_xprop_window(gtk)["_GTK_APPLICATION_ID"] == '"org.gnome.Settings"'
 
 
 def test_hypr_sway_niri_window_payloads() -> None:

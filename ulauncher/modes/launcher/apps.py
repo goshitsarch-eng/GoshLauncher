@@ -214,7 +214,21 @@ def app_is_unique_gtk(app: Any, windows: Sequence[Any] | None) -> bool:
         return False
     from ulauncher.modes.launcher.windows import is_unique_gtk_window
 
-    return any(_app_matches_window(app, win) and is_unique_gtk_window(win) for win in windows)
+    matched = False
+    for win in windows:
+        if not _app_matches_window(app, win):
+            continue
+        matched = True
+        if is_unique_gtk_window(win):
+            return True
+    if not matched:
+        return False
+    # Wayland Introspect does not export gtk unique bus names. A reachable
+    # org.gtk.Actions muxer on the well-known desktop id is a unique GtkApplication.
+    for bus_name, object_path in _app_gtk_muxer_targets(app, windows):
+        if probe_gtk_actions(bus_name, object_path) is not None:
+            return True
+    return False
 
 
 def home_apps(limit: int) -> list[AppResult]:
@@ -276,9 +290,10 @@ def muxer_has_new_window_action(action_names: Sequence[str] | None) -> bool:
     return False
 
 
-def list_gtk_action_names(bus_name: str, object_path: str) -> list[str]:
+def probe_gtk_actions(bus_name: str, object_path: str) -> list[str] | None:
+    """List org.gtk.Actions on a muxer. None means the name is not a Gtk app."""
     if not bus_name or not object_path:
-        return []
+        return None
     try:
         from ulauncher.gi import Gio, GLib
 
@@ -296,20 +311,43 @@ def list_gtk_action_names(bus_name: str, object_path: str) -> list[str]:
         )
         return [str(item) for item in result.unpack()[0]]
     except Exception:
-        return []
+        return None
 
 
-def app_muxer_has_new_window(app: Any, windows: Sequence[Any] | None) -> bool:
-    if not windows:
-        return False
-    for win in windows:
+def list_gtk_action_names(bus_name: str, object_path: str) -> list[str]:
+    names = probe_gtk_actions(bus_name, object_path)
+    return [] if names is None else names
+
+
+def _app_gtk_muxer_targets(app: Any, windows: Sequence[Any] | None) -> list[tuple[str, str]]:
+    from ulauncher.modes.launcher.windows import application_bus_name, application_object_path
+
+    seen: set[tuple[str, str]] = set()
+    targets: list[tuple[str, str]] = []
+
+    def add(bus_name: str, object_path: str) -> None:
+        if not bus_name or not object_path or (bus_name, object_path) in seen:
+            return
+        seen.add((bus_name, object_path))
+        targets.append((bus_name, object_path))
+
+    for win in windows or ():
         if not _app_matches_window(app, win):
             continue
-        names = list_gtk_action_names(
+        add(
             str(getattr(win, "gtk_unique_bus_name", "") or ""),
             str(getattr(win, "gtk_application_object_path", "") or ""),
         )
-        if muxer_has_new_window_action(names):
+    bus_name = application_bus_name(str(getattr(app, "app_id", "") or ""))
+    add(bus_name, application_object_path(bus_name))
+    return targets
+
+
+def app_muxer_has_new_window(app: Any, windows: Sequence[Any] | None) -> bool:
+    if not windows or not any(_app_matches_window(app, win) for win in windows):
+        return False
+    for bus_name, object_path in _app_gtk_muxer_targets(app, windows):
+        if muxer_has_new_window_action(list_gtk_action_names(bus_name, object_path)):
             return True
     return False
 

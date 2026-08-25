@@ -12,7 +12,7 @@ import signal
 import subprocess
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 from urllib.parse import quote, unquote
 
@@ -139,21 +139,23 @@ def _ewmh_windows() -> list[WindowInfo]:
         name = ewmh.getWmName(win) or ewmh.getWmVisibleName(win) or ""
         if isinstance(name, bytes):
             name = name.decode("utf-8", "replace")
-        wm_class = ""
+        instance = ""
+        klass = ""
         try:
             cls = win.get_wm_class()
             if cls:
                 instance = str(cls[0] or "") if len(cls) > 0 else ""
                 klass = str(cls[1] or "") if len(cls) > 1 else ""
-                wm_class = window_class_text(klass, instance)
         except Exception:
-            wm_class = ""
+            instance = ""
+            klass = ""
         desktop = ewmh.getWmDesktop(win)
         if desktop is None:
             desktop = current or 0
         sticky = desktop == 0xFFFFFFFF
         pid = ewmh.getWmPid(win) or 0
         gtk_app_id, gtk_bus, gtk_path = _ewmh_gtk_application_props(ewmh, win)
+        wm_class = window_class_text(klass, instance, gtk_app_id)
         results.append(
             WindowInfo(
                 wid=hex(win.id),
@@ -262,9 +264,72 @@ def parse_wmctrl_lx(text: str) -> list[WindowInfo]:
     return rows
 
 
+_XPROP_LINE_RE = re.compile(r"^([A-Za-z0-9_]+)\([^)]+\)\s*=\s*(.*)$")
+
+
+def _xprop_unquote(raw: str) -> str:
+    text = raw.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
+        return text[1:-1]
+    return text
+
+
+def parse_xprop_window(text: str) -> dict[str, str]:
+    """Parse `xprop -id WID` atoms used for listing and GtkApplication uniqueness."""
+    props: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or "not found." in stripped:
+            continue
+        match = _XPROP_LINE_RE.match(stripped)
+        if not match:
+            continue
+        props[match.group(1)] = match.group(2).strip()
+    return props
+
+
+def gtk_unique_props_from_xprop(text: str) -> tuple[str, str, str]:
+    props = parse_xprop_window(text)
+    return (
+        _xprop_unquote(props.get("_GTK_APPLICATION_ID", "")),
+        _xprop_unquote(props.get("_GTK_UNIQUE_BUS_NAME", "")),
+        _xprop_unquote(props.get("_GTK_APPLICATION_OBJECT_PATH", "")),
+    )
+
+
+def window_inspect_from_xprop(text: str) -> tuple[bool | None, str | None, str, str, str] | None:
+    """Return skip-taskbar, type, and Gtk unique muxer props from xprop output."""
+    props = parse_xprop_window(text)
+    if not props:
+        return None
+    skip_taskbar = "_NET_WM_STATE_SKIP_TASKBAR" in props.get("_NET_WM_STATE", "")
+    type_names = [part.strip() for part in props.get("_NET_WM_WINDOW_TYPE", "").split(",") if part.strip()]
+    window_type = ewmh_window_type(type_names) if type_names else None
+    gtk_app_id, gtk_bus, gtk_path = gtk_unique_props_from_xprop(text)
+    if window_type is None and "_NET_WM_STATE" not in props and not gtk_app_id:
+        return None
+    return skip_taskbar, window_type or ewmh_window_type([]), gtk_app_id, gtk_bus, gtk_path
+
+
+def _apply_inspect_gtk(row: WindowInfo, flags: tuple[Any, ...]) -> WindowInfo:
+    if len(flags) < 5:
+        return row
+    gtk_app_id = str(flags[2] or "")
+    gtk_bus = str(flags[3] or "")
+    gtk_path = str(flags[4] or "")
+    wm_class = window_class_text(row.wm_class, "", gtk_app_id) if gtk_app_id else row.wm_class
+    return replace(
+        row,
+        wm_class=wm_class,
+        gtk_app_id=gtk_app_id or row.gtk_app_id,
+        gtk_unique_bus_name=gtk_bus or row.gtk_unique_bus_name,
+        gtk_application_object_path=gtk_path or row.gtk_application_object_path,
+    )
+
+
 def filter_listed_windows(
     rows: list[WindowInfo],
-    inspect: Callable[[str], tuple[bool | None, str | None] | None] | None,
+    inspect: Callable[[str], tuple[Any, ...] | None] | None,
 ) -> list[WindowInfo]:
     """Drop skip-taskbar / dock ids when inspect can read EWMH type and state.
 
@@ -280,16 +345,16 @@ def filter_listed_windows(
         if flags is None:
             kept.append(row)
             continue
-        skip_taskbar, window_type = flags
+        skip_taskbar, window_type = flags[0], flags[1]
         if skip_taskbar is None and not window_type:
             kept.append(row)
             continue
         if should_list_window(True, bool(skip_taskbar), window_type or ewmh_window_type([])):
-            kept.append(row)
+            kept.append(_apply_inspect_gtk(row, flags))
     return kept
 
 
-def _ewmh_inspect_wid(ewmh: Any, wid: str) -> tuple[bool | None, str | None] | None:
+def _ewmh_inspect_wid(ewmh: Any, wid: str) -> tuple[bool | None, str | None, str, str, str] | None:
     try:
         win_id = int(str(wid), 16) if str(wid).startswith("0x") else int(str(wid))
     except ValueError:
@@ -301,7 +366,32 @@ def _ewmh_inspect_wid(ewmh: Any, wid: str) -> tuple[bool | None, str | None] | N
     except Exception:
         return None
     skip_taskbar = "_NET_WM_STATE_SKIP_TASKBAR" in states
-    return skip_taskbar, ewmh_window_type(types)
+    gtk_app_id, gtk_bus, gtk_path = _ewmh_gtk_application_props(ewmh, win)
+    return skip_taskbar, ewmh_window_type(types), gtk_app_id, gtk_bus, gtk_path
+
+
+def _xprop_inspect_wid(wid: str) -> tuple[bool | None, str | None, str, str, str] | None:
+    if not shutil.which("xprop"):
+        return None
+    try:
+        text = subprocess.check_output(
+            [
+                "xprop",
+                "-id",
+                str(wid),
+                "_NET_WM_STATE",
+                "_NET_WM_WINDOW_TYPE",
+                "_GTK_APPLICATION_ID",
+                "_GTK_UNIQUE_BUS_NAME",
+                "_GTK_APPLICATION_OBJECT_PATH",
+            ],
+            text=True,
+            errors="replace",
+            timeout=0.08,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    return window_inspect_from_xprop(text)
 
 
 def _wmctrl_windows() -> list[WindowInfo]:
@@ -309,13 +399,22 @@ def _wmctrl_windows() -> list[WindowInfo]:
         return []
     out = subprocess.check_output(["wmctrl", "-lx"], text=True, errors="replace")
     rows = parse_wmctrl_lx(out)
+    ewmh = None
     try:
         from ulauncher.utils.ewmh import EWMH
 
         ewmh = EWMH()
     except Exception:
-        return rows
-    return filter_listed_windows(rows, lambda wid: _ewmh_inspect_wid(ewmh, wid))
+        ewmh = None
+
+    def inspect(wid: str) -> tuple[Any, ...] | None:
+        if ewmh is not None:
+            flags = _ewmh_inspect_wid(ewmh, wid)
+            if flags is not None:
+                return flags
+        return _xprop_inspect_wid(wid)
+
+    return filter_listed_windows(rows, inspect)
 
 
 def window_recency_value(tab_index: int, tab_count: int, user_time: int) -> int:
@@ -368,6 +467,18 @@ def _introspect_window_type(props: Mapping[str, Any]) -> str:
     return ewmh_window_type([])
 
 
+def _introspect_class_text(props: Mapping[str, Any], app_id: str) -> str:
+    # gnome-shell GetWindows: wm-class plus sandboxed-app-id. goshos concatenates
+    # those into windowClassText so org.mozilla matches a Firefox window.
+    sandboxed = str(props.get("sandboxed-app-id") or props.get("sandboxed_app_id") or "")
+    wm_raw = str(props.get("wm-class") or props.get("wm_class") or "")
+    instance = str(props.get("wm-class-instance") or props.get("wm_instance") or "")
+    text = window_class_text(wm_raw, instance, sandboxed)
+    if text:
+        return text
+    return app_id[:-8] if app_id.endswith(".desktop") else app_id
+
+
 def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
     """Map Mutter Introspect GetWindows onto WindowInfo (Wayland has no EWMH list)."""
     if not isinstance(payload, dict):
@@ -384,7 +495,7 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
             continue
         title = str(props.get("title") or "")
         app_id = str(props.get("app-id") or props.get("gtk-app-id") or "")
-        wm_class = str(props.get("wm-class") or props.get("wm_class") or app_id or "")
+        wm_class = _introspect_class_text(props, app_id)
         if not title and not wm_class:
             continue
         try:
@@ -415,12 +526,23 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
 def tab_ranks_from_introspect_payload(payload: Any) -> dict[str, int]:
     if not isinstance(payload, dict):
         return {}
+    focused: list[tuple[Any, Mapping[str, Any]]] = []
+    rest: list[tuple[Any, Mapping[str, Any]]] = []
+    for xid, props in payload.items():
+        props_map: Mapping[str, Any] = props if isinstance(props, dict) else {}
+        pair = (xid, props_map)
+        if props_map.get("has-focus") or props_map.get("has_focus"):
+            focused.append(pair)
+        else:
+            rest.append(pair)
     ranks: dict[str, int] = {}
-    for index, (xid, props) in enumerate(payload.items()):
-        props_map = props if isinstance(props, dict) else {}
+    for index, (xid, props_map) in enumerate(focused + rest):
         wm_class = str(props_map.get("wm-class") or props_map.get("app-id") or "").lower()
         if wm_class:
             ranks[wm_class] = index
+        sandboxed = str(props_map.get("sandboxed-app-id") or "").lower()
+        if sandboxed:
+            ranks[sandboxed] = index
         ranks[str(xid)] = index
         if isinstance(xid, int):
             ranks[hex(xid)] = index
