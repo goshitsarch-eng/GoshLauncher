@@ -875,6 +875,19 @@ def one_based_workspace_desktop(number: int) -> int:
     return number - 1
 
 
+def _workspace_num(num: Any) -> int | None:
+    if isinstance(num, bool):
+        return None
+    if isinstance(num, int):
+        return num
+    if isinstance(num, str):
+        try:
+            return int(num.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def workspace_desktop_from_name(name: str, num: Any = None) -> int:
     """Map a Sway/i3/Qtile workspace name onto WindowInfo.desktop.
 
@@ -882,8 +895,9 @@ def workspace_desktop_from_name(name: str, num: Any = None) -> int:
     workspaces (``code``) have no GNOME-style index, so the label is Switch
     to window rather than the leftover Workspace 1 of desktop 0.
     """
-    if isinstance(num, int) and not isinstance(num, bool) and num >= 1:
-        return one_based_workspace_desktop(num)
+    number = _workspace_num(num)
+    if number is not None and number >= 1:
+        return one_based_workspace_desktop(number)
     text = str(name or "").strip()
     if text.isdigit():
         return one_based_workspace_desktop(int(text))
@@ -901,8 +915,9 @@ def _compositor_workspace_desktop(workspace: Any) -> int:
     """
     if isinstance(workspace, dict):
         return workspace_desktop_from_name(str(workspace.get("name") or ""), workspace.get("id"))
-    if isinstance(workspace, int) and not isinstance(workspace, bool):
-        return one_based_workspace_desktop(workspace)
+    number = _workspace_num(workspace)
+    if number is not None:
+        return one_based_workspace_desktop(number)
     return workspace_desktop_from_name(str(workspace or ""))
 
 

@@ -845,6 +845,8 @@ def test_named_sway_i3_qtile_workspaces_are_not_workspace_one() -> None:
     assert workspace_desktop_from_name("www", 3) == 2
     assert workspace_desktop_from_name("code", -1) == -1
     assert workspace_desktop_from_name("code", True) == -1
+    assert workspace_desktop_from_name("", "2") == 1
+    assert workspace_desktop_from_name("code", "3") == 2
 
     sway = windows_from_sway_tree(
         {
@@ -939,6 +941,34 @@ def test_missing_hypr_niri_workspace_is_not_workspace_one() -> None:
     assert named[0].desktop == -1
     assert window_workspace_label(named[0].desktop) == "Switch to window"
     assert not window_matches(named[0], "1")
+
+    string_id = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xnum",
+                "title": "Term",
+                "class": "foot",
+                "workspace": {"id": "2"},
+                "mapped": True,
+            }
+        ]
+    )
+    assert string_id[0].desktop == 1
+    assert window_matches(string_id[0], "2")
+
+    special_str = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xneg",
+                "title": "Scratch",
+                "class": "foot",
+                "workspace": {"id": "-98"},
+                "mapped": True,
+            }
+        ]
+    )
+    assert special_str[0].desktop == -1
+    assert not window_matches(special_str[0], "1")
 
     text_ws = windows_from_hypr_clients(
         [
