@@ -209,8 +209,8 @@ class UlauncherCore:
 
     def get_home_results(self) -> Iterable[Result]:
         # LauncherMode owns goshos empty-state (frequent apps + windows).
-        # A zero max_recent_apps must not hide windows, and AppMode must not
-        # refill the list after empty suggestions are turned off.
+        # Both lists share max_per_category; AppMode must not refill the list
+        # after empty suggestions are turned off.
         from ulauncher.modes.launcher.mode import LauncherMode
 
         settings = Settings.load()

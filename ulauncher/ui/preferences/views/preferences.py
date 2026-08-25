@@ -460,14 +460,6 @@ class PreferencesView:
         page.add(extras)
 
         desktop = Adw.PreferencesGroup(title="Desktop")
-        recent_adjustment = Gtk.Adjustment(value=self.settings.max_recent_apps, lower=0, upper=20, step_increment=1)
-        add_spin_row(
-            desktop,
-            "Number of frequent apps to show",
-            "Pinned near the top of empty-state and app results.",
-            recent_adjustment,
-            self._on_recent_apps_changed,
-        )
         raise_switch = add_switch_row(
             desktop,
             "Switch to application if already running",
@@ -691,9 +683,6 @@ class PreferencesView:
 
     def _on_layer_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         self.settings.save({"layer_shell": switch.get_active()})
-
-    def _on_recent_apps_changed(self, spin: Gtk.SpinButton) -> None:
-        self.settings.save({"max_recent_apps": spin.get_value_as_int()})
 
     def _on_terminal_changed(self, entry: Gtk.Entry) -> None:
         self.settings.save({"terminal_command": entry.get_text()})

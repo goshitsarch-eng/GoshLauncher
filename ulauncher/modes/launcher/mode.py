@@ -148,14 +148,15 @@ class LauncherMode(Mode):
         order = flags.get("result_order") or chrome.get("result_order") or "default"
         if order == "default":
             order = chrome.get("result_order") or "default"
-        recent_cap = int(getattr(settings, "max_recent_apps", 6) or 0)
+        # max_recent_apps is leftover Ulauncher JSON; goshos caps both empty-state
+        # lists with the same max-results as search categories.
         need_windows = bool(flags.get("windows") or flags.get("apps"))
         open_windows = cached_windows() if need_windows else []
         if need_windows:
             ensure_windows(lambda: _events.emit("app:reload_query"))
         app_rows: list[dict[str, Any]] = []
-        if flags.get("apps") and recent_cap > 0:
-            for app in home_apps(min(limit, recent_cap)):
+        if flags.get("apps"):
+            for app in home_apps(limit):
                 app_rows.append(
                     {
                         "kind": "app",
@@ -167,7 +168,7 @@ class LauncherMode(Mode):
                 )
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
-            for win in open_windows:
+            for win in open_windows[:limit]:
                 if win.sticky or win.desktop < 0:
                     workspace = "On all workspaces"
                 else:

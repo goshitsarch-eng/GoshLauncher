@@ -18,6 +18,8 @@ def test_preferences_view_omits_ulauncher_color_theme_and_window_shadow() -> Non
     assert "look_prefs_search_text()" in text
     assert "engine_prefs_search_text()" in text
     assert "Jump keys" not in text
+    assert "Number of frequent apps" not in text
+    assert "max_recent_apps" not in text
 
 
 def test_goshos_pref_page_titles() -> None:

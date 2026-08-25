@@ -173,7 +173,42 @@ def test_empty_state_puts_windows_first_for_popos(monkeypatch: pytest.MonkeyPatc
     assert app.description == "Switch to application"
 
 
-def test_empty_state_hides_apps_when_recent_cap_is_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+def _patch_empty_state(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: object,
+    apps: list,
+    windows: list,
+) -> None:
+    from ulauncher.utils.settings import Settings
+
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.home_apps", lambda limit: apps[:limit])
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.cached_windows", lambda: windows)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
+
+
+def test_empty_state_hides_apps_when_apps_are_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = False
+    settings.enable_window_search = True
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")],
+        [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
+    )
+    results = list(LauncherMode().get_home_results(6))
+    assert _kinds(results) == ["window"]
+
+
+def test_empty_state_ignores_legacy_recent_app_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     from ulauncher.modes.launcher.windows import WindowInfo
     from ulauncher.utils.settings import Settings
 
@@ -185,18 +220,44 @@ def test_empty_state_hides_apps_when_recent_cap_is_zero(monkeypatch: pytest.Monk
     settings.enable_application_mode = True
     settings.enable_window_search = True
     settings.max_recent_apps = 0
-    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
-    monkeypatch.setattr(
-        "ulauncher.modes.launcher.apps.home_apps",
-        lambda limit: [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")][:limit],
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")],
+        [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
     )
-    monkeypatch.setattr(
-        "ulauncher.modes.launcher.windows.cached_windows",
-        lambda: [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)],
-    )
-    monkeypatch.setattr("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None)
     results = list(LauncherMode().get_home_results(6))
-    assert _kinds(results) == ["window"]
+    assert _kinds(results) == ["window", "app"]
+
+
+def test_empty_state_honors_max_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    apps = [
+        SimpleNamespace(name=f"App{i}", icon="app", app_id=f"app{i}.desktop") for i in range(1, 5)
+    ]
+    windows = [
+        WindowInfo(wid=f"0x{i}", title=f"Win{i}", wm_class="x.X", desktop=0, pid=i) for i in range(1, 5)
+    ]
+    _patch_empty_state(monkeypatch, settings, apps, windows)
+    results = list(LauncherMode().get_home_results(2))
+    assert _kinds(results) == ["window", "window"]
+    assert [row.name for row in results] == ["Win1", "Win2"]
+
+    settings.look_id = "spotlight"
+    settings.applied_look = "spotlight"
+    settings.result_order = "default"
+    results = list(LauncherMode().get_home_results(2))
+    assert _kinds(results) == ["app", "app"]
+    assert [row.name for row in results] == ["App1", "App2"]
 
 
 def test_empty_suggestions_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
