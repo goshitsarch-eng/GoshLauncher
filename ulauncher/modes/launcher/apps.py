@@ -234,8 +234,12 @@ def take_app_actions(actions: list[Any], max_results: int) -> list[Any]:
     return actions[:max_results]
 
 
-def can_open_new_window(window_count: int) -> bool:
-    return window_count > 0
+def can_open_new_window(window_count: int, app: Any = None) -> bool:
+    # goshos: get_n_windows() > 0 && shellApp.can_open_new_window().
+    # Shell returns false for X-GNOME-SingleWindow / unique apps while running.
+    if window_count <= 0:
+        return False
+    return not bool(getattr(app, "single_window", False))
 
 
 def open_new_window(app: Any) -> bool:
@@ -257,7 +261,7 @@ def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[st
     if limit <= 0:
         return []
     rows: list[dict[str, Any]] = []
-    if can_open_new_window(window_count):
+    if can_open_new_window(window_count, app):
         rows.append(
             {
                 "title": new_window_title(app.name),

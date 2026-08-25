@@ -37,3 +37,9 @@ class TestAppResult:
 
     def test_search_score(self, app1: AppResult) -> None:
         assert app1.search_score("true") > app1.search_score("trivago")
+
+    def test_single_window_desktop_key(self, app1: AppResult) -> None:
+        assert app1.single_window is False
+        single = AppResult.from_id("singleapp.desktop")
+        assert single is not None
+        assert single.single_window is True

@@ -10,6 +10,7 @@ from ulauncher.modes.launcher.apps import (
     app_match_tier,
     app_row_description,
     app_window_count,
+    can_open_new_window,
     desktop_action_title,
     home_apps,
     is_new_window_action,
@@ -152,6 +153,22 @@ def test_app_action_rows_hide_new_window_when_not_running() -> None:
     assert synthesized[0]["title"] == "New window — Notes"
     assert synthesized[0]["synthetic_new_window"] is True
     assert app_action_rows(notes, 6, window_count=0)[0]["action_name"] == "new"
+
+
+def test_single_window_apps_skip_synthetic_new_window() -> None:
+    settings = SimpleNamespace(
+        name="Settings",
+        icon="settings",
+        app_id="org.gnome.Settings.desktop",
+        actions={"launch": {"name": "Launch"}, "action:about": {"name": "About"}},
+        single_window=True,
+    )
+    assert can_open_new_window(0, settings) is False
+    assert can_open_new_window(1, settings) is False
+    assert can_open_new_window(1, SimpleNamespace()) is True
+    rows = app_action_rows(settings, 6, window_count=2)
+    assert [row["action_name"] for row in rows] == ["about"]
+    assert all(not row.get("synthetic_new_window") for row in rows)
 
 
 def test_app_row_description_and_window_count() -> None:

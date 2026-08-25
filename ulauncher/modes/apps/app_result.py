@@ -20,6 +20,8 @@ class AppResult(Result):
     generic_name: str = ""
     keywords: list[str] = []
     _executable: str = ""
+    # goshos Shell.App.can_open_new_window() is false for these while running
+    single_window: bool = False
 
     def __init__(self, app_info: GioUnix.DesktopAppInfo) -> None:
         actions: dict[str, dict[Literal["name", "icon"], str]] = {"launch": {"name": "Launch application"}}
@@ -41,6 +43,9 @@ class AppResult(Result):
         # get_executable uses Exec, which is always specified, but it will return the actual executable.
         # Sometimes the actual executable is not the app to start, but a wrappers like "env" or "sh -c"
         self._executable = basename(app_info.get_string("TryExec") or app_info.get_executable() or "")
+        self.single_window = bool(
+            app_info.get_boolean("X-GNOME-SingleWindow") or app_info.get_boolean("SingleMainWindow")
+        )
 
     @staticmethod
     def from_id(app_id: str) -> AppResult | None:
