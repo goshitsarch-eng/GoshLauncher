@@ -797,8 +797,8 @@ def test_kwin_dump_lists_and_activates_plasma_windows() -> None:
     )
     assert sticky[0].sticky is True
     assert window_matches(sticky[0], "sticky")
-    assert "desktop:desktopOf(c)" in KWIN_LIST_SCRIPT
-    assert "pid:Number(c.pid||0)" in KWIN_LIST_SCRIPT
+    assert "desktop: desktopOf(c)" in KWIN_LIST_SCRIPT
+    assert "pid: Number(c.pid || 0)" in KWIN_LIST_SCRIPT
 
 
 def test_qtile_windows_list_and_activate() -> None:
