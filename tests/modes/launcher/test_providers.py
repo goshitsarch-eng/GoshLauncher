@@ -7,7 +7,7 @@ from ulauncher.modes.launcher.color import parse_color
 from ulauncher.modes.launcher.plan import flags_from_settings, plan_search
 from ulauncher.modes.launcher.units import convert_query
 from ulauncher.modes.launcher.urls import match_url
-from ulauncher.modes.launcher.web import engine_prefs_search_text, web_result
+from ulauncher.modes.launcher.web import SEARCH_ENGINES, engine_prefs_search_text, get_engine, web_result
 
 
 def _flags(**overrides: object) -> dict:
@@ -87,3 +87,22 @@ def test_engine_prefs_search_text_lists_catalog() -> None:
     assert "Kagi" in text
     assert "Wikipedia" in text
     assert "Brave" in text
+
+
+GOSHOS_ENGINES = (
+    ("google", "Google", "https://www.google.com/search?q="),
+    ("duckduckgo", "DuckDuckGo", "https://duckduckgo.com/?q="),
+    ("brave", "Brave", "https://search.brave.com/search?q="),
+    ("bing", "Bing", "https://www.bing.com/search?q="),
+    ("startpage", "Startpage", "https://www.startpage.com/do/search?q="),
+    ("ecosia", "Ecosia", "https://www.ecosia.org/search?q="),
+    ("qwant", "Qwant", "https://www.qwant.com/?q="),
+    ("kagi", "Kagi", "https://kagi.com/search?q="),
+    ("wikipedia", "Wikipedia", "https://en.wikipedia.org/w/index.php?search="),
+)
+
+
+def test_search_engines_match_goshos_web_engines() -> None:
+    assert [(engine["id"], engine["label"], engine["url"]) for engine in SEARCH_ENGINES] == list(GOSHOS_ENGINES)
+    assert get_engine("kagi")["label"] == "Kagi"
+    assert get_engine("nope")["id"] == "google"

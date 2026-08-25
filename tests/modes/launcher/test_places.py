@@ -26,3 +26,6 @@ def test_spoken_open_documents() -> None:
     assert "Documents" in titles
     folder = strip_leading_verb("open the pictures folder")
     assert folder == "pictures"
+    directory = strip_leading_verb("open pictures dir")
+    assert directory == "pictures"
+    assert "Pictures" in [place["title"] for place in match_places(directory)]

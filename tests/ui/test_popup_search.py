@@ -107,6 +107,11 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     popup.app.preferences_shown = False
     assert popup.press(Gdk.KEY_comma, Gdk.ModifierType.CONTROL_MASK)
     assert popup.app.preferences_shown is True
+    selected = popup.win.results_view.selected_index
+    assert popup.press(Gdk.KEY_h, Gdk.ModifierType.CONTROL_MASK) is False
+    assert popup.win.results_view.selected_index == selected
+    assert popup.press(Gdk.KEY_l, Gdk.ModifierType.CONTROL_MASK) is False
+    assert popup.win.results_view.selected_index == selected
     assert popup.press(Gdk.KEY_1, Gdk.ModifierType.ALT_MASK)
     assert popup.app.activated is None
     assert popup.press(Gdk.KEY_2, Gdk.ModifierType.ALT_MASK)
@@ -285,9 +290,13 @@ def test_more_goshos_queries(popup: SearchPopup) -> None:
     assert "units" in popup.type_query("32 f to c")
     assert "calculator" in popup.type_query("half of 80")
     assert "place" in popup.type_query("open my documents")
+    assert "place" in popup.type_query("open pictures dir")
     assert "calculator" in popup.type_query("2pi")
     assert "calculator" in popup.type_query("what is 2+2")
+    assert "calculator" in popup.type_query("calculate 2+2")
     assert "clock" in popup.type_query("yesterday")
+    assert "clock" in popup.type_query("what time is it now")
+    assert "clock" in popup.type_query("clock")
     assert "color" in popup.type_query("red")
     color = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "color")
     assert color.name == "#ff0000"
@@ -462,6 +471,83 @@ def test_click_row_activates_and_click_outside_closes(popup: SearchPopup) -> Non
     popup.app.closed = False
     popup.win.on_backdrop_released(SimpleNamespace(), 1, -8.0, -8.0)
     assert popup.app.closed is True
+
+
+def _firefox_app() -> SimpleNamespace:
+    return SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        _executable="firefox",
+        actions={"launch": {"name": "Launch"}},
+    )
+
+
+def test_search_order_apps_before_windows_by_default() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    windows = [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)]
+    try:
+        probe = open_search_popup(typed_apps=[_firefox_app()], home_windows=windows)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.type_query("firefox")
+        assert "app" in kinds
+        assert "window" in kinds
+        assert kinds.index("app") < kinds.index("window")
+        headers = probe.header_names()
+        if headers:
+            assert headers.index("Applications") < headers.index("Windows")
+    finally:
+        probe.close()
+
+
+def test_search_order_windows_first_on_popos() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = ""
+    windows = [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)]
+    try:
+        probe = open_search_popup(settings=settings, typed_apps=[_firefox_app()], home_windows=windows)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.type_query("firefox")
+        assert "window" in kinds
+        assert "app" in kinds
+        assert kinds.index("window") < kinds.index("app")
+        headers = probe.header_names()
+        if headers:
+            assert headers.index("Windows") < headers.index("Applications")
+    finally:
+        probe.close()
+
+
+def test_empty_state_apps_first_on_spotlight() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    settings = Settings()
+    settings.look_id = "spotlight"
+    settings.applied_look = "spotlight"
+    settings.result_order = "default"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    apps = [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")]
+    windows = [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11)]
+    try:
+        probe = open_search_popup(settings=settings, home_apps=apps, home_windows=windows)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.kinds()
+        assert kinds[:2] == ["app", "window"]
+        assert probe.names()[:2] == ["Firefox", "Mozilla Firefox"]
+    finally:
+        probe.close()
 
 
 def test_typed_app_offers_new_window_when_running() -> None:

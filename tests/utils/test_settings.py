@@ -5,6 +5,7 @@ class TestSettings:
     def test_defaults(self) -> None:
         assert Settings().theme_name == "light"
         assert Settings(theme_name="asdf").theme_name == "asdf"
+        assert Settings().arrow_key_aliases == ""
 
     def test_dash_to_underscore(self) -> None:
         s = Settings()

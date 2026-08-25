@@ -417,15 +417,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
         show_numbers = bool(self._chrome.get("show_numbers"))
 
-        aliases_raw = self.settings.arrow_key_aliases or ""
-        use_arrow_key_aliases = len(aliases_raw) == 4  # noqa: PLR2004
-        arrow_key_aliases = [*aliases_raw] if use_arrow_key_aliases else [None] * 4
-        left_alias, down_alias, up_alias, right_alias = arrow_key_aliases
-        if aliases_raw and not use_arrow_key_aliases:
-            logger.warning(
-                "Invalid value for arrow_key_aliases: %s, expected four letters", self.settings.arrow_key_aliases
-            )
-
         entry = self.prompt_input
         preedit = _read_entry_preedit(entry)
         now_us = _event_time_us(controller)
@@ -499,20 +490,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if action["type"] == "activate-index":
             self._activate_numbered(int(action["index"]))
             return True
-
-        if self.results_view.has_results:
-            if ctrl and keyname == left_alias:
-                entry.set_position(max(0, cursor - 1))
-                return True
-            if ctrl and keyname == right_alias:
-                entry.set_position(cursor + 1)
-                return True
-            if ctrl and keyname == up_alias:
-                self.results_view.go_up()
-                return True
-            if ctrl and keyname == down_alias:
-                self.results_view.go_down()
-                return True
         return False
 
     def on_mouse_down(self, gesture: Gtk.GestureClick, _n_press: int, x: float, y: float) -> None:

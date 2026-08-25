@@ -9,9 +9,8 @@ _settings_file = f"{paths.CONFIG}/settings.json"
 
 
 class Settings(JsonConf):
-    # Leftover Ulauncher JSON. Goshos navigates with arrows / Ctrl+j k n p, not hjkl
-    # without Ctrl. These four letters only apply together with Control.
-    arrow_key_aliases: str = "hjkl"
+    # Leftover Ulauncher JSON. Goshos navigates with arrows / Ctrl+j k n p, not hjkl.
+    arrow_key_aliases: str = ""
     auto_resume: bool = False
     base_width: int = 600
     close_on_focus_out: bool = True

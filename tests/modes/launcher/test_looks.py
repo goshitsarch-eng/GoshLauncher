@@ -24,15 +24,91 @@ def test_applied_look_defaults_empty_so_first_enable_stamps() -> None:
     assert Settings.applied_look == ""
 
 
-def test_seventeen_looks() -> None:
+# Spotlight-goshos themes.js look catalog (id, title, hint, chrome). Width is not a field.
+GOSHOS_LOOKS = (
+    ("spotlight", "Spotlight", "Search apps...", "center", "comfortable", False, True, True, True, True, "default", 28),
+    ("omarchy", "Omarchy", "Search...", "center", "comfortable", False, True, True, True, True, "default", 24),
+    ("popos", "Pop!_OS", "Type to search", "top", "comfortable", True, True, True, True, True, "windows-first", 36),
+    ("ulauncher", "Ulauncher", "Search", "center", "comfortable", False, False, True, True, True, "default", 40),
+    ("krunner", "KRunner", "Search or run", "top", "compact", True, False, True, True, True, "default", 20),
+    ("gnome", "GNOME", "Type to search", "center", "comfortable", False, True, True, True, True, "default", 28),
+    ("rofi", "Rofi", "Filter", "center", "compact", False, False, False, False, False, "default", 22),
+    (
+        "raycast",
+        "Raycast",
+        "Search for apps and commands...",
+        "center",
+        "comfortable",
+        False,
+        False,
+        True,
+        True,
+        True,
+        "default",
+        32,
+    ),
+    ("albert", "Albert", "Enter a query", "center", "comfortable", False, True, True, True, True, "default", 26),
+    ("wofi", "Wofi", "Search", "center", "compact", False, False, False, False, False, "default", 22),
+    ("fuzzel", "Fuzzel", "Type to search", "center", "compact", False, False, False, True, False, "default", 24),
+    ("anyrun", "Anyrun", "Search", "center", "comfortable", False, False, False, True, False, "default", 28),
+    ("tofi", "Tofi", "Run", "top", "compact", False, False, False, False, False, "default", 20),
+    ("light", "Light", "Type to search", "center", "comfortable", False, True, True, True, True, "default", 28),
+    (
+        "powertoys",
+        "PowerToys",
+        "Type here to search",
+        "center",
+        "comfortable",
+        True,
+        False,
+        True,
+        True,
+        True,
+        "default",
+        32,
+    ),
+    ("synapse", "Synapse", "Search...", "center", "comfortable", False, False, True, True, False, "default", 48),
+    ("onagre", "Onagre", "Search", "center", "comfortable", False, False, True, True, False, "default", 30),
+)
+
+
+def test_seventeen_looks_match_goshos_themes() -> None:
     ids = look_ids()
+    assert ids == [row[0] for row in GOSHOS_LOOKS]
     assert len(ids) == 17
-    assert "spotlight" in ids
-    assert "popos" in ids
     assert get_look("missing")["id"] == LOOKS[0]["id"]
-    pop = get_look("popos")
-    assert pop["look"]["result_order"] == "windows-first"
-    assert pop["look"]["show_numbers"] is True
+    for look, expected in zip(LOOKS, GOSHOS_LOOKS):
+        (
+            look_id,
+            title,
+            hint,
+            position,
+            density,
+            numbers,
+            headers,
+            search_icon,
+            result_icons,
+            descriptions,
+            order,
+            icon,
+        ) = expected
+        chrome = look["look"]
+        assert look["id"] == look_id
+        assert look["title"] == title
+        assert look["hint"] == hint
+        assert chrome == {
+            "position": position,
+            "density": density,
+            "show_numbers": numbers,
+            "show_headers": headers,
+            "show_search_icon": search_icon,
+            "show_result_icons": result_icons,
+            "show_descriptions": descriptions,
+            "result_order": order,
+            "icon_size": icon,
+        }
+        assert "width" not in chrome
+        assert "base_width" not in chrome
 
 
 def test_apply_look_chrome_stamps_popos() -> None:
@@ -47,6 +123,11 @@ def test_apply_look_chrome_stamps_popos() -> None:
     assert chrome["position"] == "top"
     assert chrome["show_numbers"] is True
     assert chrome["result_order"] == "windows-first"
+    wide = SimpleNamespace(look_id="spotlight", applied_look="spotlight", base_width=800)
+    payload = apply_look_chrome(wide, "krunner")
+    assert wide.base_width == 800
+    assert "base_width" not in payload
+    assert "width" not in payload
 
 
 def test_look_apply_action_stamps_default_without_rewriting_chrome() -> None:

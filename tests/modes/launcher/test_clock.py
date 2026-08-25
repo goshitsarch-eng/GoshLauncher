@@ -14,6 +14,9 @@ def test_time_phrases() -> None:
         "show me the time",
         "tell me the time",
         "tell me what time it is",
+        "what time is it now",
+        "clock",
+        "what time is it right now",
     ):
         assert time_query_kind(query) == "time"
         hit = match_clock(query)
@@ -26,6 +29,8 @@ def test_date_phrases() -> None:
         assert time_query_kind(query) == "date"
     assert time_query_kind("today's date") == "date"
     assert time_query_kind("tell me the day") == "date"
+    assert time_query_kind("what's the day") == "date"
+    assert time_query_kind("tell me the day please") == "date"
 
 
 def test_relative_days() -> None:
