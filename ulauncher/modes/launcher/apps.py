@@ -186,19 +186,29 @@ def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     open_windows = list_windows() if windows is None else windows
     if app_window_count(app, open_windows) <= 0:
         return False
+    # goshos Shell.App.activate still raises skip-taskbar-only apps. Prefer a
+    # listed window so an IBus panel is not focused when a normal one exists.
+    target = None
     for win in open_windows:
-        if getattr(win, "skip_taskbar", False) or not _app_matches_window(app, win):
+        if not _app_matches_window(app, win):
             continue
-        activate_window(
-            {
-                "kind": "focus",
-                "wid": getattr(win, "wid", ""),
-                "pid": getattr(win, "pid", 0),
-                "payload": getattr(win, "wid", ""),
-            }
-        )
-        return True
-    return False
+        if getattr(win, "skip_taskbar", False):
+            if target is None:
+                target = win
+            continue
+        target = win
+        break
+    if target is None:
+        return False
+    activate_window(
+        {
+            "kind": "focus",
+            "wid": getattr(target, "wid", ""),
+            "pid": getattr(target, "pid", 0),
+            "payload": getattr(target, "wid", ""),
+        }
+    )
+    return True
 
 
 def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:

@@ -375,7 +375,9 @@ def test_focus_open_windows_activates_matching_class(monkeypatch: pytest.MonkeyP
     activated.clear()
     assert focus_open_windows(app, hidden) is True
     assert activated[0]["wid"] == "0x1"
-    assert focus_open_windows(app, hidden[:1]) is False
+    activated.clear()
+    assert focus_open_windows(app, hidden[:1]) is True
+    assert activated[0]["wid"] == "0x2"
 
 
 def test_match_apps_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -> None:
