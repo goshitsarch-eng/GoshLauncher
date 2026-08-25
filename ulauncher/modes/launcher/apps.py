@@ -187,7 +187,7 @@ def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     if app_window_count(app, open_windows) <= 0:
         return False
     for win in open_windows:
-        if not _app_matches_window(app, win):
+        if getattr(win, "skip_taskbar", False) or not _app_matches_window(app, win):
             continue
         activate_window(
             {

@@ -306,8 +306,16 @@ def test_app_row_description_and_window_count() -> None:
     windows = [
         WindowInfo(wid="1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=1),
         WindowInfo(wid="2", title="Terminal", wm_class="gnome-terminal.Gnome-terminal", desktop=0, pid=2),
+        WindowInfo(
+            wid="3",
+            title="Firefox Hidden",
+            wm_class="firefox.Firefox",
+            desktop=0,
+            pid=1,
+            skip_taskbar=True,
+        ),
     ]
-    assert app_window_count(app, windows) == 1
+    assert app_window_count(app, windows) == 2
     assert app_row_description(1) == "Switch to application"
     assert app_row_description(0) == "Application"
 
@@ -353,6 +361,21 @@ def test_focus_open_windows_activates_matching_class(monkeypatch: pytest.MonkeyP
     assert focus_open_windows(app, windows) is True
     assert activated[0]["wid"] == "0x1"
     assert focus_open_windows(app, []) is False
+    hidden = [
+        WindowInfo(
+            wid="0x2",
+            title="Firefox Hidden",
+            wm_class="Navigator.firefox",
+            desktop=0,
+            pid=11,
+            skip_taskbar=True,
+        ),
+        WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="Navigator.firefox", desktop=0, pid=11),
+    ]
+    activated.clear()
+    assert focus_open_windows(app, hidden) is True
+    assert activated[0]["wid"] == "0x1"
+    assert focus_open_windows(app, hidden[:1]) is False
 
 
 def test_match_apps_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -> None:

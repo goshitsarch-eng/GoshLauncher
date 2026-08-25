@@ -12,6 +12,7 @@ def _win(**kwargs: object) -> WindowInfo:
         wm_class=str(values["wm_class"]),
         desktop=int(values["desktop"]),  # type: ignore[arg-type]
         app_id=str(values.get("app_id") or ""),
+        skip_taskbar=bool(values.get("skip_taskbar") or False),
     )
 
 
@@ -25,6 +26,6 @@ def test_ibus_and_fcitx_candidate_windows_count_as_panels() -> None:
 
 def test_ime_panel_visible_uses_supplied_window_list() -> None:
     hidden = [_win(wm_class="foot", title="Terminal")]
-    shown = [_win(wm_class="ibus-ui-gtk4", title="")]
+    shown = [_win(wm_class="ibus-ui-gtk4", title="", skip_taskbar=True)]
     assert ime_panel_visible(windows=hidden) is False
     assert ime_panel_visible(windows=shown) is True

@@ -39,6 +39,7 @@ class WindowInfo:
     gtk_app_id: str = ""
     gtk_unique_bus_name: str = ""
     gtk_application_object_path: str = ""
+    skip_taskbar: bool = False
 
 
 WINDOWS_CACHE_TTL_S = 0.4
@@ -166,7 +167,9 @@ def _ewmh_windows() -> list[WindowInfo]:
         except Exception:
             states = []
         skip_taskbar = "_NET_WM_STATE_SKIP_TASKBAR" in states
-        if not should_list_window(True, skip_taskbar, ewmh_window_type(types)):
+        # Type filter still drops docks; skip-taskbar stays for app_window_count
+        # (goshos get_n_windows) while window search hides them (shouldListWindow).
+        if not should_list_window(True, False, ewmh_window_type(types)):
             continue
         name = ewmh.getWmName(win) or ewmh.getWmVisibleName(win) or ""
         if isinstance(name, bytes):
@@ -200,6 +203,7 @@ def _ewmh_windows() -> list[WindowInfo]:
                 gtk_app_id=gtk_app_id,
                 gtk_unique_bus_name=gtk_bus,
                 gtk_application_object_path=gtk_path,
+                skip_taskbar=skip_taskbar,
             )
         )
     return results
@@ -344,11 +348,10 @@ def window_inspect_from_xprop(text: str) -> tuple[bool | None, str | None, str, 
 
 
 def _apply_inspect_gtk(row: WindowInfo, flags: tuple[Any, ...]) -> WindowInfo:
-    if len(flags) < 5:
-        return row
-    gtk_app_id = str(flags[2] or "")
-    gtk_bus = str(flags[3] or "")
-    gtk_path = str(flags[4] or "")
+    skip_taskbar = bool(flags[0]) if flags[0] is not None else row.skip_taskbar
+    gtk_app_id = str(flags[2] or "") if len(flags) >= 5 else ""
+    gtk_bus = str(flags[3] or "") if len(flags) >= 5 else ""
+    gtk_path = str(flags[4] or "") if len(flags) >= 5 else ""
     wm_class = window_class_text(row.wm_class, "", gtk_app_id) if gtk_app_id else row.wm_class
     return replace(
         row,
@@ -356,6 +359,7 @@ def _apply_inspect_gtk(row: WindowInfo, flags: tuple[Any, ...]) -> WindowInfo:
         gtk_app_id=gtk_app_id or row.gtk_app_id,
         gtk_unique_bus_name=gtk_bus or row.gtk_unique_bus_name,
         gtk_application_object_path=gtk_path or row.gtk_application_object_path,
+        skip_taskbar=skip_taskbar,
     )
 
 
@@ -363,11 +367,11 @@ def filter_listed_windows(
     rows: list[WindowInfo],
     inspect: Callable[[str], tuple[Any, ...] | None] | None,
 ) -> list[WindowInfo]:
-    """Drop skip-taskbar / dock ids when inspect can read EWMH type and state.
+    """Drop docks when inspect can read EWMH type. Skip-taskbar stays marked.
 
-    A missing inspect result keeps the row: wmctrl is the fallback when the
-    stacking list already failed, and we must not hide every window if xlib
-    cannot map that id.
+    goshos shouldListWindow hides skip-taskbar from window search; get_n_windows
+    still counts them for Switch to application. A missing inspect result keeps
+    the row: wmctrl is the fallback when the stacking list already failed.
     """
     if inspect is None:
         return list(rows)
@@ -381,9 +385,15 @@ def filter_listed_windows(
         if skip_taskbar is None and not window_type:
             kept.append(row)
             continue
-        if should_list_window(True, bool(skip_taskbar), window_type or ewmh_window_type([])):
-            kept.append(_apply_inspect_gtk(row, flags))
+        if not should_list_window(True, False, window_type or ewmh_window_type([])):
+            continue
+        kept.append(_apply_inspect_gtk(row, flags))
     return kept
+
+
+def window_is_searchable(win: WindowInfo) -> bool:
+    """Window-search listing: goshos shouldListWindow hides skip-taskbar."""
+    return not getattr(win, "skip_taskbar", False)
 
 
 def _ewmh_inspect_wid(ewmh: Any, wid: str) -> tuple[bool | None, str | None, str, str, str] | None:
@@ -525,7 +535,7 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
             continue
         skip_taskbar = bool(props.get("is-skip-taskbar") or props.get("skip-taskbar"))
         has_workspace = props.get("workspace", True)
-        if not should_list_window(has_workspace, skip_taskbar, _introspect_window_type(props)):
+        if not should_list_window(has_workspace, False, _introspect_window_type(props)):
             continue
         title = str(props.get("title") or "")
         app_id = str(props.get("app-id") or props.get("gtk-app-id") or "")
@@ -555,6 +565,7 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
                 gtk_unique_bus_name=gtk_bus,
                 gtk_application_object_path=gtk_path,
                 user_time=1 if props.get("has-focus") or props.get("has_focus") else 0,
+                skip_taskbar=skip_taskbar,
             )
         )
     return windows
@@ -1773,6 +1784,8 @@ def match_windows(
             }
     window_rows: list[dict] = []
     for win in windows if windows is not None else cached_windows():
+        if not window_is_searchable(win):
+            continue
         target = rest if intent != "focus" else query
         if not window_matches(win, target):
             continue

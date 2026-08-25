@@ -386,6 +386,43 @@ def test_empty_state_skips_one_vanished_window(monkeypatch: pytest.MonkeyPatch) 
     assert [row.name for row in results] == ["Mozilla Firefox", "Notes"]
 
 
+def test_empty_state_hides_skip_taskbar_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.look_id = "popos"
+    settings.applied_look = "popos"
+    settings.result_order = "windows-first"
+    settings.enable_empty_suggestions = True
+    settings.enable_application_mode = True
+    settings.enable_window_search = True
+    _patch_empty_state(
+        monkeypatch,
+        settings,
+        [SimpleNamespace(name="Firefox", icon="firefox", app_id="firefox.desktop")],
+        [
+            WindowInfo(
+                wid="0x2",
+                title="Top Bar",
+                wm_class="firefox.Firefox",
+                desktop=0,
+                pid=11,
+                skip_taskbar=True,
+            ),
+            WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=11),
+        ],
+    )
+    capped = list(LauncherMode().get_home_results(1))
+    assert [row.name for row in capped] == ["Mozilla Firefox"]
+    results = list(LauncherMode().get_home_results(6))
+    kinds = _kinds(results)
+    assert kinds[0] == "window"
+    assert [row.name for row in results if row.kind == "window"] == ["Mozilla Firefox"]
+    app = next(row for row in results if row.kind == "app")
+    assert app.description == "Switch to application"
+
+
 def test_settings_row_copy_matches_goshos() -> None:
     results = _handle("# wifi")
     settings_row = next(row for row in results if getattr(row, "kind", "") == "settings")

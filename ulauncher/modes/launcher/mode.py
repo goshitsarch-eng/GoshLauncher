@@ -142,7 +142,7 @@ class LauncherMode(Mode):
         if not getattr(settings, "enable_empty_suggestions", True) or limit <= 0:
             return []
         from ulauncher.modes.launcher.apps import home_apps
-        from ulauncher.modes.launcher.windows import cached_windows
+        from ulauncher.modes.launcher.windows import cached_windows, window_is_searchable
 
         chrome = chrome_from_settings(settings)
         flags = flags_from_settings(settings)
@@ -163,10 +163,14 @@ class LauncherMode(Mode):
                     app_rows.append(row)
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
-            for win in open_windows[:limit]:
+            for win in open_windows:
+                if not window_is_searchable(win):
+                    continue
                 row = _empty_window_row(win)
                 if row is not None:
                     win_rows.append(row)
+                if len(win_rows) >= limit:
+                    break
         merged = merge_empty_suggestions(order, win_rows, app_rows, limit)
         return list(self._materialize(merged, chrome, headers=False))
 
