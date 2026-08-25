@@ -904,7 +904,9 @@ def should_list_window(
 ) -> bool:
     # goshos windowMatch.js: closed actors, skip-taskbar, and docks stay out of
     # alt-tab. Empty EWMH type is treated as normal by ewmh_window_type.
-    if not has_workspace or skip_taskbar:
+    # goshos uses the Meta.Workspace object as a boolean; {} in the JS tests
+    # is truthy. Python empty dict is not, so only None/False mean "closed".
+    if has_workspace is None or has_workspace is False or skip_taskbar:
         return False
     allowed = listed_types if listed_types is not None else ("normal", "dialog", "modal_dialog")
     return window_type in allowed
