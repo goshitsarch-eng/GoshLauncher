@@ -958,9 +958,7 @@ def test_missing_hypr_niri_workspace_is_not_workspace_one() -> None:
     assert niri[0].desktop == -1
     assert not window_matches(niri[0], "1")
 
-    niri_named = windows_from_niri_windows(
-        [{"id": 10, "title": "Web", "app_id": "firefox", "workspace_id": "code"}]
-    )
+    niri_named = windows_from_niri_windows([{"id": 10, "title": "Web", "app_id": "firefox", "workspace_id": "code"}])
     assert niri_named[0].desktop == -1
 
     stray = windows_from_sway_tree(
