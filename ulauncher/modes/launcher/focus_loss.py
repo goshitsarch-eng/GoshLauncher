@@ -117,11 +117,8 @@ def prompt_click_target(
     y: float,
     icon_rect: tuple[float, float, float, float],
     entry_rect: tuple[float, float, float, float],
-    prefs_rect: tuple[float, float, float, float],
 ) -> str:
     """Which prompt child a click hit. Search icon and empty padding are chrome."""
-    if point_in_rect(x, y, prefs_rect):
-        return "prefs"
     if point_in_rect(x, y, icon_rect):
         return "search-icon"
     if point_in_rect(x, y, entry_rect):
@@ -134,9 +131,9 @@ def prompt_click_should_refocus(target: str) -> bool:
     return target in {"search-icon", "padding"}
 
 
-def prompt_click_should_drag(target: str) -> bool:
-    """Goshos chrome is not a movable window. Keep drag on empty padding only."""
-    return target == "padding"
+def prompt_click_should_drag(target: str) -> bool:  # noqa: ARG001
+    """Goshos chrome is a fixed work-area actor, not a movable GTK window."""
+    return False
 
 
 def gtk_window_focus_action(

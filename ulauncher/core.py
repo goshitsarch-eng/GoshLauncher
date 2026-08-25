@@ -186,15 +186,14 @@ class UlauncherCore:
         hits.sort(key=lambda item: item.search_score(query_str), reverse=True)
         return hits[:limit]
 
-    def _should_merge_legacy(self, valid_mode: Mode | None) -> bool:
-        return valid_mode is not None and type(valid_mode).__name__ == "LauncherMode" and self.query.keyword is None
+    def _should_merge_legacy(self, _valid_mode: Mode | None) -> bool:
+        # goshos has no keyword-shortcut or extension rows in typed search
+        return False
 
     def _merge_legacy_into_launcher(self, results: list[Result]) -> list[Result]:
-        # Keyword shortcuts can still appear beside goshos rows. Default-search
-        # fallbacks must not: web last unless @ is already a LauncherMode result.
-        merged = list(results)
-        merged.extend(self.search_legacy_triggers())
-        return merged
+        # Typed search is goshos-only. Keyword shortcuts still run when set_query
+        # selects ShortcutMode; they are not mixed into LauncherMode rows.
+        return list(results)
 
     def get_home_results(self) -> Iterable[Result]:
         # LauncherMode owns goshos empty-state (frequent apps + windows).

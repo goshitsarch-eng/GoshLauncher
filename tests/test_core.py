@@ -75,7 +75,7 @@ def test_launcher_has_local_hits_skips_headers_and_web() -> None:
     assert launcher_has_local_hits([LauncherResult(name="Firefox", kind="app")]) is True
 
 
-def test_launcher_paint_merges_shortcut_triggers_not_apps(mocker: MockerFixture) -> None:
+def test_launcher_paint_does_not_merge_shortcut_triggers(mocker: MockerFixture) -> None:
     class ShortcutMode:
         pass
 
@@ -97,11 +97,12 @@ def test_launcher_paint_merges_shortcut_triggers_not_apps(mocker: MockerFixture)
 
     outer = MagicMock()
     emit = core._mode_callback(launcher, outer)
-    emit(effects.render_results([LauncherResult(name="Firefox", kind="app")], final=True))
+    row = LauncherResult(name="Firefox", kind="app")
+    emit(effects.render_results([row], final=True))
     painted = outer.call_args.args[0]["results"]
-    assert trigger in painted
+    assert painted == [row]
+    assert trigger not in painted
     assert app_trigger not in painted
-    assert core._mode_map[trigger] is shortcut_mode
 
 
 def test_launcher_paint_does_not_add_default_search_fallbacks_next_to_web(mocker: MockerFixture) -> None:

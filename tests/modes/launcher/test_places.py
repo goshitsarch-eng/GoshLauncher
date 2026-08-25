@@ -15,6 +15,7 @@ def test_place_icons_are_symbolic() -> None:
     from ulauncher.modes.launcher.places import PLACE_CATALOG
 
     assert PLACE_CATALOG[0]["icon"] == "user-home-symbolic"
+    assert len(PLACE_CATALOG) == 9
     assert all(str(place["icon"]).endswith("-symbolic") for place in PLACE_CATALOG)
 
 

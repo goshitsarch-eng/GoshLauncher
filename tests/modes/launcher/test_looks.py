@@ -142,3 +142,29 @@ def test_spotlight_shell_is_transparent_like_goshos() -> None:
     assert "#1a1b26" in omarchy
     popos = text.split(".gosh-theme-popos.app {", 1)[1].split("}", 1)[0]
     assert "#242426" in popos
+
+
+def test_look_placeholder_colors_match_goshos_hint_text() -> None:
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    assert "rgba(245, 245, 247, 0.35)" in text
+    hints = {
+        "omarchy": "#565f89",
+        "popos": "rgba(242, 242, 242, 0.4)",
+        "rofi": "#666666",
+        "raycast": "#6e6e73",
+        "albert": "#7f8c8d",
+        "wofi": "#707880",
+        "fuzzel": "#93a1a1",
+        "anyrun": "#6c7086",
+        "tofi": "#888888",
+        "light": "#9a9996",
+        "powertoys": "#9a9a9a",
+        "synapse": "#a39e93",
+        "onagre": "#78716c",
+    }
+    for look_id, color in hints.items():
+        assert f".gosh-theme-{look_id} .input placeholder" in text
+        assert f".gosh-theme-{look_id} .input text.placeholder {{\n  color: {color};\n}}" in text
+    assert ".prefs-btn" not in text

@@ -32,16 +32,6 @@ window.gosh-popup.background {
   color: #98989d;
 }
 
-.prefs-btn {
-  border-radius: 12px;
-  opacity: 0.8;
-  background-color: transparent;
-}
-
-.prefs-btn:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-}
-
 .prompt {
   background-color: rgb(28, 28, 30);
   border-radius: 32px;
@@ -62,6 +52,12 @@ window.gosh-popup.background {
 .input selection {
   background-color: #0a84ff;
 }
+
+.input placeholder,
+.input text.placeholder {
+  color: rgba(245, 245, 247, 0.35);
+}
+
 
 
 .input:focus {
@@ -177,6 +173,12 @@ window.gosh-popup.background {
   background-color: #7aa2f7;
 }
 
+.gosh-theme-omarchy .input placeholder,
+.gosh-theme-omarchy .input text.placeholder {
+  color: #565f89;
+}
+
+
 
 .gosh-theme-omarchy .search-icon {
   color: #7aa2f7;
@@ -249,6 +251,12 @@ window.gosh-popup.background {
 .gosh-theme-popos .input selection {
   background-color: #6ba4f8;
 }
+
+.gosh-theme-popos .input placeholder,
+.gosh-theme-popos .input text.placeholder {
+  color: rgba(242, 242, 242, 0.4);
+}
+
 
 
 .gosh-theme-popos .search-icon {
@@ -485,6 +493,12 @@ window.gosh-popup.background {
   background-color: #005577;
 }
 
+.gosh-theme-rofi .input placeholder,
+.gosh-theme-rofi .input text.placeholder {
+  color: #666666;
+}
+
+
 
 .gosh-theme-rofi .search-icon {
   color: #005577;
@@ -542,6 +556,12 @@ window.gosh-popup.background {
 .gosh-theme-raycast .input selection {
   background-color: #ff6363;
 }
+
+.gosh-theme-raycast .input placeholder,
+.gosh-theme-raycast .input text.placeholder {
+  color: #6e6e73;
+}
+
 
 
 .gosh-theme-raycast .search-icon {
@@ -605,6 +625,12 @@ window.gosh-popup.background {
   background-color: #1d99f3;
 }
 
+.gosh-theme-albert .input placeholder,
+.gosh-theme-albert .input text.placeholder {
+  color: #7f8c8d;
+}
+
+
 
 .gosh-theme-albert .search-icon {
   color: #1d99f3;
@@ -660,6 +686,12 @@ window.gosh-popup.background {
 .gosh-theme-wofi .input selection {
   background-color: #285577;
 }
+
+.gosh-theme-wofi .input placeholder,
+.gosh-theme-wofi .input text.placeholder {
+  color: #707880;
+}
+
 
 
 .gosh-theme-wofi .search-icon {
@@ -719,6 +751,12 @@ window.gosh-popup.background {
 .gosh-theme-fuzzel .input selection {
   background-color: #eee8d5;
 }
+
+.gosh-theme-fuzzel .input placeholder,
+.gosh-theme-fuzzel .input text.placeholder {
+  color: #93a1a1;
+}
+
 
 
 .gosh-theme-fuzzel .search-icon {
@@ -791,6 +829,12 @@ window.gosh-popup.background {
 .gosh-theme-anyrun .input selection {
   background-color: #89b4fa;
 }
+
+.gosh-theme-anyrun .input placeholder,
+.gosh-theme-anyrun .input text.placeholder {
+  color: #6c7086;
+}
+
 
 
 .gosh-theme-anyrun .search-icon {
@@ -866,6 +910,12 @@ window.gosh-popup.background {
   background-color: #555555;
 }
 
+.gosh-theme-tofi .input placeholder,
+.gosh-theme-tofi .input text.placeholder {
+  color: #888888;
+}
+
+
 
 .gosh-theme-tofi .search-icon {
   color: #ffffff;
@@ -931,6 +981,12 @@ window.gosh-popup.background {
 .gosh-theme-light .input selection {
   background-color: #3584e4;
 }
+
+.gosh-theme-light .input placeholder,
+.gosh-theme-light .input text.placeholder {
+  color: #9a9996;
+}
+
 
 
 .gosh-theme-light .search-icon {
@@ -1186,6 +1242,12 @@ window.gosh-popup.background {
   background-color: #0078d4;
 }
 
+.gosh-theme-powertoys .input placeholder,
+.gosh-theme-powertoys .input text.placeholder {
+  color: #9a9a9a;
+}
+
+
 
 .gosh-theme-powertoys .search-icon {
   color: #60cdff;
@@ -1250,6 +1312,12 @@ window.gosh-popup.background {
 .gosh-theme-synapse .input selection {
   background-color: #f07746;
 }
+
+.gosh-theme-synapse .input placeholder,
+.gosh-theme-synapse .input text.placeholder {
+  color: #a39e93;
+}
+
 
 
 .gosh-theme-synapse .search-icon {
@@ -1316,6 +1384,12 @@ window.gosh-popup.background {
 .gosh-theme-onagre .input selection {
   background-color: #f59e0b;
 }
+
+.gosh-theme-onagre .input placeholder,
+.gosh-theme-onagre .input text.placeholder {
+  color: #78716c;
+}
+
 
 
 .gosh-theme-onagre .search-icon {

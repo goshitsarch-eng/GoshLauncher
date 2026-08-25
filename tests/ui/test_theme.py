@@ -84,7 +84,8 @@ def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:
     assert "window.gosh-popup" in css
     assert ".gosh-theme-spotlight" in css
     assert "@define-color bg_color" not in css
-    assert ".prefs-btn" in css
+    assert ".prefs-btn" not in css
+    assert "text.placeholder" in css
 
 
 def test_packaged_themes_are_gosh_looks_only() -> None:

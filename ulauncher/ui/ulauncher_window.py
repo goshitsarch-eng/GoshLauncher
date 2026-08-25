@@ -122,12 +122,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.prompt_input = Gtk.Entry(hexpand=True)
         # CSS .input padding is the inset; widget margins would ignore look/no-icon rules
 
-        self.prefs_btn = Gtk.Button(name="prefs_btn", width_request=24, height_request=24)
-        self.prefs_btn.set_halign(Gtk.Align.CENTER)
-        self.prefs_btn.set_valign(Gtk.Align.CENTER)
-        self.prefs_btn.set_margin_end(15)
-        self.prefs_btn.set_can_focus(False)
-
         from ulauncher.modes.launcher.focus_loss import popup_chrome_should_focus
         from ulauncher.modes.launcher.search_entry import SEARCH_ICON_NAME, SEARCH_ICON_PX
 
@@ -137,7 +131,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.search_icon.set_valign(Gtk.Align.CENTER)
         gtk4.pack_start(self.prompt, self.search_icon, False, False, 0)
         gtk4.pack_start(self.prompt, self.prompt_input, True, True, 0)
-        gtk4.pack_end(self.prompt, self.prefs_btn, False, False, 0)
         self._sync_search_entry()
 
         self.results_view = ResultsView(self.settings, self.apply_css, self._activate_clicked)
@@ -168,7 +161,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         keys.connect("key-pressed", self.on_input_key_press)
         self.prompt_input.add_controller(keys)
         self.connect("map", self.on_initial_draw)
-        self.prefs_btn.connect("clicked", lambda *_: self.get_app().show_preferences())
 
         # Style before the first map so GSK builds a tree (opacity 0 skipped paints).
         self.apply_styling()
@@ -191,10 +183,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         gtk4.add_css_class(self.prompt, "prompt")
         gtk4.add_css_class(self.results_view, "result-box")
         gtk4.add_css_class(self.prompt_input, "input")
-        gtk4.add_css_class(self.prefs_btn, "prefs-btn")
-        prefs_icon = Gtk.Image.new_from_icon_name("emblem-system-symbolic")
-        prefs_icon.set_pixel_size(16)
-        self.prefs_btn.set_child(prefs_icon)
 
         self.apply_theme()
         self.position_window()
@@ -576,7 +564,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             y,
             self._widget_rect_in_prompt(self.search_icon),
             self._widget_rect_in_prompt(self.prompt_input),
-            self._widget_rect_in_prompt(self.prefs_btn),
         )
 
     def _refocus_entry_soon(self) -> None:

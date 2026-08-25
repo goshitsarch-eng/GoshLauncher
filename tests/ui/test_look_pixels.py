@@ -123,8 +123,6 @@ def popup_window() -> Iterator[object]:
 
 
 def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
-    from gi.repository import Gtk
-
     win = popup_window
     assert win.has_css_class("gosh-popup")
     assert "gosh-theme-" in " ".join(win.theme_root.get_css_classes())
@@ -134,9 +132,7 @@ def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
     assert win.prompt.get_height() > 1
     rgb = sample_popup_look("omarchy")
     assert _near(rgb["panel"], _hex_rgb(LOOK_PANEL_HEX["omarchy"])), rgb
-    child = win.prefs_btn.get_child()
-    assert isinstance(child, Gtk.Image)
-    assert child.get_icon_name() == "emblem-system-symbolic"
+    assert not hasattr(win, "prefs_btn")
 
 
 @pytest.mark.parametrize("look_id", look_ids())
