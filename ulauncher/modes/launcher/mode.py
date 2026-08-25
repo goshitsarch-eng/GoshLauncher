@@ -335,9 +335,11 @@ class LauncherMode(Mode):
                         "description": hit.get("description") or "",
                         "icon": hit.get("icon") or "folder-symbolic",
                         "path": hit["path"],
+                        "id": hit.get("id") or hit["path"],
                         "in_terminal": bool(hit.get("in_terminal")),
                         "exists": hit.get("exists", True),
                         "checking": bool(hit.get("checking")),
+                        "activatable": hit.get("activatable", True) is not False,
                     },
                 )
 

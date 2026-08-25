@@ -78,3 +78,15 @@ def test_date_title_format() -> None:
     text = source.read_text()
     assert "DateTime.new_now_local" in text
     assert "datetime.now" not in text
+
+
+def test_goshos_clock_false_positives() -> None:
+    assert time_query_kind("days") is None
+    assert time_query_kind("daylight") is None
+    assert time_query_kind("timeout") is None
+    assert time_query_kind("yesterdays") is None
+    assert time_query_kind("day") == "date"
+    assert time_query_kind("weekday") == "date"
+    assert time_query_kind("day of the week") == "date"
+    assert time_query_kind("current date") == "date"
+    assert time_query_kind("what the time is") == "time"

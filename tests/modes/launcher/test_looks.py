@@ -231,6 +231,8 @@ def test_compact_row_padding_comes_after_every_look() -> None:
     assert "caret-color: #f07746" in text
     assert "background-color: #000000" in text
     assert "background-color: #fdf6e3" in text
+    assert "background-color: #1d99f3" in text
+    assert "background-color: #285577" in text
     for look_id in (
         "omarchy",
         "popos",

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ulauncher.modes.launcher.recents import (
+    basename_from_uri,
     ensure_recent_files,
     flush_recents_lookup,
     icon_for_basename,
@@ -87,6 +88,12 @@ def test_parse_recent_xbel_regex_unescapes_and_skips_web() -> None:
     assert "file:///tmp/spaced.txt" in uris
     assert "sftp://nas.local/share/notes.txt" in uris
     assert all("example.com" not in uri and "javascript" not in uri for uri in uris)
+
+
+def test_basename_from_uri_keeps_latin1_percent_bytes() -> None:
+    assert basename_from_uri("file:///home/user/My%20File.pdf") == "My File.pdf"
+    assert basename_from_uri("file:///tmp/a%") == "a%"
+    assert basename_from_uri("file:///tmp/caf%E9.txt") == "caf%E9.txt"
 
 
 def test_icon_for_basename_and_exists_budget() -> None:

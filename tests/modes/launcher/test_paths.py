@@ -13,7 +13,10 @@ from ulauncher.modes.launcher.bookmarks import (
     search_bookmarks,
 )
 from ulauncher.modes.launcher.paths import (
+    canonicalize_file_uri,
     canonicalize_launch_uri,
+    canonicalize_remote_uri,
+    decode_uri_component_safe,
     ensure_path,
     file_uri_from_absolute,
     flush_path_lookup,
@@ -54,15 +57,31 @@ def test_path_row_meta_pending_and_ready() -> None:
     assert pending["description"] == "Checking path"
     assert pending["checking"] is True
     assert pending["exists"] is False
+    assert pending["type"] == "path"
+    assert pending["id"] == "/home/me/code"
+    assert pending["activatable"] is False
     missing = path_row_meta("/missing", "/missing", "missing")
     assert missing["description"] == "Path not found"
+    assert missing["activatable"] is False
     ready = path_row_meta("/tmp", "/tmp", "directory")
     assert ready["description"] == "Open path"
     assert ready["exists"] is True
+    assert ready["id"] == "/tmp"
+    assert "activatable" not in ready
     pdf = path_row_meta("notes.pdf", "/tmp/notes.pdf", "file")
     assert pdf["icon"] == "x-office-document-symbolic"
     png = path_row_meta("shot.png", "/home/me/shot.png", "file", home="/home/me")
     assert png["icon"] == "image-x-generic-symbolic"
+
+
+def test_goshos_latin1_percent_decode_stays_raw() -> None:
+    # JS decodeURIComponent throws on latin-1 percent bytes; Python unquote must not
+    # replace them or canonicalize_file_uri re-encodes a replacement character.
+    assert decode_uri_component_safe("caf%E9") == "caf%E9"
+    assert decode_uri_component_safe("My%20File") == "My File"
+    assert path_from_file_uri("file:///home/u/caf%E9") == ""
+    assert canonicalize_file_uri("file:///home/u/caf%E9") == "file:///home/u/caf%E9"
+    assert canonicalize_remote_uri("sftp://nas/caf%E9") == "sftp://nas/caf%E9"
 
 
 def test_search_path_pending_then_flush_resolves() -> None:

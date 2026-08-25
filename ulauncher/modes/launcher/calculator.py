@@ -17,9 +17,17 @@ def _tan(n: float) -> float:
     return math.tan(rad)
 
 
+def _cbrt(n: float) -> float:
+    # math.cbrt is 3.11+; n ** (1/3) is complex for negatives on 3.8–3.10.
+    cbrt = getattr(math, "cbrt", None)
+    if cbrt is not None:
+        return float(cbrt(n))
+    return math.copysign(abs(n) ** (1 / 3), n)
+
+
 FUNCS = {
     "sqrt": math.sqrt,
-    "cbrt": math.cbrt if hasattr(math, "cbrt") else lambda n: n ** (1 / 3),
+    "cbrt": _cbrt,
     "abs": abs,
     "log": math.log10,
     "log2": math.log2,

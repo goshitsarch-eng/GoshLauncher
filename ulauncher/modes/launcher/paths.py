@@ -100,12 +100,14 @@ def collapse_home(path: str, home: str | None = None) -> str:
 
 
 def decode_uri_component_safe(text: str) -> str:
+    # goshos decodeURIComponent throws on latin-1 percent bytes such as %E9.
+    # Python unquote replaces those; strict keeps the original href instead.
     if not text:
         return ""
     safe = _PERCENT_RE.sub("%25", text)
     try:
-        return unquote(safe)
-    except Exception:
+        return unquote(safe, errors="strict")
+    except UnicodeDecodeError:
         return safe
 
 
@@ -123,7 +125,11 @@ def path_from_file_uri(uri: str) -> str:
         raw = raw[len("localhost") :]
     if not raw.startswith("/"):
         return ""
-    return decode_uri_component_safe(_PERCENT_RE.sub("%25", raw))
+    safe = _PERCENT_RE.sub("%25", raw)
+    try:
+        return unquote(safe, errors="strict")
+    except UnicodeDecodeError:
+        return ""
 
 
 def _encode_uri_path_part(part: str) -> str:
@@ -131,8 +137,8 @@ def _encode_uri_path_part(part: str) -> str:
         return ""
     safe = _PERCENT_RE.sub("%25", part)
     try:
-        return quote(unquote(safe), safe="")
-    except Exception:
+        return quote(unquote(safe, errors="strict"), safe="")
+    except UnicodeDecodeError:
         return safe
 
 
@@ -174,13 +180,17 @@ def canonicalize_launch_uri(uri: str) -> str:
 
 
 def path_row_meta(trimmed: str, resolved: str, kind: str, home: str | None = None) -> dict:
+    row_id = resolved or trimmed
     if kind == "missing":
         return {
+            "type": "path",
             "path": resolved,
             "kind": "missing",
             "title": trimmed,
             "description": "Path not found",
             "icon": "dialog-warning-symbolic",
+            "id": row_id,
+            "activatable": False,
             "exists": False,
             "is_dir": False,
             "checking": False,
@@ -188,11 +198,14 @@ def path_row_meta(trimmed: str, resolved: str, kind: str, home: str | None = Non
         }
     if kind == "pending":
         return {
+            "type": "path",
             "path": resolved,
             "kind": "pending",
             "title": collapse_home(resolved, home),
             "description": "Checking path",
             "icon": "folder-symbolic",
+            "id": row_id,
+            "activatable": False,
             "exists": False,
             "is_dir": False,
             "checking": True,
@@ -206,11 +219,13 @@ def path_row_meta(trimmed: str, resolved: str, kind: str, home: str | None = Non
 
         icon = icon_for_basename(Path(resolved).name)
     return {
+        "type": "path",
         "path": resolved,
         "kind": "directory" if is_dir else "file",
         "title": collapse_home(resolved, home),
         "description": "Open path",
         "icon": icon,
+        "id": row_id,
         "exists": True,
         "is_dir": is_dir,
         "checking": False,

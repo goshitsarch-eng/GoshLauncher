@@ -149,6 +149,50 @@ def test_spoken_open_firefox_strips_verb() -> None:
     assert strip_leading_verb("can you") == "can you"
 
 
+def test_goshos_spoken_verbs_battery() -> None:
+    from ulauncher.modes.launcher.plan import strip_leading_verb
+
+    expected = (
+        ("please lock", "lock"),
+        ("could you launch gimp", "gimp"),
+        ("can you please open firefox", "firefox"),
+        ("please can you open firefox", "firefox"),
+        ("will you open firefox", "firefox"),
+        ("what is the time", "time"),
+        ("calculate 2+2", "2+2"),
+        ("please convert 10 km to mi", "10 km to mi"),
+        ("show me firefox", "firefox"),
+        ("can you tell me the time", "time"),
+        ("please tell me the date", "date"),
+        ("tell me firefox", "firefox"),
+        ("my downloads", "downloads"),
+        ("open the", "the"),
+        ("launch code", "code"),
+        ("go to downloads", "downloads"),
+        ("find firefox", "firefox"),
+        ("search for wifi", "wifi"),
+        ("look up hex", "hex"),
+        ("lookup hex", "hex"),
+        ("help me open firefox", "firefox"),
+        ("just open firefox", "firefox"),
+        ("i want to open firefox", "firefox"),
+        ("navigate to downloads", "downloads"),
+        ("navigate to wifi settings", "wifi"),
+        ("help me", "help me"),
+        ("just", "just"),
+        ("search settings wifi", "wifi"),
+        ("launch firefox", "firefox"),
+        ("run firefox", "firefox"),
+        ("start firefox", "firefox"),
+        ("open up firefox", "firefox"),
+        ("start up firefox", "firefox"),
+        ("execute firefox", "firefox"),
+        ("search for firefox", "firefox"),
+    )
+    for query, stripped in expected:
+        assert strip_leading_verb(query) == stripped, query
+
+
 def test_goshos_plan_search_battery() -> None:
     from ulauncher.modes.launcher.calculator import evaluate_arithmetic
     from ulauncher.modes.launcher.clock import time_query_kind

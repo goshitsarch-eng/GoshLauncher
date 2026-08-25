@@ -88,3 +88,31 @@ def test_settings_panel_catalog_matches_goshos() -> None:
     assert by_id["background"]["title"] == "Appearance"
     assert by_id["privacy"]["title"] == "Privacy & Security"
     assert by_id["universal-access"]["title"] == "Accessibility"
+
+
+def test_goshos_settings_aliases() -> None:
+    expected = (
+        ("winver", "about"),
+        ("dnd", "notifications"),
+        ("hotspot", "wifi"),
+        ("hot", "wifi"),
+        ("wireless", "wifi"),
+        ("a11y", "universal-access"),
+        ("zoom", "universal-access"),
+        ("camera", "privacy"),
+        ("location", "privacy"),
+        ("microphone", "privacy"),
+        ("thunderbolt", "privacy"),
+        ("firmware", "privacy"),
+        ("security", "privacy"),
+        ("user-accounts", "users"),
+        ("info-overview", "about"),
+        ("stylus", "wacom"),
+        ("fractional scaling", "display"),
+    )
+    for query, panel_id in expected:
+        assert any(panel["id"] == panel_id for panel in match_settings_panels(query)), query
+    assert any(panel["id"] == "online-accounts" for panel in match_settings_panels("o", 20))
+    assert not any(panel["id"] == "wifi" for panel in match_settings_panels("o", 20))
+    assert not any(panel["id"] == "wifi" for panel in match_settings_panels("pot"))
+    assert not any(panel["id"] == "wifi" for panel in match_settings_panels("ifi"))

@@ -161,6 +161,21 @@ def test_goshos_trig_log_and_scientific() -> None:
     assert evaluate_arithmetic("sqrt") is None
 
 
+def test_goshos_cbrt_mod_zero_and_binary() -> None:
+    assert evaluate_arithmetic("cbrt(8)") == 2
+    assert evaluate_arithmetic("cbrt 8") == 2
+    assert evaluate_arithmetic("cbrt(-8)") == -2
+    assert evaluate_arithmetic("8 % 0") is None
+    assert evaluate_arithmetic("2 + - 3") == -1
+    assert evaluate_arithmetic(".5*2", True) == 1
+    assert evaluate_arithmetic("0b10+0b10") == 4
+    assert evaluate_arithmetic("-3 + 5") == 2
+    assert evaluate_arithmetic("2 * -4") == -8
+    assert evaluate_arithmetic("((2+3)*4)") == 20
+    assert evaluate_arithmetic("2 ^ 0") == 1
+    assert evaluate_arithmetic("0.5 * 2") == 1
+
+
 def test_format_number_is_stable() -> None:
     assert format_number(4.0) == "4"
     assert format_number(0) == "0"

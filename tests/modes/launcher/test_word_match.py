@@ -51,3 +51,5 @@ def test_id_and_label_keep_org_and_ows_out() -> None:
     assert not path_matches_query("/home/u", "ome")
     assert keyword_matches_query("browser", "bro")
     assert not keyword_matches_query("browser", "row")
+    assert keyword_matches_query("hotspot", "hot")
+    assert not keyword_matches_query("hotspot", "pot")

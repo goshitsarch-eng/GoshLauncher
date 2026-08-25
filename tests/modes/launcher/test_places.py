@@ -15,6 +15,7 @@ def test_single_letter_is_prefix_only() -> None:
     assert place_matches("Desktop", ["desktop"], "d")
     assert place_matches("Documents", ["documents", "docs"], "d")
     assert not any(place["id"] == "home" for place in match_places("o"))
+    assert not place_matches("Pictures", ["photos", "images"], "hot")
 
 
 def test_place_icons_are_symbolic() -> None:

@@ -120,3 +120,19 @@ def test_goshos_pressure_energy_and_angle() -> None:
     assert parse_unit_query("180° to rad")["from"] == "deg"
     assert parse_unit_query("180 degrees to rad")["from"] == "degrees"
     assert parse_unit_query("1 fl oz to ml")["from"] == "floz"
+
+
+def test_goshos_unit_as_how_many_and_articles() -> None:
+    from ulauncher.modes.launcher.units import parse_unit_query
+
+    assert parse_unit_query("10 km as miles")["to"] == "miles"
+    assert parse_unit_query("how many miles is 10 km")["to"] == "miles"
+    assert parse_unit_query("how many miles are in 10 km")["to"] == "miles"
+    assert parse_unit_query("how many miles are 10 km")["from"] == "km"
+    assert parse_unit_query("an inch to cm")["value"] == 1
+    assert parse_unit_query("10 km to a mile")["from"] == "km"
+    assert parse_unit_query("10 km to a mile")["to"] == "mile"
+    assert parse_unit_query("1.5e2 f to c")["value"] == 150
+    assert parse_unit_query("how many km are in a mile")["value"] == 1
+    assert parse_unit_query("a mile to km")["value"] == 1
+    assert parse_unit_query("180° into rad")["from"] == "deg"

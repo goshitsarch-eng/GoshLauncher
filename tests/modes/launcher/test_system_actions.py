@@ -5,6 +5,7 @@ import pytest
 from ulauncher.modes.launcher.system_actions import (
     SYSTEM_ACTIONS,
     action_is_available,
+    action_matches,
     match_system_actions,
     orientation_icon,
     orientation_title,
@@ -99,3 +100,15 @@ def test_screenshot_portal_runs_before_argv(monkeypatch: pytest.MonkeyPatch) -> 
     run_system_action("screenshot", screenshot_ui=lambda: False)
     assert launched
     assert launched[0] == ["gtk-launch", "org.gnome.Screenshot"]
+
+
+def test_goshos_lock_o_is_not_a_match() -> None:
+    lock = {"title": "Lock Screen", "keywords": ["lock"]}
+    assert action_matches(lock, "loc") is True
+    assert action_matches(lock, "lock") is True
+    assert action_matches(lock, "firefox") is False
+    assert action_matches(lock, "clock") is False
+    assert action_matches(lock, "een") is False
+    assert action_matches(lock, "o") is False
+    assert action_matches({"title": "Shut Down", "keywords": ["turn off"]}, "off") is True
+    assert action_matches({"title": "Take a Screenshot", "keywords": ["record"]}, "record") is True

@@ -428,10 +428,12 @@ def test_path_first_paint_is_checking_until_flush() -> None:
     first = captured[0]["results"]
     path = next(row for row in first if getattr(row, "kind", "") == "path")
     assert path.description == "Checking path"
+    assert path.activatable is False
     mode.flush_lookups()
     last = captured[-1]["results"]
     path = next(row for row in last if getattr(row, "kind", "") == "path" and not row.payload.get("in_terminal"))
     assert path.description == "Open path"
+    assert path.activatable is True
 
 
 def test_bookmark_first_paint_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.urls import FILE_EXTS, match_url
+from ulauncher.modes.launcher.paths import canonicalize_file_uri
+from ulauncher.modes.launcher.urls import FILE_EXTS, is_file_url_query, match_url
 
 # Exact denylist from spotlight-goshos urlMatch.js (Version 2026.08.20).
 GOSHOS_FILE_EXTS = frozenset(
@@ -182,3 +183,10 @@ def test_mailto_magnet_localhost_and_https_with_space() -> None:
     assert match_url("localhostx") is None
     assert match_url("magnet:?xt=urn:btih:abc") is not None
     assert match_url("magnet:xt=urn:btih:abc") is not None
+
+
+def test_latin1_file_uri_is_still_a_location() -> None:
+    assert is_file_url_query("file:///") is True
+    assert is_file_url_query("file://") is False
+    assert is_file_url_query("file:///home/u/caf%E9") is True
+    assert canonicalize_file_uri("file:///home/u/caf%E9") == "file:///home/u/caf%E9"
