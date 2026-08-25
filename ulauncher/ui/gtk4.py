@@ -120,11 +120,14 @@ def add_provider_to_display(provider: Gtk.CssProvider, priority: int = Gtk.STYLE
 
 
 def clipboard_set_text(text: str) -> None:
+    # Gdk.Clipboard.set() is GTK 4.8+. Ubuntu 22.04 ships 4.6, which only has set_content().
     display = Gdk.Display.get_default()
     if not display:
         return
     clipboard = display.get_clipboard()
-    clipboard.set(text)
+    data = GLib.Bytes.new((text or "").encode())
+    provider = Gdk.ContentProvider.new_for_bytes("text/plain;charset=utf-8", data)
+    clipboard.set_content(provider)
     store_async = getattr(clipboard, "store_async", None)
     if callable(store_async):
         store_async(0, None, None, None)

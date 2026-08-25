@@ -104,6 +104,20 @@ def test_places_system_path_and_spoken_math(popup: SearchPopup) -> None:
     assert "path" in popup.type_query("/tmp")
     assert "calculator" in popup.type_query("two plus two")
     assert "settings" in popup.type_query("wifi")
+    assert "units" in popup.type_query("convert 10 km to mi")
+    assert "settings" in popup.type_query("open wifi settings")
+
+
+def test_enter_activates_calculator_row(popup: SearchPopup) -> None:
+    from gi.repository import Gdk
+
+    kinds = popup.type_query("2+2")
+    assert "calculator" in kinds
+    popup.app.activated = None
+    assert popup.press(Gdk.KEY_Return)
+    chosen, alt = popup.app.activated
+    assert alt is False
+    assert chosen.kind == "calculator"
 
 
 def test_dollar_and_dot_prefixes_need_a_space() -> None:
@@ -117,6 +131,10 @@ def test_dollar_and_dot_prefixes_need_a_space() -> None:
     try:
         kinds = probe.type_query("$ firefox")
         assert kinds == ["window"]
+        kinds = probe.type_query("close firefox")
+        assert "window-close" in kinds
+        kinds = probe.type_query("workspace 2")
+        assert "workspace" in kinds
         home_kinds = probe.type_query("$HOME")
         assert "window" not in home_kinds
         bashrc = probe.type_query(".bashrc")

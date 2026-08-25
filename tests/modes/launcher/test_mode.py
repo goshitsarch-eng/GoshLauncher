@@ -241,12 +241,8 @@ def test_empty_state_honors_max_results(monkeypatch: pytest.MonkeyPatch) -> None
     settings.enable_empty_suggestions = True
     settings.enable_application_mode = True
     settings.enable_window_search = True
-    apps = [
-        SimpleNamespace(name=f"App{i}", icon="app", app_id=f"app{i}.desktop") for i in range(1, 5)
-    ]
-    windows = [
-        WindowInfo(wid=f"0x{i}", title=f"Win{i}", wm_class="x.X", desktop=0, pid=i) for i in range(1, 5)
-    ]
+    apps = [SimpleNamespace(name=f"App{i}", icon="app", app_id=f"app{i}.desktop") for i in range(1, 5)]
+    windows = [WindowInfo(wid=f"0x{i}", title=f"Win{i}", wm_class="x.X", desktop=0, pid=i) for i in range(1, 5)]
     _patch_empty_state(monkeypatch, settings, apps, windows)
     results = list(LauncherMode().get_home_results(2))
     assert _kinds(results) == ["window", "window"]
@@ -375,3 +371,17 @@ def test_get_modes_launcher_owns_typed_search() -> None:
     assert "CalcMode" not in names
     assert "ShortcutMode" in names
     assert "ExtensionMode" in names
+    assert "AppMode" in names
+
+
+def test_calculator_activate_copies_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.mode._events.emit",
+        lambda name, data: seen.append((name, str(data))),
+    )
+    result = next(row for row in _handle("2+2") if getattr(row, "kind", "") == "calculator")
+    captured: list = []
+    LauncherMode().activate_result("activate", result, Query(None, "2+2"), captured.append)
+    assert seen == [("app:copy_and_close", "4")]
+    assert captured[-1]["type"] == EffectType.CLOSE_WINDOW

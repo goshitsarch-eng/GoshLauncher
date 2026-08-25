@@ -40,6 +40,16 @@ def test_debian_depends_on_gtk4_and_adwaita() -> None:
     assert "https://github.com/goshitsarch-eng/GoshLauncher" in control
 
 
+def test_pyproject_points_at_goshlauncher() -> None:
+    text = (ROOT / "pyproject.toml").read_text()
+    assert 'description = "GTK 4 + libadwaita launcher matching Spotlight-goshos"' in text
+    assert "https://github.com/goshitsarch-eng/GoshLauncher" in text
+    assert "http://ulauncher.io/" not in text
+    gtk4 = (ROOT / "ulauncher" / "ui" / "gtk4.py").read_text()
+    assert "ContentProvider.new_for_bytes" in gtk4
+    assert "clipboard.set(text)" not in gtk4
+
+
 def test_setup_excludes_tests_from_install() -> None:
     setup = (ROOT / "setup.py").read_text()
     assert 'exclude=["tests", "tests.*", "conftest.py"]' in setup

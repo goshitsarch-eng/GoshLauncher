@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ulauncher"
-description = "Application launcher for Linux"
+description = "GTK 4 + libadwaita launcher matching Spotlight-goshos"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [
@@ -12,10 +12,10 @@ authors = [
   {name = "Albin Larsson"},
   {name = "Troy Curtis"},
 ]
-urls.Homepage = "http://ulauncher.io/"
+urls.Homepage = "https://github.com/goshitsarch-eng/GoshLauncher"
 urls.Documentation = "https://docs.ulauncher.io/"
-urls.Repository = "https://github.com/Ulauncher/Ulauncher.git"
-urls.Issues = "https://github.com/Ulauncher/Ulauncher/issues"
+urls.Repository = "https://github.com/goshitsarch-eng/GoshLauncher.git"
+urls.Issues = "https://github.com/goshitsarch-eng/GoshLauncher/issues"
 keywords = [ "linux", "desktop", "application", "launcher", "gtk" ]
 dependencies = [ "PyGObject", "pycairo", "python-xlib" ]
 dynamic = ["version", "license"]
