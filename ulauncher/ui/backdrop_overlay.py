@@ -23,6 +23,14 @@ window.goshos-backdrop {
   background-color: rgba(0, 0, 0, 0.01);
 }
 """
+_css_state: dict[str, bool] = {"loaded": False}
+
+
+def _ensure_backdrop_css() -> None:
+    if _css_state["loaded"]:
+        return
+    gtk4.add_provider_to_display(gtk4.load_css_provider(_BACKDROP_CSS))
+    _css_state["loaded"] = True
 
 
 class PopupBackdrop:
@@ -37,8 +45,8 @@ class PopupBackdrop:
         self._on_became_active = on_became_active
         self._windows: list[Gtk.Window] = []
         self._connections: list[tuple[Any, int]] = []
-        self._css = gtk4.load_css_provider(_BACKDROP_CSS)
         self._style = overlay_window_style()
+        _ensure_backdrop_css()
 
     def window_count(self) -> int:
         return len(self._windows)
@@ -78,7 +86,6 @@ class PopupBackdrop:
         window.set_can_focus(bool(self._style["can_focus"]))
         window.set_focusable(False)
         gtk4.add_css_class(window, str(self._style["css_class"]))
-        gtk4.add_provider_to_widget(window, self._css)
         window.set_child(Gtk.Box())
 
         gesture = Gtk.GestureClick()

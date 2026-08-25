@@ -562,8 +562,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                         float(bounds.get_height()),
                     )
                 return (float(bounds.x), float(bounds.y), float(bounds.width), float(bounds.height))
-        alloc = widget.get_allocation()
-        return (float(alloc.x), float(alloc.y), float(alloc.width), float(alloc.height))
+        return (0.0, 0.0, 0.0, 0.0)
 
     def _prompt_click_target(self, x: float, y: float) -> str:
         from ulauncher.modes.launcher.focus_loss import prompt_click_target
@@ -636,13 +635,13 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return self.get_app().query
 
     def apply_css(self, widget: Gtk.Widget) -> None:
-        if getattr(self, "_css_on_display", False):
+        if getattr(self, "_css_on_display", False) or not self._css_provider:
             return
-        if not self._css_provider:
-            self._css_provider = Gtk.CssProvider()
-        widget.get_style_context().add_provider(self._css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        for child in gtk4.iter_children(widget):
-            self.apply_css(child)
+        display = widget.get_display() or Gdk.Display.get_default()
+        if not display:
+            return
+        gtk4.add_provider_to_display(self._css_provider)
+        self._css_on_display = True
 
     def apply_theme(self) -> None:
         css = launcher_popup_css()

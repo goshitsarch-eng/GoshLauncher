@@ -17,6 +17,7 @@ if GTK4_AVAILABLE:
         css_parsing_errors,
         display_available,
         open_popup_window,
+        sample_entry_selection,
         sample_look,
         sample_popup_look,
     )
@@ -150,3 +151,11 @@ def test_popup_look_panel_pixels(popup_window: object, look_id: str) -> None:
         assert _near(sampled["selected"], selected_expected), (
             f"{look_id} popup selected {sampled['selected']} != {selected_expected}"
         )
+
+
+def test_entry_selection_paints_tofi_highlight() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    rgb = sample_entry_selection("tofi")
+    expected = _hex_rgb("#555555")
+    assert _near(rgb, expected, 24), f"tofi entry selection {rgb} != {expected}"

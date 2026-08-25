@@ -362,3 +362,50 @@ def sample_popup_look(look_id: str) -> dict[str, tuple[int, int, int]]:
     selected_y = max(int(selected.get_height()) // 2, 4)
     selected_rgb = widget_rgb_retry(selected, selected_x, selected_y)
     return {"panel": panel_rgb, "selected": selected_rgb}
+
+
+def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
+    """Paint a selected query so GTK4 ``selection`` CSS can be sampled."""
+    from gi.repository import GLib, Gtk
+
+    from ulauncher.ui import gtk4
+
+    win, _app, prompt, _selected = build_look_tree(look_id)
+    entry = None
+    for child in gtk4.iter_children(prompt):
+        if isinstance(child, Gtk.Entry) or (hasattr(child, "has_css_class") and child.has_css_class("input")):
+            entry = child
+            break
+    if entry is None:
+        win.close()
+        pump(8)
+        msg = f"look {look_id} has no search entry"
+        raise RuntimeError(msg)
+    mapped = {"ok": False}
+
+    def on_map(*_args: object) -> None:
+        mapped["ok"] = True
+
+    win.connect("map", on_map)
+    win.present()
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 2_000_000
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        if mapped["ok"] and entry.get_width() > 40 and entry.get_height() > 8:
+            break
+    entry.grab_focus()
+    entry.set_text("        ")
+    entry.select_region(0, -1)
+    pump(16)
+    if entry.get_width() <= 40:
+        win.close()
+        pump(8)
+        msg = f"look {look_id} entry did not allocate ({entry.get_width()}x{entry.get_height()})"
+        raise RuntimeError(msg)
+    sample_x = max(int(entry.get_width()) // 3, 12)
+    sample_y = max(int(entry.get_height()) // 2, 4)
+    rgb = widget_rgb_retry(entry, sample_x, sample_y)
+    win.close()
+    pump(8)
+    return rgb
