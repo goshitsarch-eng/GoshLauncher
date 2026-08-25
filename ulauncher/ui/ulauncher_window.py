@@ -173,6 +173,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.apply_styling()
         self._apply_unredirect(True)
         self._show_backdrop()
+        self._sync_gnome_wayland_overlay()
         self.present()
         super().set_visible(True)
 
@@ -680,16 +681,36 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         return inset
 
     def get_layout_size(self) -> Gdk.Rectangle | None:
+        from ulauncher.modes.launcher.popup_position import gnome_wayland_overlay_size
+
+        mouse = self.settings.render_on_screen != "default-monitor"
         if DESKTOP_ID == "GNOME" and not IS_X11_COMPATIBLE:
-            if not (geometries := get_monitor_geometries()):
+            monitor = get_monitor(mouse)
+            selected = None
+            if monitor is not None:
+                geo = monitor.get_geometry()
+                selected = {"x": geo.x, "y": geo.y, "width": geo.width, "height": geo.height}
+            geometries = [{"x": g.x, "y": g.y, "width": g.width, "height": g.height} for g in get_monitor_geometries()]
+            overlay = gnome_wayland_overlay_size(selected, geometries)
+            if not overlay:
                 return None
             layout_size = Gdk.Rectangle()
-            layout_size.width = min(geometry.width for geometry in geometries)
-            layout_size.height = min(geometry.height for geometry in geometries)
+            layout_size.x = overlay["x"]
+            layout_size.y = overlay["y"]
+            layout_size.width = overlay["width"]
+            layout_size.height = overlay["height"]
             return layout_size
-        if monitor := get_monitor(self.settings.render_on_screen != "default-monitor"):
+        if monitor := get_monitor(mouse):
             return monitor_work_geometry(monitor)
         return None
+
+    def _sync_gnome_wayland_overlay(self) -> None:
+        if DESKTOP_ID != "GNOME" or IS_X11_COMPATIBLE:
+            return
+        monitor = get_monitor(self.settings.render_on_screen != "default-monitor")
+        fullscreen_on = getattr(self, "fullscreen_on_monitor", None)
+        if callable(fullscreen_on) and monitor is not None:
+            fullscreen_on(monitor)
 
     def position_window(self) -> None:
         from ulauncher.modes.launcher.chrome_size import clamp_popup_width, clamp_results_max_height
@@ -707,6 +728,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         from ulauncher.modes.launcher.popup_shadow import origin_minus_inset, surface_size_with_inset
         from ulauncher.modes.launcher.ui_scale import gtk_layout_scale
 
+        self._sync_gnome_wayland_overlay()
         if layout_size := self.get_layout_size():
             work = {
                 "x": int(getattr(layout_size, "x", 0) or 0),

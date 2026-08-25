@@ -41,6 +41,23 @@ def gtk_window_owns_popup_width(desktop_id: str, is_x11_compatible: bool) -> boo
     return desktop_id != "GNOME" or is_x11_compatible
 
 
+def gnome_wayland_overlay_size(
+    selected: dict[str, float] | None,
+    geometries: list[dict[str, float]] | None = None,
+) -> dict[str, int] | None:
+    """Fill the chosen monitor. Min-of-all-monitors would shrink a 4K primary next to a 1080p panel."""
+    if selected and float(selected.get("width") or 0) > 0 and float(selected.get("height") or 0) > 0:
+        return {
+            "x": int(selected.get("x") or 0),
+            "y": int(selected.get("y") or 0),
+            "width": int(selected["width"]),
+            "height": int(selected["height"]),
+        }
+    if geometries:
+        return gnome_wayland_overlay_size(geometries[0], None)
+    return None
+
+
 def intersect_rect(first: dict[str, float], second: dict[str, float]) -> dict[str, int] | None:
     x = max(first["x"], second["x"])
     y = max(first["y"], second["y"])

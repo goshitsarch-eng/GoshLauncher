@@ -6,6 +6,7 @@ from ulauncher.modes.launcher.popup_position import (
     MIN_RESULTS_HEIGHT,
     desktop_work_area_from_ewmh,
     empty_popup_height,
+    gnome_wayland_overlay_size,
     gtk_default_window_size,
     gtk_window_owns_popup_width,
     keyboard_overlap_from_box,
@@ -137,6 +138,29 @@ def test_empty_popup_height_uses_measured_entry() -> None:
     assert gtk_window_owns_popup_width("GNOME", False) is False
     assert gtk_window_owns_popup_width("GNOME", True) is True
     assert gtk_window_owns_popup_width("KDE", False) is True
+
+
+def test_gnome_wayland_overlay_fills_chosen_monitor() -> None:
+    primary = {"x": 0, "y": 0, "width": 3840, "height": 2160}
+    panel = {"x": 3840, "y": 0, "width": 1920, "height": 1080}
+    overlay = gnome_wayland_overlay_size(primary, [primary, panel])
+    assert overlay == {"x": 0, "y": 0, "width": 3840, "height": 2160}
+    assert overlay != {
+        "x": 0,
+        "y": 0,
+        "width": min(primary["width"], panel["width"]),
+        "height": min(primary["height"], panel["height"]),
+    }
+    second = gnome_wayland_overlay_size(panel, [primary, panel])
+    assert second == {"x": 3840, "y": 0, "width": 1920, "height": 1080}
+    assert gnome_wayland_overlay_size(None, [panel]) == {"x": 3840, "y": 0, "width": 1920, "height": 1080}
+    assert gnome_wayland_overlay_size(None, None) is None
+    assert gnome_wayland_overlay_size({"x": 0, "y": 0, "width": 0, "height": 1080}, [primary]) == {
+        "x": 0,
+        "y": 0,
+        "width": 3840,
+        "height": 2160,
+    }
 
 
 def test_work_area_sits_below_panel_struts() -> None:
