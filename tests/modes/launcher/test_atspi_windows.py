@@ -40,6 +40,7 @@ def test_windows_from_atspi_nodes_keep_skip_taskbar_chrome() -> None:
                 "bus_name": ":1.2",
                 "path": "/w/1",
                 "active": True,
+                "pid": 42,
             },
             {"role": "panel", "title": "Dash", "app_id": "dash", "bus_name": ":1.3", "path": "/w/2"},
             {"role": "label", "title": "Ignore"},
@@ -48,6 +49,7 @@ def test_windows_from_atspi_nodes_keep_skip_taskbar_chrome() -> None:
     )
     assert [row.title for row in rows] == ["Firefox", "Dash"]
     assert rows[0].user_time == 1
+    assert rows[0].pid == 42
     assert rows[0].skip_taskbar is False
     assert rows[0].atspi_ref == atspi_ref(":1.2", "/w/1")
     assert rows[1].skip_taskbar is True
@@ -124,11 +126,14 @@ def test_overlay_copies_atspi_ref_onto_ext_foreign() -> None:
         title="Mozilla Firefox",
         wm_class="firefox",
         desktop=0,
+        pid=42,
         app_id="firefox",
         atspi_ref=atspi_ref(":1.2", "/w/1"),
     )
-    assert overlay_window_info(ext, a11y).atspi_ref == atspi_ref(":1.2", "/w/1")
-    assert overlay_window_info(ext, a11y).wid == "ext:ident"
+    merged = overlay_window_info(ext, a11y)
+    assert merged.atspi_ref == atspi_ref(":1.2", "/w/1")
+    assert merged.wid == "ext:ident"
+    assert merged.pid == 42
 
 
 def test_atspi_live_watch_records_activate_and_notifies() -> None:

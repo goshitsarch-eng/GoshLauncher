@@ -868,6 +868,25 @@ def test_match_windows_close_payload_keeps_real_title() -> None:
     assert rows[0]["kind"] == "close"
 
 
+def test_match_windows_kill_payload_keeps_overlaid_pid() -> None:
+    rows = match_windows(
+        "kill firefox",
+        windows=[
+            WindowInfo(
+                wid="ext:abc",
+                title="Mozilla Firefox",
+                wm_class="firefox",
+                desktop=0,
+                pid=42,
+                app_id="firefox",
+            )
+        ],
+    )
+    assert rows[0]["kind"] == "kill"
+    assert rows[0]["pid"] == 42
+    assert rows[0]["title"] == "Kill Mozilla Firefox"
+
+
 def test_close_prefers_gtk_actions_before_sigterm(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[object, ...]] = []
     monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)

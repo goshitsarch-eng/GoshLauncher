@@ -1,10 +1,11 @@
-"""AT-SPI stand-in for Mutter get_tab_list recency, raise, and win.delete.
+"""AT-SPI stand-in for Mutter get_tab_list recency, raise, win.delete, and pid.
 
-ext-foreign-toplevel-list has no activate/close, and Introspect GetWindows is
+ext-foreign-toplevel-list has no activate/close/pid, and Introspect GetWindows is
 allowlisted to portal backends. When the session a11y bus is already enabled,
 Window:Activate is the public focus order, Component.GrabFocus is the
-per-window raise, and Action.DoAction("close") is win.delete for non-GTK
-surfaces. This module never writes org.a11y.Status.IsEnabled.
+per-window raise, Action.DoAction("close") is win.delete for non-GTK
+surfaces, and GetConnectionUnixProcessID on that bus is win.kill's pid.
+This module never writes org.a11y.Status.IsEnabled.
 """
 
 from __future__ import annotations
@@ -269,11 +270,16 @@ def _window_from_atspi_node(item: Mapping[str, Any]) -> WindowInfo | None:
     if not atspi_role_is_listed(role) and not atspi_role_is_skip_taskbar(role):
         return None
     ident = object_path or title
+    try:
+        pid = int(item.get("pid") or 0)
+    except (TypeError, ValueError):
+        pid = 0
     return Win(
         wid=f"atspi:{ident}",
         title=title or app_id,
         wm_class=app_id,
         desktop=0,
+        pid=pid,
         app_id=app_id,
         user_time=1 if item.get("active") or item.get("has-focus") else 0,
         skip_taskbar=atspi_role_is_skip_taskbar(role),
@@ -570,16 +576,43 @@ def _windows_for_application(conn: Any, dest: str, path: str) -> list[dict[str, 
         return []
     if not isinstance(children, (list, tuple)):
         return []
+    pid = _unix_pid_for_name(conn, dest)
     nodes: list[dict[str, Any]] = []
     for item in children:
         if not isinstance(item, tuple) or len(item) < 2:
             continue
         node = _read_window_node(conn, str(item[0] or dest), str(item[1]))
         if node is not None:
+            node["pid"] = pid
             nodes.append(node)
         if len(nodes) >= 24:
             break
     return nodes
+
+
+def _unix_pid_for_name(conn: Any, dest: str) -> int:
+    """Unix pid of the a11y-bus connection. ext-foreign-toplevel-list has no pid."""
+    if not dest:
+        return 0
+    try:
+        from ulauncher.gi import GLib
+
+        pid = _dbus_call(
+            conn,
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "GetConnectionUnixProcessID",
+            "(u)",
+            GLib.Variant("(s)", (dest,)),
+        )
+    except Exception:
+        logger.debug("AT-SPI unix pid lookup failed", exc_info=True)
+        return 0
+    try:
+        return int(pid or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _read_window_node(conn: Any, dest: str, path: str) -> dict[str, Any] | None:
