@@ -606,13 +606,7 @@ def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
         klass = str(item.get("class") or item.get("initialClass") or "")
         if not title and not klass:
             continue
-        workspace = item.get("workspace")
-        ws_id = workspace.get("id") if isinstance(workspace, dict) else workspace
-        try:
-            ws_num = int(ws_id) if isinstance(ws_id, (int, str)) else 1
-        except (TypeError, ValueError):
-            ws_num = 1
-        desktop = one_based_workspace_desktop(ws_num)
+        desktop = _compositor_workspace_desktop(item.get("workspace"))
         try:
             pid = int(item.get("pid") or 0)
         except (TypeError, ValueError):
@@ -653,10 +647,7 @@ def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
         app_id = str(item.get("app_id") or "")
         if not title and not app_id:
             continue
-        try:
-            ws_num = int(item.get("workspace_id") or 1)
-        except (TypeError, ValueError):
-            ws_num = 1
+        desktop = _compositor_workspace_desktop(item.get("workspace_id"))
         try:
             pid = int(item.get("pid") or 0)
         except (TypeError, ValueError):
@@ -666,7 +657,7 @@ def windows_from_niri_windows(payload: Any) -> list[WindowInfo]:
                 wid=f"niri:{ident}",
                 title=title,
                 wm_class=app_id,
-                desktop=one_based_workspace_desktop(ws_num),
+                desktop=desktop,
                 pid=pid,
                 sticky=False,
                 user_time=1 if item.get("is_focused") else 0,
@@ -687,7 +678,7 @@ def windows_from_i3_tree(payload: Any) -> list[WindowInfo]:
 
 def windows_from_i3ipc_tree(payload: Any, prefix: str) -> list[WindowInfo]:
     windows: list[WindowInfo] = []
-    _walk_sway_tree(payload, windows, 0, prefix)
+    _walk_sway_tree(payload, windows, -1, prefix)
     return windows
 
 
@@ -900,6 +891,19 @@ def workspace_desktop_from_name(name: str, num: Any = None) -> int:
     if head.isdigit():
         return one_based_workspace_desktop(int(head))
     return -1
+
+
+def _compositor_workspace_desktop(workspace: Any) -> int:
+    """Map a Hypr/Niri workspace field onto WindowInfo.desktop.
+
+    Numeric ids stay 1-based. A missing or named value is Switch to window
+    instead of the leftover Workspace 1 of a defaulted 1.
+    """
+    if isinstance(workspace, dict):
+        return workspace_desktop_from_name(str(workspace.get("name") or ""), workspace.get("id"))
+    if isinstance(workspace, int) and not isinstance(workspace, bool):
+        return one_based_workspace_desktop(workspace)
+    return workspace_desktop_from_name(str(workspace or ""))
 
 
 def _kwin_placement(item: Mapping[str, Any]) -> tuple[int, bool, int]:

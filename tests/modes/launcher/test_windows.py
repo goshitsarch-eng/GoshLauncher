@@ -924,6 +924,63 @@ def test_named_sway_i3_qtile_workspaces_are_not_workspace_one() -> None:
     assert not window_matches(qtile[0], "1")
 
 
+def test_missing_hypr_niri_workspace_is_not_workspace_one() -> None:
+    named = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xcode",
+                "title": "Editor",
+                "class": "code",
+                "workspace": {"name": "code"},
+                "mapped": True,
+            }
+        ]
+    )
+    assert named[0].desktop == -1
+    assert window_workspace_label(named[0].desktop) == "Switch to window"
+    assert not window_matches(named[0], "1")
+
+    text_ws = windows_from_hypr_clients(
+        [
+            {
+                "address": "0xstr",
+                "title": "Term",
+                "class": "foot",
+                "workspace": "code",
+                "mapped": True,
+            }
+        ]
+    )
+    assert text_ws[0].desktop == -1
+    assert not window_matches(text_ws[0], "1")
+
+    niri = windows_from_niri_windows([{"id": 9, "title": "Notes", "app_id": "notes"}])
+    assert niri[0].desktop == -1
+    assert not window_matches(niri[0], "1")
+
+    niri_named = windows_from_niri_windows(
+        [{"id": 10, "title": "Web", "app_id": "firefox", "workspace_id": "code"}]
+    )
+    assert niri_named[0].desktop == -1
+
+    stray = windows_from_sway_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "id": 1,
+                    "type": "con",
+                    "name": "Ghost",
+                    "app_id": "ghost",
+                    "pid": 2,
+                }
+            ],
+        }
+    )
+    assert stray[0].desktop == -1
+    assert not window_matches(stray[0], "workspace 1")
+
+
 def test_match_windows_reads_cached_snapshot() -> None:
     from ulauncher.modes.launcher.windows import invalidate_windows, match_windows, store_window_snapshot
 
