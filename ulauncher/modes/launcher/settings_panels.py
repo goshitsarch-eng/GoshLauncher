@@ -175,7 +175,9 @@ def settings_panel_available(panel_id: str, has_desktop: Callable[[str], bool] |
         return True
 
 
-def match_settings_panels(query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None) -> list[SettingsPanel]:
+def match_settings_panels(
+    query: str, limit: int = 6, is_available: Callable[[str], bool] | None = None
+) -> list[SettingsPanel]:
     available = is_available or settings_panel_available
     lower = query.lower()
     normalized = lower.replace("-", "").replace("_", "").replace(" ", "")

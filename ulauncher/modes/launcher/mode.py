@@ -603,7 +603,9 @@ class LauncherMode(Mode):
 
         return rows
 
-    def _materialize(self, rows: Sequence[dict[str, Any]], chrome: Mapping[str, Any], headers: bool) -> Iterator[Result]:
+    def _materialize(
+        self, rows: Sequence[dict[str, Any]], chrome: Mapping[str, Any], headers: bool
+    ) -> Iterator[Result]:
         from ulauncher.modes.launcher.section_titles import section_title
 
         last_kind = ""
