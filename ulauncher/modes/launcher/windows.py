@@ -36,6 +36,9 @@ class WindowInfo:
     sticky: bool = False
     user_time: int = 0
     app_id: str = ""
+    gtk_app_id: str = ""
+    gtk_unique_bus_name: str = ""
+    gtk_application_object_path: str = ""
 
 
 WINDOWS_CACHE_TTL_S = 0.4
@@ -150,6 +153,7 @@ def _ewmh_windows() -> list[WindowInfo]:
             desktop = current or 0
         sticky = desktop == 0xFFFFFFFF
         pid = ewmh.getWmPid(win) or 0
+        gtk_app_id, gtk_bus, gtk_path = _ewmh_gtk_application_props(ewmh, win)
         results.append(
             WindowInfo(
                 wid=hex(win.id),
@@ -159,9 +163,67 @@ def _ewmh_windows() -> list[WindowInfo]:
                 pid=int(pid),
                 sticky=sticky,
                 user_time=_window_user_time(ewmh, win),
+                gtk_app_id=gtk_app_id,
+                gtk_unique_bus_name=gtk_bus,
+                gtk_application_object_path=gtk_path,
             )
         )
     return results
+
+
+def _decode_x_string(raw: Any) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, bytes):
+        return raw.decode("utf-8", "replace").rstrip("\0")
+    if isinstance(raw, str):
+        return raw.rstrip("\0")
+    if isinstance(raw, (list, tuple)):
+        try:
+            return bytes(raw).decode("utf-8", "replace").rstrip("\0")
+        except (TypeError, ValueError, OverflowError):
+            return ""
+    return str(raw).rstrip("\0")
+
+
+def _utf8_window_prop(ewmh: Any, win: Any, name: str) -> str:
+    getter = getattr(ewmh, "_getProperty", None)
+    if not callable(getter):
+        return ""
+    try:
+        return _decode_x_string(getter(name, win))
+    except Exception:
+        return ""
+
+
+def _ewmh_gtk_application_props(ewmh: Any, win: Any) -> tuple[str, str, str]:
+    return (
+        _utf8_window_prop(ewmh, win, "_GTK_APPLICATION_ID"),
+        _utf8_window_prop(ewmh, win, "_GTK_UNIQUE_BUS_NAME"),
+        _utf8_window_prop(ewmh, win, "_GTK_APPLICATION_OBJECT_PATH"),
+    )
+
+
+def gtk_unique_props_from_mapping(props: Mapping[str, Any]) -> tuple[str, str, str]:
+    gtk_app_id = str(
+        props.get("gtk-app-id") or props.get("gtk_application_id") or props.get("gtk-application-id") or ""
+    )
+    gtk_bus = str(
+        props.get("gtk-unique-bus-name") or props.get("unique-bus-name") or props.get("gtk_unique_bus_name") or ""
+    )
+    gtk_path = str(
+        props.get("gtk-application-object-path")
+        or props.get("application-object-path")
+        or props.get("gtk_application_object_path")
+        or ""
+    )
+    return gtk_app_id, gtk_bus, gtk_path
+
+
+def is_unique_gtk_window(win: WindowInfo) -> bool:
+    # gnome-shell shell_app_can_open_new_window: unique bus + object path + app id
+    # means a unique GtkApplication that Activate() would only raise.
+    return bool(win.gtk_unique_bus_name and win.gtk_application_object_path and win.gtk_app_id)
 
 
 def _window_user_time(ewmh: Any, win: Any) -> int:
@@ -177,12 +239,9 @@ def _window_user_time(ewmh: Any, win: Any) -> int:
     return 0
 
 
-def _wmctrl_windows() -> list[WindowInfo]:
-    if not shutil.which("wmctrl"):
-        return []
-    out = subprocess.check_output(["wmctrl", "-lx"], text=True, errors="replace")
+def parse_wmctrl_lx(text: str) -> list[WindowInfo]:
     rows: list[WindowInfo] = []
-    for line in out.splitlines():
+    for line in text.splitlines():
         parts = line.split(None, 4)
         if len(parts) < 5:
             continue
@@ -201,6 +260,62 @@ def _wmctrl_windows() -> list[WindowInfo]:
             )
         )
     return rows
+
+
+def filter_listed_windows(
+    rows: list[WindowInfo],
+    inspect: Callable[[str], tuple[bool | None, str | None] | None] | None,
+) -> list[WindowInfo]:
+    """Drop skip-taskbar / dock ids when inspect can read EWMH type and state.
+
+    A missing inspect result keeps the row: wmctrl is the fallback when the
+    stacking list already failed, and we must not hide every window if xlib
+    cannot map that id.
+    """
+    if inspect is None:
+        return list(rows)
+    kept: list[WindowInfo] = []
+    for row in rows:
+        flags = inspect(row.wid)
+        if flags is None:
+            kept.append(row)
+            continue
+        skip_taskbar, window_type = flags
+        if skip_taskbar is None and not window_type:
+            kept.append(row)
+            continue
+        if should_list_window(True, bool(skip_taskbar), window_type or ewmh_window_type([])):
+            kept.append(row)
+    return kept
+
+
+def _ewmh_inspect_wid(ewmh: Any, wid: str) -> tuple[bool | None, str | None] | None:
+    try:
+        win_id = int(str(wid), 16) if str(wid).startswith("0x") else int(str(wid))
+    except ValueError:
+        return None
+    try:
+        win = ewmh.display.create_resource_object("window", win_id)
+        types = ewmh.getWmWindowType(win, str=True) or []
+        states = ewmh.getWmState(win, str=True) or []
+    except Exception:
+        return None
+    skip_taskbar = "_NET_WM_STATE_SKIP_TASKBAR" in states
+    return skip_taskbar, ewmh_window_type(types)
+
+
+def _wmctrl_windows() -> list[WindowInfo]:
+    if not shutil.which("wmctrl"):
+        return []
+    out = subprocess.check_output(["wmctrl", "-lx"], text=True, errors="replace")
+    rows = parse_wmctrl_lx(out)
+    try:
+        from ulauncher.utils.ewmh import EWMH
+
+        ewmh = EWMH()
+    except Exception:
+        return rows
+    return filter_listed_windows(rows, lambda wid: _ewmh_inspect_wid(ewmh, wid))
 
 
 def window_recency_value(tab_index: int, tab_count: int, user_time: int) -> int:
@@ -280,7 +395,20 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
             wid = hex(int(xid))
         except (TypeError, ValueError):
             wid = str(xid)
-        windows.append(WindowInfo(wid=wid, title=title, wm_class=wm_class, desktop=0, pid=pid, app_id=app_id))
+        gtk_app_id, gtk_bus, gtk_path = gtk_unique_props_from_mapping(props)
+        windows.append(
+            WindowInfo(
+                wid=wid,
+                title=title,
+                wm_class=wm_class,
+                desktop=0,
+                pid=pid,
+                app_id=app_id,
+                gtk_app_id=gtk_app_id,
+                gtk_unique_bus_name=gtk_bus,
+                gtk_application_object_path=gtk_path,
+            )
+        )
     return windows
 
 

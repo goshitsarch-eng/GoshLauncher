@@ -9,6 +9,7 @@ from typing import Any
 from ulauncher.modes.apps.app_mode import AppMode
 from ulauncher.modes.apps.app_rankings import AppRankings
 from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
+from ulauncher.modes.launcher.app_usage import gnome_app_usage_score
 from ulauncher.modes.launcher.word_match import (
     SUBSTRING_MIN,
     id_matches_query,
@@ -109,7 +110,7 @@ def app_matches(app: AppResult, query: str) -> bool:
     return app_match_tier(app, query) >= 0
 
 
-def _usage_rank(app_id: str) -> int:
+def _launcher_rank(app_id: str) -> int:
     ids = AppRankings.load().get_app_ids()
     try:
         return ids.index(app_id)
@@ -117,8 +118,18 @@ def _usage_rank(app_id: str) -> int:
         return len(ids) + 1
 
 
+def _usage_sort_key(app_id: str) -> tuple[int, float, int]:
+    # goshos searchApps: AppUsage.compare after match tier. Missing usage ranks
+    # below any scored id; launcher rankings break ties and cover non-GNOME.
+    gnome = gnome_app_usage_score(app_id)
+    launcher = _launcher_rank(app_id)
+    if gnome is None:
+        return (1, 0.0, launcher)
+    return (0, -float(gnome), launcher)
+
+
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
-    scored: list[tuple[int, int, AppResult]] = []
+    scored: list[tuple[int, tuple[int, float, int], AppResult]] = []
     for app in iter_apps():
         try:
             tier = app_match_tier(app, query)
@@ -126,7 +137,7 @@ def match_apps(query: str, limit: int = 6) -> list[AppResult]:
             continue
         if tier < 0:
             continue
-        scored.append((tier, _usage_rank(getattr(app, "app_id", "")), app))
+        scored.append((tier, _usage_sort_key(getattr(app, "app_id", "")), app))
     scored.sort(key=lambda item: (item[0], item[1]))
     return unique_by_base_name([app for _tier, _rank, app in scored], limit)
 
@@ -151,26 +162,42 @@ def _app_class_needles(app: Any) -> set[str]:
     return {needle for needle in needles if needle and needle != "desktop"}
 
 
+def _window_class_tokens(win: Any) -> set[str]:
+    cls = str(getattr(win, "wm_class", "") or "").lower()
+    return {part for part in re.split(r"[./\s]", cls) if part}
+
+
+def _app_matches_window(app: Any, win: Any) -> bool:
+    needles = _app_class_needles(app)
+    if needles & _window_class_tokens(win):
+        return True
+    gtk = str(getattr(win, "gtk_app_id", "") or getattr(win, "app_id", "") or "").lower()
+    if gtk.endswith(".desktop"):
+        gtk = gtk[:-8]
+    app_id = str(getattr(app, "app_id", "") or "").lower()
+    if app_id.endswith(".desktop"):
+        app_id = app_id[:-8]
+    return bool(gtk and app_id and gtk == app_id)
+
+
 def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     from ulauncher.modes.launcher.windows import activate_window, list_windows
 
     open_windows = list_windows() if windows is None else windows
     if app_window_count(app, open_windows) <= 0:
         return False
-    needles = _app_class_needles(app)
     for win in open_windows:
-        cls = str(getattr(win, "wm_class", "") or "").lower()
-        tokens = {part for part in re.split(r"[./\s]", cls) if part}
-        if needles & tokens:
-            activate_window(
-                {
-                    "kind": "focus",
-                    "wid": getattr(win, "wid", ""),
-                    "pid": getattr(win, "pid", 0),
-                    "payload": getattr(win, "wid", ""),
-                }
-            )
-            return True
+        if not _app_matches_window(app, win):
+            continue
+        activate_window(
+            {
+                "kind": "focus",
+                "wid": getattr(win, "wid", ""),
+                "pid": getattr(win, "pid", 0),
+                "payload": getattr(win, "wid", ""),
+            }
+        )
+        return True
     return False
 
 
@@ -179,26 +206,22 @@ def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:
         from ulauncher.modes.launcher.windows import list_windows
 
         windows = list_windows()
-    needles = _app_class_needles(app)
-    if not needles:
-        return 0
-    count = 0
-    for win in windows:
-        cls = str(getattr(win, "wm_class", "") or "").lower()
-        tokens = {part for part in re.split(r"[./\s]", cls) if part}
-        if needles & tokens:
-            count += 1
-    return count
+    return sum(1 for win in windows if _app_matches_window(app, win))
+
+
+def app_is_unique_gtk(app: Any, windows: Sequence[Any] | None) -> bool:
+    if not windows:
+        return False
+    from ulauncher.modes.launcher.windows import is_unique_gtk_window
+
+    return any(_app_matches_window(app, win) and is_unique_gtk_window(win) for win in windows)
 
 
 def home_apps(limit: int) -> list[AppResult]:
     # goshos searchFrequentApps: all usable apps, AppUsage order, then
     # takeUniqueByBaseName. Rankings-only lists hid unused apps and kept
     # Firefox plus Firefox ESR as two empty-state rows.
-    ranked = AppRankings.load().get_app_ids()
-    rank_index = {app_id: index for index, app_id in enumerate(ranked)}
-    fallback = len(rank_index)
-    usable: list[tuple[int, int, AppResult]] = []
+    usable: list[tuple[tuple[int, float, int], int, AppResult]] = []
     for index, app in enumerate(iter_apps()):
         try:
             app_id = str(getattr(app, "app_id", "") or "")
@@ -206,7 +229,7 @@ def home_apps(limit: int) -> list[AppResult]:
             continue
         if not app_id:
             continue
-        usable.append((rank_index.get(app_id, fallback), index, app))
+        usable.append((_usage_sort_key(app_id), index, app))
     usable.sort(key=lambda item: (item[0], item[1]))
     return unique_by_base_name([app for _rank, _index, app in usable], limit)
 
@@ -234,12 +257,34 @@ def take_app_actions(actions: list[Any], max_results: int) -> list[Any]:
     return actions[:max_results]
 
 
-def can_open_new_window(window_count: int, app: Any = None) -> bool:
+def has_desktop_new_window_action(app: Any) -> bool:
+    for key in getattr(app, "actions", None) or {}:
+        if key == "launch" or not str(key).startswith(ACTION_PREFIX):
+            continue
+        if is_new_window_action(str(key)[len(ACTION_PREFIX) :]):
+            return True
+    return False
+
+
+def can_open_new_window(
+    window_count: int,
+    app: Any = None,
+    unique_gtk: bool | None = None,
+    windows: Sequence[Any] | None = None,
+) -> bool:
     # goshos: get_n_windows() > 0 && shellApp.can_open_new_window().
-    # Shell returns false for X-GNOME-SingleWindow / unique apps while running.
+    # Port of gnome-shell shell_app_can_open_new_window while running:
+    # SingleMainWindow / X-GNOME-SingleWindow, then a desktop new-window
+    # action, then unique GtkApplication windows that would only raise.
     if window_count <= 0:
         return False
-    return not bool(getattr(app, "single_window", False))
+    if bool(getattr(app, "single_window", False)):
+        return False
+    if has_desktop_new_window_action(app):
+        return True
+    if unique_gtk is None:
+        unique_gtk = app_is_unique_gtk(app, windows)
+    return not unique_gtk
 
 
 def open_new_window(app: Any) -> bool:
@@ -257,11 +302,16 @@ def open_new_window(app: Any) -> bool:
     return launch_app(app_id, raise_existing=False)
 
 
-def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[str, Any]]:
+def app_action_rows(
+    app: Any,
+    limit: int,
+    window_count: int = 0,
+    windows: Sequence[Any] | None = None,
+) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     rows: list[dict[str, Any]] = []
-    if can_open_new_window(window_count, app):
+    if can_open_new_window(window_count, app, windows=windows):
         rows.append(
             {
                 "title": new_window_title(app.name),

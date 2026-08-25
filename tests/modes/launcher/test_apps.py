@@ -7,11 +7,13 @@ import pytest
 from ulauncher.modes.launcher.apps import (
     app_action_rows,
     app_base_name,
+    app_is_unique_gtk,
     app_match_tier,
     app_row_description,
     app_window_count,
     can_open_new_window,
     desktop_action_title,
+    has_desktop_new_window_action,
     home_apps,
     is_new_window_action,
     match_apps,
@@ -166,9 +168,58 @@ def test_single_window_apps_skip_synthetic_new_window() -> None:
     assert can_open_new_window(0, settings) is False
     assert can_open_new_window(1, settings) is False
     assert can_open_new_window(1, SimpleNamespace()) is True
+    assert has_desktop_new_window_action(settings) is False
     rows = app_action_rows(settings, 6, window_count=2)
     assert [row["action_name"] for row in rows] == ["about"]
     assert all(not row.get("synthetic_new_window") for row in rows)
+
+
+def test_unique_gtk_apps_skip_synthetic_new_window_unless_desktop_action() -> None:
+    settings = SimpleNamespace(
+        name="Settings",
+        icon="settings",
+        app_id="org.gnome.Settings.desktop",
+        actions={"launch": {"name": "Launch"}, "action:about": {"name": "About"}},
+        single_window=False,
+    )
+    unique = WindowInfo(
+        wid="0x1",
+        title="Settings",
+        wm_class="org.gnome.Settings",
+        desktop=0,
+        gtk_app_id="org.gnome.Settings",
+        gtk_unique_bus_name=":1.42",
+        gtk_application_object_path="/org/gnome/Settings",
+    )
+    assert app_is_unique_gtk(settings, [unique]) is True
+    assert can_open_new_window(1, settings, unique_gtk=True) is False
+    assert can_open_new_window(1, settings, windows=[unique]) is False
+    rows = app_action_rows(settings, 6, window_count=1, windows=[unique])
+    assert [row["action_name"] for row in rows] == ["about"]
+    firefox = SimpleNamespace(
+        name="Firefox",
+        icon="firefox",
+        app_id="firefox.desktop",
+        actions={
+            "launch": {"name": "Launch"},
+            "action:new-window": {"name": "New Window"},
+            "action:private": {"name": "Private"},
+        },
+        single_window=False,
+    )
+    assert has_desktop_new_window_action(firefox) is True
+    assert can_open_new_window(1, firefox, unique_gtk=True) is True
+    firefox_win = WindowInfo(
+        wid="0x2",
+        title="Mozilla Firefox",
+        wm_class="firefox.Firefox",
+        desktop=0,
+        gtk_app_id="firefox",
+        gtk_unique_bus_name=":1.9",
+        gtk_application_object_path="/org/mozilla/Firefox",
+    )
+    running = app_action_rows(firefox, 6, window_count=1, windows=[firefox_win])
+    assert running[0]["synthetic_new_window"] is True
 
 
 def test_app_row_description_and_window_count() -> None:
@@ -206,6 +257,7 @@ def test_match_apps_keeps_more_used_variant(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, stable])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
     matched = match_apps("fire", 6)
     assert [app.name for app in matched] == ["Firefox"]
 
@@ -249,6 +301,7 @@ def test_match_apps_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), good])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
     assert [app.name for app in match_apps("notes")] == ["Notes"]
 
 
@@ -265,6 +318,7 @@ def test_home_apps_lists_unused_apps_and_collapses_variants(monkeypatch: pytest.
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, notes, stable])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
     assert [app.name for app in home_apps(6)] == ["Firefox", "Notes"]
     assert [app.name for app in home_apps(1)] == ["Firefox"]
     assert home_apps(0) == []
@@ -287,6 +341,7 @@ def test_home_apps_skips_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), notes])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
     assert [app.name for app in home_apps(6)] == ["Notes"]
 
 
@@ -309,3 +364,38 @@ def test_open_new_window_uses_desktop_action_then_launch(monkeypatch: pytest.Mon
     notes = SimpleNamespace(name="Notes", app_id="notes.desktop", actions={"launch": {"name": "Launch"}})
     assert open_new_window(notes) is True
     assert launched == [("notes.desktop", None, False)]
+
+
+def test_home_apps_prefers_gnome_app_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    firefox = SimpleNamespace(name="Firefox", app_id="firefox.desktop")
+    notes = SimpleNamespace(name="Notes", app_id="notes.desktop")
+    scores = {"notes.desktop": 80.0, "firefox.desktop": 1.0}
+
+    class _Rankings:
+        def get_app_ids(self) -> list[str]:
+            return ["firefox.desktop"]
+
+    monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda app_id: scores.get(app_id))
+    monkeypatch.setattr(apps_mod, "iter_apps", lambda: [firefox, notes])
+    assert [app.name for app in home_apps(6)] == ["Notes", "Firefox"]
+    alpha = SimpleNamespace(
+        name="Alpha Editor",
+        app_id="alpha.desktop",
+        generic_name="",
+        description="",
+        keywords=[],
+    )
+    beta = SimpleNamespace(
+        name="Beta Editor",
+        app_id="beta.desktop",
+        generic_name="",
+        description="",
+        keywords=[],
+    )
+    editor_scores = {"beta.desktop": 80.0, "alpha.desktop": 1.0}
+    monkeypatch.setattr(apps_mod, "iter_apps", lambda: [alpha, beta])
+    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda app_id: editor_scores.get(app_id))
+    assert [app.name for app in match_apps("editor", 6)] == ["Beta Editor", "Alpha Editor"]

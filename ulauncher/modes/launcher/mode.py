@@ -395,7 +395,12 @@ class LauncherMode(Mode):
                     },
                 )
             if matched and getattr(settings, "enable_app_actions", True):
-                for action in app_action_rows(matched[0], cap, app_window_count(matched[0], open_windows)):
+                for action in app_action_rows(
+                    matched[0],
+                    cap,
+                    app_window_count(matched[0], open_windows),
+                    open_windows,
+                ):
                     add(
                         "apps",
                         {

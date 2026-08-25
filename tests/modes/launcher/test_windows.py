@@ -12,7 +12,11 @@ from ulauncher.modes.launcher.windows import (
     compositor_list_commands,
     compositor_window_argv,
     ewmh_window_type,
+    filter_listed_windows,
+    gtk_unique_props_from_mapping,
+    is_unique_gtk_window,
     match_windows,
+    parse_wmctrl_lx,
     parse_window_close_query,
     parse_window_intent,
     parse_workspace_query,
@@ -252,6 +256,76 @@ def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
         "First ws",
         "Enum",
     ]
+
+
+def test_unique_gtk_window_needs_bus_path_and_app_id() -> None:
+    unique = WindowInfo(
+        wid="0x1",
+        title="Settings",
+        wm_class="org.gnome.Settings",
+        desktop=0,
+        gtk_app_id="org.gnome.Settings",
+        gtk_unique_bus_name=":1.42",
+        gtk_application_object_path="/org/gnome/Settings",
+    )
+    assert is_unique_gtk_window(unique) is True
+    missing_id = WindowInfo(
+        wid="0x2",
+        title="Legacy",
+        wm_class="app",
+        desktop=0,
+        gtk_unique_bus_name=":1.1",
+        gtk_application_object_path="/org/app",
+    )
+    assert is_unique_gtk_window(missing_id) is False
+    wayland_only = WindowInfo(wid="0x3", title="Term", wm_class="org.gnome.Console", desktop=0, app_id="org.gnome.Console")
+    assert is_unique_gtk_window(wayland_only) is False
+    gtk_app_id, gtk_bus, gtk_path = gtk_unique_props_from_mapping(
+        {
+            "gtk-app-id": "org.gnome.Settings",
+            "gtk-unique-bus-name": ":1.42",
+            "gtk-application-object-path": "/org/gnome/Settings",
+        }
+    )
+    assert (gtk_app_id, gtk_bus, gtk_path) == ("org.gnome.Settings", ":1.42", "/org/gnome/Settings")
+    payload = {
+        9: {
+            "title": "Settings",
+            "wm-class": "org.gnome.Settings",
+            "gtk-app-id": "org.gnome.Settings",
+            "gtk-unique-bus-name": ":1.42",
+            "gtk-application-object-path": "/org/gnome/Settings",
+        }
+    }
+    rows = windows_from_introspect_payload(payload)
+    assert len(rows) == 1
+    assert is_unique_gtk_window(rows[0]) is True
+
+
+def test_wmctrl_list_drops_skip_taskbar_when_inspect_knows() -> None:
+    text = (
+        "0x01a00001  0 firefox.Firefox host Mozilla Firefox\n"
+        "0x01a00002  0 panel.Panel host Top Bar\n"
+        "0x01a00003  0 dock.Dock host Dock\n"
+        "incomplete line\n"
+    )
+    rows = parse_wmctrl_lx(text)
+    assert [row.title for row in rows] == ["Mozilla Firefox", "Top Bar", "Dock"]
+
+    def inspect(wid: str) -> tuple[bool | None, str | None] | None:
+        if wid == "0x01a00002":
+            return True, "normal"
+        if wid == "0x01a00003":
+            return False, "dock"
+        if wid == "0x01a00001":
+            return False, "normal"
+        return None
+
+    kept = filter_listed_windows(rows, inspect)
+    assert [row.title for row in kept] == ["Mozilla Firefox"]
+    assert filter_listed_windows(rows, None) == rows
+    unknown = filter_listed_windows(rows, lambda _wid: None)
+    assert [row.title for row in unknown] == ["Mozilla Firefox", "Top Bar", "Dock"]
 
 
 def test_hypr_sway_niri_window_payloads() -> None:
