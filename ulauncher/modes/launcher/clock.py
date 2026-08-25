@@ -129,11 +129,15 @@ def match_clock(query: str) -> Optional[dict]:
     return _payload(kind)
 
 
-def _payload(kind: str) -> dict:
+def _payload(kind: str) -> dict | None:
     from ulauncher.gi import GLib
 
     now = GLib.DateTime.new_now_local()
-    when = now.add_days(date_offset_days(kind)) or now
+    if now is None:
+        return None
+    when = now.add_days(date_offset_days(kind))
+    if when is None:
+        when = now
     weekday = weekday_name(when.get_day_of_week())
     iso_date = format_iso_date(when.get_year(), when.get_month(), when.get_day_of_month())
     clock = format_clock(when.get_hour(), when.get_minute(), when.get_second())

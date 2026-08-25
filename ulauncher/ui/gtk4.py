@@ -129,19 +129,20 @@ def clipboard_set_text(text: str) -> None:
     if not display:
         return
     encoded = (text or "").encode()
-    getters = [display.get_clipboard]
-    primary = getattr(display, "get_primary_clipboard", None)
-    if callable(primary):
-        getters.append(primary)
-    for getter in getters:
-        clipboard = getter()
+
+    def _store(clipboard: Any) -> None:
         if clipboard is None:
-            continue
+            return
         provider = Gdk.ContentProvider.new_for_bytes("text/plain;charset=utf-8", GLib.Bytes.new(encoded))
         clipboard.set_content(provider)
         store_async = getattr(clipboard, "store_async", None)
         if callable(store_async):
             store_async(0, None, None, None)
+
+    _store(display.get_clipboard())
+    get_primary = getattr(display, "get_primary_clipboard", None)
+    if callable(get_primary):
+        _store(get_primary())
 
 
 def measure_height_for_width(widget: Gtk.Widget, width: int) -> tuple[int, int]:
