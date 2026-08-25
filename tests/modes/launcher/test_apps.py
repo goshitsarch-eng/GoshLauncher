@@ -17,6 +17,7 @@ from ulauncher.modes.launcher.apps import (
     home_apps,
     is_new_window_action,
     match_apps,
+    muxer_has_new_window_action,
     new_window_title,
     open_new_window,
     take_app_actions,
@@ -174,7 +175,10 @@ def test_single_window_apps_skip_synthetic_new_window() -> None:
     assert all(not row.get("synthetic_new_window") for row in rows)
 
 
-def test_unique_gtk_apps_skip_synthetic_new_window_unless_desktop_action() -> None:
+def test_unique_gtk_apps_skip_synthetic_new_window_unless_desktop_action(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: [])
     settings = SimpleNamespace(
         name="Settings",
         icon="settings",
@@ -220,6 +224,35 @@ def test_unique_gtk_apps_skip_synthetic_new_window_unless_desktop_action() -> No
     )
     running = app_action_rows(firefox, 6, window_count=1, windows=[firefox_win])
     assert running[0]["synthetic_new_window"] is True
+
+
+def test_muxer_new_window_beats_single_window_and_unique_gtk(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher import apps as apps_mod
+
+    monkeypatch.setattr(apps_mod, "list_gtk_action_names", lambda *_args, **_kwargs: ["new-window"])
+    settings = SimpleNamespace(
+        name="Settings",
+        icon="settings",
+        app_id="org.gnome.Settings.desktop",
+        actions={"launch": {"name": "Launch"}, "action:about": {"name": "About"}},
+        single_window=True,
+    )
+    unique = WindowInfo(
+        wid="0x1",
+        title="Settings",
+        wm_class="org.gnome.Settings",
+        desktop=0,
+        gtk_app_id="org.gnome.Settings",
+        gtk_unique_bus_name=":1.42",
+        gtk_application_object_path="/org/gnome/Settings",
+    )
+    assert muxer_has_new_window_action(["quit", "app.new-window"]) is True
+    assert muxer_has_new_window_action(["about"]) is False
+    assert can_open_new_window(1, settings, muxer_new_window=True) is True
+    assert can_open_new_window(1, settings, unique_gtk=True, muxer_new_window=True) is True
+    rows = app_action_rows(settings, 6, window_count=1, windows=[unique])
+    assert rows[0]["synthetic_new_window"] is True
+    assert rows[0]["title"] == "New window — Settings"
 
 
 def test_app_row_description_and_window_count() -> None:

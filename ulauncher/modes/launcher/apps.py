@@ -266,18 +266,71 @@ def has_desktop_new_window_action(app: Any) -> bool:
     return False
 
 
+def muxer_has_new_window_action(action_names: Sequence[str] | None) -> bool:
+    # gnome-shell checks g_action_group_has_action(muxer, "app.new-window")
+    # before SingleMainWindow. The remote org.gtk.Actions names omit the prefix.
+    for name in action_names or ():
+        normalized = str(name).lower().replace("_", "-")
+        if normalized in {"new-window", "app.new-window"}:
+            return True
+    return False
+
+
+def list_gtk_action_names(bus_name: str, object_path: str) -> list[str]:
+    if not bus_name or not object_path:
+        return []
+    try:
+        from ulauncher.gi import Gio, GLib
+
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        result = bus.call_sync(
+            bus_name,
+            object_path,
+            "org.gtk.Actions",
+            "List",
+            None,
+            GLib.VariantType.new("(as)"),
+            Gio.DBusCallFlags.NONE,
+            80,
+            None,
+        )
+        return [str(item) for item in result.unpack()[0]]
+    except Exception:
+        return []
+
+
+def app_muxer_has_new_window(app: Any, windows: Sequence[Any] | None) -> bool:
+    if not windows:
+        return False
+    for win in windows:
+        if not _app_matches_window(app, win):
+            continue
+        names = list_gtk_action_names(
+            str(getattr(win, "gtk_unique_bus_name", "") or ""),
+            str(getattr(win, "gtk_application_object_path", "") or ""),
+        )
+        if muxer_has_new_window_action(names):
+            return True
+    return False
+
+
 def can_open_new_window(
     window_count: int,
     app: Any = None,
     unique_gtk: bool | None = None,
     windows: Sequence[Any] | None = None,
+    muxer_new_window: bool | None = None,
 ) -> bool:
     # goshos: get_n_windows() > 0 && shellApp.can_open_new_window().
     # Port of gnome-shell shell_app_can_open_new_window while running:
-    # SingleMainWindow / X-GNOME-SingleWindow, then a desktop new-window
-    # action, then unique GtkApplication windows that would only raise.
+    # muxer app.new-window, SingleMainWindow / X-GNOME-SingleWindow, a
+    # desktop new-window action, then unique GtkApplication windows.
     if window_count <= 0:
         return False
+    if muxer_new_window is None:
+        muxer_new_window = app_muxer_has_new_window(app, windows)
+    if muxer_new_window:
+        return True
     if bool(getattr(app, "single_window", False)):
         return False
     if has_desktop_new_window_action(app):
