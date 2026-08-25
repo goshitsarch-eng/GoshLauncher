@@ -112,6 +112,8 @@ def test_goshos_settings_aliases() -> None:
         ("info-overview", "about"),
         ("stylus", "wacom"),
         ("fractional scaling", "display"),
+        ("ssh", "system"),
+        ("remote desktop", "system"),
     )
     for query, panel_id in expected:
         assert any(panel["id"] == panel_id for panel in match_settings_panels(query)), query
