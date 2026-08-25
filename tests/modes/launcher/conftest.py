@@ -37,3 +37,4 @@ def _no_host_live_watches(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("ulauncher.modes.launcher.x11_live.X11LiveWatch", _NoHostWatch)
     monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.ExtWorkspaceLiveWatch", _NoHostWatch)
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_toplevels.ExtForeignLiveWatch", _NoHostWatch)

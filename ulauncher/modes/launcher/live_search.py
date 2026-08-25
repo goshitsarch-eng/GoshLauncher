@@ -54,6 +54,7 @@ class LiveSearchWatcher:
         self._windows_changed_ids: list[int] = []
         self._x11: Any = None
         self._ext_ws: Any = None
+        self._ext_list: Any = None
 
     @property
     def listening(self) -> bool:
@@ -182,7 +183,9 @@ class LiveSearchWatcher:
 
     def _listen_host_signals(self) -> None:
         # goshos connects to workspace_manager and per-window unmanaged. GTK
-        # stand-ins: EWMH PropertyNotify on X11, ext-workspace-v1 on Wayland.
+        # stand-ins: EWMH PropertyNotify on X11, ext-workspace-v1 and
+        # ext-foreign-toplevel-list on Wayland.
+        from ulauncher.modes.launcher.wayland_toplevels import ExtForeignLiveWatch
         from ulauncher.modes.launcher.wayland_workspaces import ExtWorkspaceLiveWatch
         from ulauncher.modes.launcher.x11_live import X11LiveWatch
 
@@ -192,6 +195,9 @@ class LiveSearchWatcher:
         ext_ws = ExtWorkspaceLiveWatch()
         if ext_ws.start(self._notify):
             self._ext_ws = ext_ws
+        ext_list = ExtForeignLiveWatch()
+        if ext_list.start(self._notify):
+            self._ext_list = ext_list
 
     def _unlisten_host_signals(self) -> None:
         if self._x11 is not None:
@@ -202,3 +208,7 @@ class LiveSearchWatcher:
             with contextlib.suppress(AttributeError, OSError, RuntimeError, TypeError):
                 self._ext_ws.stop()
             self._ext_ws = None
+        if self._ext_list is not None:
+            with contextlib.suppress(AttributeError, OSError, RuntimeError, TypeError):
+                self._ext_list.stop()
+            self._ext_list = None

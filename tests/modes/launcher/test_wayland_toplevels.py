@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import struct
 
+import pytest
+
 from ulauncher.modes.launcher.wayland_toplevels import (
     EXT_HANDLE_APP_ID,
+    EXT_HANDLE_CLOSED,
     EXT_HANDLE_DONE,
     EXT_HANDLE_IDENTIFIER,
     EXT_HANDLE_TITLE,
     EXT_LIST_IFACE,
     EXT_LIST_TOPLEVEL,
     WL_CALLBACK_DONE,
+    WL_DISPLAY_ID,
     WL_REGISTRY_GLOBAL,
+    ExtForeignLiveWatch,
     collect_ext_foreign_handles,
+    ext_foreign_events_are_live,
     list_ext_foreign_toplevels,
     pack_wayland_message,
     pack_wayland_string,
@@ -104,3 +110,54 @@ def test_list_ext_foreign_toplevels_from_scripted_display() -> None:
 
 def test_list_ext_foreign_toplevels_missing_socket_is_empty() -> None:
     assert list_ext_foreign_toplevels(environ={"WAYLAND_DISPLAY": "missing", "XDG_RUNTIME_DIR": "/tmp"}) == []
+
+
+def test_ext_foreign_events_are_live_on_map_unmap_and_title() -> None:
+    assert ext_foreign_events_are_live([(4, EXT_LIST_TOPLEVEL, struct.pack("<I", 9))], 4)
+    assert ext_foreign_events_are_live([(9, EXT_HANDLE_CLOSED, b"")], 4)
+    assert ext_foreign_events_are_live([(9, EXT_HANDLE_DONE, b"")], 4)
+    assert ext_foreign_events_are_live([(9, EXT_HANDLE_TITLE, b"")], 4)
+    assert not ext_foreign_events_are_live([(WL_DISPLAY_ID, EXT_HANDLE_CLOSED, b"")], 4)
+    assert not ext_foreign_events_are_live([(WL_DISPLAY_ID, EXT_HANDLE_DONE, b"")], 4)
+    assert not ext_foreign_events_are_live([(9, EXT_HANDLE_IDENTIFIER, b"")], 4)
+    assert not ext_foreign_events_are_live([], 4)
+
+
+def test_ext_foreign_live_watch_notifies_on_closed() -> None:
+    payload = pack_wayland_message(9, EXT_HANDLE_CLOSED, b"")
+    hits: list[int] = []
+
+    class _Once:
+        def recv(self, _size: int) -> bytes:
+            raise BlockingIOError
+
+    watch = ExtForeignLiveWatch()
+    watch._on_change = lambda: hits.append(1)
+    watch._list_id = 4
+    watch._sock = _Once()
+    watch._buf = payload
+    watch._on_readable()
+    assert hits == [1]
+
+
+def test_ext_foreign_live_watch_start_uses_scripted_display(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    cancelled: list[int] = []
+
+    class _Watchable(_ScriptedDisplay):
+        def fileno(self) -> int:
+            return 3
+
+        def setblocking(self, _flag: bool) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "ulauncher.utils.scheduling.watch_fd",
+        lambda _fd, _fn: SimpleNamespace(cancel=lambda: cancelled.append(1)),
+    )
+    watch = ExtForeignLiveWatch()
+    assert watch.start(lambda: None, sock=_Watchable(), timeout=1.0) is True
+    assert watch._list_id == 4
+    watch.stop()
+    assert cancelled == [1]

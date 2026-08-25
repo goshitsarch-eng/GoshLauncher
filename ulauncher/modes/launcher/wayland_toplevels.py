@@ -7,13 +7,14 @@ compositor directly so window search works without that binary.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import socket
 import struct
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 WL_DISPLAY_ID = 1
 WL_DISPLAY_SYNC = 0
@@ -244,7 +245,8 @@ def _recv_until_callback(sock: Any, callback_id: int, deadline: float) -> list[t
     raise TimeoutError(msg)
 
 
-def _run_list(sock: Any, timeout: float) -> list[dict[str, str]]:
+def _bind_and_list(sock: Any, timeout: float) -> tuple[int, list[dict[str, str]]] | None:
+    """Bind ext-foreign-toplevel-list. None when the protocol is missing."""
     deadline = time.monotonic() + timeout
     registry_id = CLIENT_ID_START
     sync_id = CLIENT_ID_START + 1
@@ -259,13 +261,26 @@ def _run_list(sock: Any, timeout: float) -> list[dict[str, str]]:
             list_version = version
             break
     if not list_name:
-        return []
+        return None
     list_id = CLIENT_ID_START + 2
     done_id = CLIENT_ID_START + 3
     sock.sendall(_bind_ext_list(list_name, list_version, list_id))
     sock.sendall(pack_wayland_message(WL_DISPLAY_ID, WL_DISPLAY_SYNC, struct.pack("<I", done_id)))
     listed = _recv_until_callback(sock, done_id, deadline)
-    return collect_ext_foreign_handles(listed, list_id)
+    return list_id, collect_ext_foreign_handles(listed, list_id)
+
+
+def _run_list(sock: Any, timeout: float) -> list[dict[str, str]]:
+    bound = _bind_and_list(sock, timeout)
+    if bound is None:
+        return []
+    return bound[1]
+
+
+def _session(sock: Any, environ: Mapping[str, str] | None) -> tuple[Any, bool]:
+    if sock is not None:
+        return sock, False
+    return _connect(environ), True
 
 
 def list_ext_foreign_toplevels(
@@ -274,8 +289,7 @@ def list_ext_foreign_toplevels(
     sock: Any = None,
 ) -> list[dict[str, str]]:
     """Return current toplevels, or [] when the protocol is missing or the socket fails."""
-    owned = sock is None
-    conn = sock if sock is not None else _connect(environ)
+    conn, owned = _session(sock, environ)
     if conn is None:
         return []
     try:
@@ -294,3 +308,107 @@ def ext_foreign_handle_to_window_fields(item: Mapping[str, Any]) -> dict[str, st
     if not ident or (not title and not app_id):
         return None
     return {"identifier": ident, "title": title or app_id, "app_id": app_id}
+
+
+def ext_foreign_events_are_live(events: Sequence[tuple[int, int, bytes]], list_id: int) -> bool:
+    """True when a drained batch is a window map, unmap, or title/app-id change.
+
+    Ignore wl_display (id 1): its ERROR/delete_id opcodes collide with CLOSED/DONE.
+    """
+    for object_id, opcode, _payload in events:
+        if object_id == WL_DISPLAY_ID:
+            continue
+        if object_id == list_id and opcode == EXT_LIST_TOPLEVEL:
+            return True
+        if opcode in (EXT_HANDLE_CLOSED, EXT_HANDLE_DONE, EXT_HANDLE_TITLE, EXT_HANDLE_APP_ID):
+            return True
+    return False
+
+
+class ExtForeignLiveWatch:
+    """Keep ext-foreign-toplevel-list open while the popup is up.
+
+    goshos connects window-created and per-window unmanaged. Introspect
+    WindowsChanged is allowlisted to portal backends, so this protocol is the
+    GTK stand-in on GNOME Wayland.
+    """
+
+    def __init__(self) -> None:
+        self._sock: Any = None
+        self._owned = False
+        self._list_id = 0
+        self._buf = b""
+        self._source: Any = None
+        self._on_change: Callable[[], None] | None = None
+
+    def start(
+        self,
+        on_change: Callable[[], None],
+        environ: Mapping[str, str] | None = None,
+        sock: Any = None,
+        timeout: float = 0.25,
+    ) -> bool:
+        if self._sock is not None:
+            return True
+        conn, owned = _session(sock, environ)
+        if conn is None:
+            return False
+        bound: tuple[int, list[dict[str, str]]] | None = None
+        try:
+            bound = _bind_and_list(conn, timeout)
+        except (OSError, struct.error, ValueError, TimeoutError):
+            if owned:
+                conn.close()
+            return False
+        if bound is None:
+            if owned:
+                conn.close()
+            return False
+        with contextlib.suppress(AttributeError, OSError):
+            conn.setblocking(False)
+        try:
+            fd = int(conn.fileno())
+        except (AttributeError, OSError, TypeError, ValueError):
+            if owned:
+                conn.close()
+            return False
+        self._on_change = on_change
+        self._sock = conn
+        self._owned = owned
+        self._list_id = bound[0]
+        self._buf = b""
+        try:
+            from ulauncher.utils.scheduling import watch_fd
+
+            self._source = watch_fd(fd, self._on_readable)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+            self._sock = None
+            self._owned = False
+            self._list_id = 0
+            self._on_change = None
+            if owned:
+                conn.close()
+            return False
+        return True
+
+    def stop(self) -> None:
+        if self._source is not None:
+            self._source.cancel()
+            self._source = None
+        if self._sock is not None and self._owned:
+            with contextlib.suppress(OSError, RuntimeError, TypeError):
+                self._sock.close()
+        self._sock = None
+        self._owned = False
+        self._list_id = 0
+        self._buf = b""
+        self._on_change = None
+
+    def _on_readable(self) -> None:
+        sock = self._sock
+        on_change = self._on_change
+        if sock is None or on_change is None:
+            return
+        events, self._buf = recv_wayland_available(sock, self._buf)
+        if ext_foreign_events_are_live(events, self._list_id):
+            on_change()

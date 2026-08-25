@@ -112,7 +112,7 @@ def test_introspect_running_watches_cover_both_shell_names() -> None:
         assert member == "RunningApplicationsChanged"
 
 
-def test_watcher_starts_x11_and_ext_workspace_listeners(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_watcher_starts_x11_and_wayland_host_listeners(monkeypatch: pytest.MonkeyPatch) -> None:
     started: list[str] = []
     stopped: list[str] = []
 
@@ -132,8 +132,17 @@ def test_watcher_starts_x11_and_ext_workspace_listeners(monkeypatch: pytest.Monk
         def stop(self) -> None:
             stopped.append("ext")
 
+    class _Foreign:
+        def start(self, _on_change: object) -> bool:
+            started.append("foreign")
+            return True
+
+        def stop(self) -> None:
+            stopped.append("foreign")
+
     monkeypatch.setattr("ulauncher.modes.launcher.x11_live.X11LiveWatch", _X11)
     monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.ExtWorkspaceLiveWatch", _Ext)
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_toplevels.ExtForeignLiveWatch", _Foreign)
     watcher = LiveSearchWatcher(
         lambda: None,
         list_windows=list,
@@ -142,6 +151,6 @@ def test_watcher_starts_x11_and_ext_workspace_listeners(monkeypatch: pytest.Monk
         current_desktop=lambda: 0,
     )
     watcher.start()
-    assert started == ["x11", "ext"]
+    assert started == ["x11", "ext", "foreign"]
     watcher.stop()
-    assert stopped == ["x11", "ext"]
+    assert stopped == ["x11", "ext", "foreign"]
