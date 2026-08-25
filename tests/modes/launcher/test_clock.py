@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from ulauncher.modes.launcher.clock import format_date_title, match_clock, time_query_kind
+from pathlib import Path
+
+from ulauncher.modes.launcher.clock import (
+    date_offset_days,
+    format_date_title,
+    format_iso_date,
+    match_clock,
+    month_name,
+    time_query_kind,
+    weekday_name,
+)
 
 
 def test_time_phrases() -> None:
@@ -41,8 +51,30 @@ def test_relative_days() -> None:
 
 def test_date_title_format() -> None:
     assert format_date_title("Monday", 5, "January", 2026) == "Monday, 5 January 2026"
+    assert weekday_name(1) == "Monday"
+    assert weekday_name(7) == "Sunday"
+    assert weekday_name(0) == ""
+    assert month_name(8) == "August"
+    assert month_name(13) == ""
+    assert format_iso_date(2026, 8, 3) == "2026-08-03"
+    assert date_offset_days("tomorrow") == 1
+    assert date_offset_days("yesterday") == -1
+    assert date_offset_days("time") == 0
     hit = match_clock("date")
     assert hit is not None
     assert hit["title"].startswith(f"{hit['weekday']}, ")
+    assert hit["weekday"] in {
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    }
     assert hit["copy_text"] == hit["title"]
     assert hit["description"] == hit["date"]
+    source = Path(__file__).resolve().parents[3] / "ulauncher" / "modes" / "launcher" / "clock.py"
+    text = source.read_text()
+    assert "DateTime.new_now_local" in text
+    assert "datetime.now" not in text

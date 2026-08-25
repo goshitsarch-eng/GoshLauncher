@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
 from typing import Optional
 
 _TRAILING_NOW = re.compile(r"(?:\s+(?:right\s+now|currently|at\s+the\s+moment|please))+$")
@@ -82,6 +81,47 @@ def format_date_title(weekday: str, day: int, month: str, year: int) -> str:
     return f"{weekday}, {day} {month} {year}"
 
 
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
+
+def weekday_name(day_of_week: int) -> str:
+    if day_of_week < 1 or day_of_week > 7:
+        return ""
+    return WEEKDAYS[day_of_week - 1]
+
+
+def month_name(month: int) -> str:
+    if month < 1 or month > 12:
+        return ""
+    return MONTHS[month - 1]
+
+
+def format_iso_date(year: int, month: int, day: int) -> str:
+    return f"{year}-{month:02d}-{day:02d}"
+
+
+def date_offset_days(kind: str) -> int:
+    if kind == "tomorrow":
+        return 1
+    if kind == "yesterday":
+        return -1
+    return 0
+
+
 def match_clock(query: str) -> Optional[dict]:
     kind = time_query_kind(query)
     if not kind:
@@ -90,13 +130,15 @@ def match_clock(query: str) -> Optional[dict]:
 
 
 def _payload(kind: str) -> dict:
-    now = datetime.now()
-    offset = 1 if kind == "tomorrow" else -1 if kind == "yesterday" else 0
-    day = now + timedelta(days=offset)
-    weekday = day.strftime("%A")
-    iso_date = day.strftime("%Y-%m-%d")
-    clock = format_clock(day.hour, day.minute, day.second)
-    date_title = format_date_title(weekday, day.day, day.strftime("%B"), day.year)
+    from ulauncher.gi import GLib
+
+    now = GLib.DateTime.new_now_local()
+    when = now.add_days(date_offset_days(kind)) or now
+    weekday = weekday_name(when.get_day_of_week())
+    iso_date = format_iso_date(when.get_year(), when.get_month(), when.get_day_of_month())
+    clock = format_clock(when.get_hour(), when.get_minute(), when.get_second())
+    date_title = format_date_title(weekday, when.get_day_of_month(), month_name(when.get_month()), when.get_year())
+    iso = when.format("%Y-%m-%dT%H:%M:%S") or iso_date
     if kind == "time":
         title = clock
         description = weekday
@@ -110,7 +152,7 @@ def _payload(kind: str) -> dict:
         "time": clock,
         "date": iso_date,
         "weekday": weekday,
-        "iso": day.isoformat(timespec="seconds"),
+        "iso": iso,
         "title": title,
         "description": description,
         "copy_text": copy_text,

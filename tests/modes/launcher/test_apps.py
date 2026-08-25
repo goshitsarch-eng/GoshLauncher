@@ -137,6 +137,7 @@ def test_app_action_rows_hide_new_window_when_not_running() -> None:
     assert [row["action_name"] for row in running] == ["new-window", "private"]
     assert running[0]["title"] == "New window — Firefox"
     assert running[0]["synthetic_new_window"] is True
+    assert running[0]["icon"] == "application-x-executable-symbolic"
     assert running[1]["title"] == "Private — Firefox"
     assert running[0]["description"] == "Application action"
     notes = SimpleNamespace(

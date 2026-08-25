@@ -160,7 +160,7 @@ def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     needles = _app_class_needles(app)
     for win in open_windows:
         cls = str(getattr(win, "wm_class", "") or "").lower()
-        tokens = {part for part in re.split(r"[./]", cls) if part}
+        tokens = {part for part in re.split(r"[./\s]", cls) if part}
         if needles & tokens:
             activate_window(
                 {
@@ -185,7 +185,7 @@ def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:
     count = 0
     for win in windows:
         cls = str(getattr(win, "wm_class", "") or "").lower()
-        tokens = {part for part in re.split(r"[./]", cls) if part}
+        tokens = {part for part in re.split(r"[./\s]", cls) if part}
         if needles & tokens:
             count += 1
     return count
@@ -262,7 +262,7 @@ def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[st
             {
                 "title": new_window_title(app.name),
                 "description": "Application action",
-                "icon": getattr(app, "icon", "") or "application-x-executable",
+                "icon": "application-x-executable-symbolic",
                 "app_id": getattr(app, "app_id", ""),
                 "action_name": "new-window",
                 "synthetic_new_window": True,
@@ -281,7 +281,7 @@ def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[st
             {
                 "title": desktop_action_title(name, app.name),
                 "description": "Application action",
-                "icon": getattr(app, "icon", "") or "application-x-executable",
+                "icon": "application-x-executable-symbolic",
                 "app_id": getattr(app, "app_id", ""),
                 "action_name": action_id,
             }

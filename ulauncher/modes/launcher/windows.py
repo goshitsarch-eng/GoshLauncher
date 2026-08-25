@@ -22,6 +22,10 @@ from ulauncher.modes.launcher.word_match import id_matches_query, label_matches_
 logger = logging.getLogger(__name__)
 
 
+def window_class_text(wm_class: str = "", wm_instance: str = "", sandboxed_id: str = "") -> str:
+    return " ".join(part for part in (wm_class, wm_instance, sandboxed_id) if part)
+
+
 @dataclass
 class WindowInfo:
     wid: str
@@ -129,7 +133,9 @@ def _ewmh_windows() -> list[WindowInfo]:
         try:
             cls = win.get_wm_class()
             if cls:
-                wm_class = ".".join(c for c in cls if c)
+                instance = str(cls[0] or "") if len(cls) > 0 else ""
+                klass = str(cls[1] or "") if len(cls) > 1 else ""
+                wm_class = window_class_text(klass, instance)
         except Exception:
             wm_class = ""
         desktop = ewmh.getWmDesktop(win)
@@ -758,10 +764,16 @@ def list_windows() -> list[WindowInfo]:
     return store_window_snapshot(sort_windows_most_recent(windows, tab_ranks=ranks or None))
 
 
-def _workspace_label(win: WindowInfo) -> str:
-    if win.sticky or win.desktop < 0:
+def window_workspace_label(index: int, on_all_workspaces: bool = False) -> str:
+    if on_all_workspaces:
         return "On all workspaces"
-    return f"Workspace {win.desktop + 1}"
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+        return "Switch to window"
+    return f"Workspace {index + 1}"
+
+
+def _workspace_label(win: WindowInfo) -> str:
+    return window_workspace_label(win.desktop, win.sticky)
 
 
 _SWITCH_WS_RE = re.compile(
@@ -918,7 +930,7 @@ def match_windows(query: str, limit: int = 6, windows: list[WindowInfo] | None =
             "kind": "workspace",
             "title": workspace_switch_title(workspace + 1),
             "description": "Workspace",
-            "icon": "workspace-switcher-symbolic",
+            "icon": "view-app-grid-symbolic",
             "payload": str(workspace),
             "wid": "",
             "id": workspace_result_id(workspace + 1),

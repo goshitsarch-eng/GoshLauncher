@@ -11,6 +11,7 @@ from ulauncher.modes.launcher.windows import (
     application_object_path,
     compositor_list_commands,
     compositor_window_argv,
+    match_windows,
     parse_window_close_query,
     parse_window_intent,
     parse_workspace_query,
@@ -21,10 +22,12 @@ from ulauncher.modes.launcher.windows import (
     switch_workspace,
     tab_ranks_from_introspect_payload,
     take_window_results,
+    window_class_text,
     window_close_title,
     window_matches,
     window_recency_value,
     window_result_id,
+    window_workspace_label,
     windows_from_hypr_clients,
     windows_from_i3_tree,
     windows_from_introspect_payload,
@@ -89,6 +92,28 @@ def test_workspace_switch_title_matches_goshos() -> None:
     assert workspace_switch_title(2) == "Switch to Workspace 2"
     assert window_close_title("kill", "Firefox") == "Kill Firefox"
     assert window_close_title("close", "Firefox") == "Close Firefox"
+
+
+def test_window_class_text_and_workspace_label_match_goshos() -> None:
+    assert window_class_text("Firefox", "Navigator", "org.mozilla.firefox") == "Firefox Navigator org.mozilla.firefox"
+    assert window_workspace_label(0) == "Workspace 1"
+    assert window_workspace_label(2) == "Workspace 3"
+    assert window_workspace_label(-1) == "Switch to window"
+    assert window_workspace_label(1, True) == "On all workspaces"
+    unknown = WindowInfo(wid="0x1", title="Term", wm_class="foot", desktop=-1, sticky=False)
+    assert window_matches(unknown, "") is True
+
+    rows = match_windows("workspace 2", windows=[])
+    assert rows
+    assert rows[0]["icon"] == "view-app-grid-symbolic"
+    nav = WindowInfo(
+        wid="0x2",
+        title="Mozilla Firefox",
+        wm_class=window_class_text("Firefox", "Navigator", "org.mozilla.firefox"),
+        desktop=0,
+    )
+    assert window_matches(nav, "nav")
+    assert window_matches(nav, "firefox navigator")
 
 
 def test_workspace_label_matches_number_and_sticky() -> None:

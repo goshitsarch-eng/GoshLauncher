@@ -354,6 +354,21 @@ def test_settings_row_copy_matches_goshos() -> None:
     assert settings_row.description == "GNOME Settings"
 
 
+def test_settings_without_launcher_are_not_activatable(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.settings_panels import settings_result_meta
+
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.settings_panels.settings_argv",
+        lambda *_a, **_k: None,
+    )
+    wifi = next(row for row in _handle("# wifi") if getattr(row, "kind", "") == "settings")
+    assert wifi.name == "Wi-Fi"
+    assert wifi.activatable is False
+    assert wifi.actions == {}
+    panel = {"id": "wifi", "title": "Wi-Fi", "icon": "network-wireless-symbolic", "keywords": []}
+    assert settings_result_meta(panel, None)["activatable"] is False
+
+
 def test_clock_and_units_copy_prompt_enter() -> None:
     clock = next(row for row in _handle("time") if getattr(row, "kind", "") == "clock")
     assert clock.description.endswith(" · press Enter to copy")

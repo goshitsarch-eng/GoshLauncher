@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from ulauncher.modes.launcher.settings_panels import (
     match_settings_panels,
+    settings_argv,
     settings_panel_available,
     settings_panel_desktop,
+    settings_result_meta,
 )
 
 
@@ -21,6 +23,21 @@ def test_wellbeing_hidden_when_desktop_missing() -> None:
     shown = match_settings_panels("wellbeing", is_available=lambda _panel_id: True)
     assert shown
     assert shown[0]["id"] == "wellbeing"
+
+
+def test_settings_result_is_not_activatable_without_launcher() -> None:
+    panel = {"id": "wifi", "title": "Wi-Fi", "icon": "network-wireless-symbolic", "keywords": []}
+    missing = settings_result_meta(panel, None)
+    assert missing["activatable"] is False
+    ready = settings_result_meta(panel, ["gnome-control-center", "wifi"])
+    assert ready["activatable"] is True
+    assert ready["id"] == "wifi"
+    assert settings_argv("wifi", find_in_path=lambda _name: None) is None
+    assert settings_argv("appearance", find_in_path=lambda name: name if name == "gio" else None) == [
+        "gio",
+        "launch",
+        "gnome-background-panel.desktop",
+    ]
 
 
 # Catalog order from spotlight-goshos settingsPanels.js (Version 2026.08.20).

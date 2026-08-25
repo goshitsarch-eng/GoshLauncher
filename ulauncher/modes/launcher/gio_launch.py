@@ -16,6 +16,7 @@ from ulauncher.modes.launcher.commands import (
 )
 
 _program_path_cache: dict[str, str | None] = {}
+_launch_contexts: set[Any] = set()
 
 
 def reset_program_path_cache() -> None:
@@ -82,11 +83,15 @@ def open_uri(uri: str, opener: Callable[[str], Any] | None = None) -> None:
     try:
         from ulauncher.gi import Gio
 
+        context = Gio.AppLaunchContext()
+        _launch_contexts.add(context)
+
         def _finished(_source: Any, result: Any) -> None:
             with contextlib.suppress(Exception):
                 Gio.AppInfo.launch_default_for_uri_finish(result)
+            _launch_contexts.discard(context)
 
-        Gio.AppInfo.launch_default_for_uri_async(launch, None, None, _finished)
+        Gio.AppInfo.launch_default_for_uri_async(launch, context, None, _finished)
     except Exception:
         from ulauncher.utils.launch_detached import open_detached
 

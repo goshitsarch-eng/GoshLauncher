@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
@@ -143,15 +142,31 @@ SETTINGS_PANELS: list[SettingsPanel] = [
 ]
 
 
-def settings_argv(panel_id: str) -> list[str] | None:
+def settings_argv(panel_id: str, find_in_path: Callable[[str], str | None] | None = None) -> list[str] | None:
     panel_id = "background" if panel_id == "appearance" else panel_id
-    if shutil.which("gnome-control-center"):
+    locate = find_in_path
+    if locate is None:
+        from ulauncher.modes.launcher.gio_launch import find_in_user_path
+
+        locate = find_in_user_path
+    if locate("gnome-control-center"):
         return ["gnome-control-center", panel_id]
-    if shutil.which("gio"):
+    if locate("gio"):
         return ["gio", "launch", f"gnome-{panel_id}-panel.desktop"]
-    if shutil.which("gapplication"):
+    if locate("gapplication"):
         return ["gapplication", "launch", "org.gnome.Settings", panel_id]
     return None
+
+
+def settings_result_meta(panel: SettingsPanel, argv: list[str] | None) -> dict:
+    return {
+        "type": "settings",
+        "title": panel["title"],
+        "description": "GNOME Settings",
+        "icon": panel.get("icon") or "preferences-system-symbolic",
+        "id": panel["id"],
+        "activatable": argv is not None,
+    }
 
 
 def settings_panel_desktop(panel_id: str) -> str:

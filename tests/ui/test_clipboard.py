@@ -14,6 +14,7 @@ def test_clipboard_helper_uses_gtk46_set_content() -> None:
     text = source.read_text()
     assert "ContentProvider.new_for_bytes" in text
     assert "set_content" in text
+    assert "get_primary_clipboard" in text
     assert "clipboard.set(text)" not in text
 
 

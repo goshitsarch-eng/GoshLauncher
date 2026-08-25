@@ -401,7 +401,7 @@ class LauncherMode(Mode):
                             "score": 69,
                             "title": action["title"],
                             "description": action["description"],
-                            "icon": action.get("icon") or "application-x-executable",
+                            "icon": action.get("icon") or "application-x-executable-symbolic",
                             "app_id": action["app_id"],
                             "action_name": action["action_name"],
                             "synthetic_new_window": bool(action.get("synthetic_new_window")),
@@ -526,18 +526,24 @@ class LauncherMode(Mode):
                 )
 
         if "settings" in providers:
-            from ulauncher.modes.launcher.settings_panels import match_settings_panels
+            from ulauncher.modes.launcher.settings_panels import (
+                match_settings_panels,
+                settings_argv,
+                settings_result_meta,
+            )
 
             for hit in safe_provider_results(lambda: match_settings_panels(q))[:cap]:
+                meta = settings_result_meta(hit, settings_argv(hit["id"]))
                 add(
                     "settings",
                     {
                         "kind": "settings",
                         "score": 55,
-                        "title": hit["title"],
-                        "description": "GNOME Settings",
-                        "icon": hit.get("icon") or "preferences-system-symbolic",
+                        "title": meta["title"],
+                        "description": meta["description"],
+                        "icon": meta["icon"],
                         "panel_id": hit["id"],
+                        "activatable": meta["activatable"],
                     },
                 )
 
@@ -631,6 +637,8 @@ class LauncherMode(Mode):
             if kind in {"path", "place", "file", "bookmark"} and not row.get("exists", True):
                 actions = {}
                 activatable = False
+            if not activatable:
+                actions = {}
             yield LauncherResult(
                 name=str(row["title"]),
                 description="" if not show_descriptions else str(row.get("description") or ""),
@@ -667,10 +675,9 @@ def _empty_app_row(app: Any, open_windows: Sequence[Any]) -> dict[str, Any] | No
 
 def _empty_window_row(win: Any) -> dict[str, Any] | None:
     try:
-        if win.sticky or win.desktop < 0:
-            workspace = "On all workspaces"
-        else:
-            workspace = f"Workspace {win.desktop + 1}"
+        from ulauncher.modes.launcher.windows import window_workspace_label
+
+        workspace = window_workspace_label(win.desktop, win.sticky)
         return {
             "kind": "window",
             "title": win.title or win.wm_class,
@@ -731,6 +738,6 @@ def _default_icon(kind: str) -> str:
         "file": "text-x-generic-symbolic",
         "bookmark": "user-bookmarks-symbolic",
         "app-action": "application-x-executable-symbolic",
-        "workspace": "workspace-switcher-symbolic",
+        "workspace": "view-app-grid-symbolic",
         "window-close": "window-close-symbolic",
     }.get(kind, "application-x-executable-symbolic")

@@ -124,16 +124,24 @@ def add_provider_to_display(provider: Gtk.CssProvider, priority: int = Gtk.STYLE
 
 def clipboard_set_text(text: str) -> None:
     # Gdk.Clipboard.set() is GTK 4.8+. Ubuntu 22.04 ships 4.6, which only has set_content().
+    # Goshos writes calculator/units/color/clock to CLIPBOARD and PRIMARY.
     display = Gdk.Display.get_default()
     if not display:
         return
-    clipboard = display.get_clipboard()
-    data = GLib.Bytes.new((text or "").encode())
-    provider = Gdk.ContentProvider.new_for_bytes("text/plain;charset=utf-8", data)
-    clipboard.set_content(provider)
-    store_async = getattr(clipboard, "store_async", None)
-    if callable(store_async):
-        store_async(0, None, None, None)
+    encoded = (text or "").encode()
+    getters = [display.get_clipboard]
+    primary = getattr(display, "get_primary_clipboard", None)
+    if callable(primary):
+        getters.append(primary)
+    for getter in getters:
+        clipboard = getter()
+        if clipboard is None:
+            continue
+        provider = Gdk.ContentProvider.new_for_bytes("text/plain;charset=utf-8", GLib.Bytes.new(encoded))
+        clipboard.set_content(provider)
+        store_async = getattr(clipboard, "store_async", None)
+        if callable(store_async):
+            store_async(0, None, None, None)
 
 
 def measure_height_for_width(widget: Gtk.Widget, width: int) -> tuple[int, int]:
