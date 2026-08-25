@@ -210,6 +210,41 @@ def test_hidden_search_icon_inset_follows_goshos_order() -> None:
     assert leftover_16 == -1
 
 
+def test_compact_row_padding_comes_after_every_look() -> None:
+    from pathlib import Path
+
+    # goshos: compact .gosh-result is last so it beats theme padding. Omarchy/Anyrun
+    # already reserve the 3px leading edge in their own .item-box blocks.
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    compact = text.rfind(".app.gosh-density-compact .item-box")
+    assert compact != -1
+    for look_id in look_ids():
+        theme_row = text.rfind(f".gosh-theme-{look_id} .item-box")
+        if theme_row == -1:
+            continue
+        assert compact > theme_row, look_id
+    assert "border-left: 3px solid transparent" in text
+    assert "border-left-color: #7aa2f7" in text
+    assert "border-left-color: #89b4fa" in text
+    assert "caret-color: #ff6363" in text
+    assert "caret-color: #60cdff" in text
+    assert "caret-color: #f07746" in text
+    assert "background-color: #000000" in text
+    assert "background-color: #fdf6e3" in text
+    for look_id in (
+        "omarchy",
+        "popos",
+        "ulauncher",
+        "gnome",
+        "raycast",
+        "fuzzel",
+        "anyrun",
+        "powertoys",
+        "synapse",
+    ):
+        assert f".gosh-theme-{look_id} .item-box.selected .item-descr" in text, look_id
+
+
 def test_every_look_panel_fill_is_in_css() -> None:
     from pathlib import Path
 

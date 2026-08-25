@@ -53,7 +53,9 @@ def test_cal_is_not_food_calorie() -> None:
 
 
 def test_goshos_unit_conversion_battery() -> None:
-    from ulauncher.modes.launcher.units import parse_unit_query
+    import math
+
+    from ulauncher.modes.launcher.units import convert_units, parse_unit_query
 
     ten = convert_query("ten km to mi")
     assert ten is not None
@@ -89,3 +91,27 @@ def test_goshos_unit_conversion_battery() -> None:
     assert convert_query("5 km to km") is None
     assert convert_query("1 kg to km") is None
     assert convert_query("1 min to m") is None
+    assert convert_query("32 psi to bar")["title"].split()[1] == "bar"
+    assert convert_query("760 mmhg to atm")["title"].split()[1] == "atm"
+    assert convert_query("10 m/s to kph")["title"].split()[1] == "kph"
+    assert parse_unit_query("1 m² to ft2")["from"] == "m2"
+    assert convert_query("1 m² to ft2") is not None
+    assert convert_query("200 calories to kj")["title"] == "836.8 kj"
+    cal = convert_units(1, "cal", "j")
+    assert cal is not None
+    assert cal["value"] == 4.184
+    hp = convert_units(1, "hp", "w")
+    assert hp is not None
+    assert round(hp["value"]) == 746
+    deg = convert_units(180, "deg", "rad")
+    assert deg is not None
+    assert abs(deg["value"] - math.pi) < 1e-10
+    nmi = convert_units(1, "nmi", "m")
+    assert nmi is not None
+    assert nmi["value"] == 1852
+    stone = convert_units(1, "st", "kg")
+    assert stone is not None
+    assert round(stone["value"] * 1000) / 1000 == 6.35
+    assert parse_unit_query("180° to rad")["from"] == "deg"
+    assert parse_unit_query("180 degrees to rad")["from"] == "degrees"
+    assert parse_unit_query("1 fl oz to ml")["from"] == "floz"

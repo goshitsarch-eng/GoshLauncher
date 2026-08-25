@@ -25,6 +25,12 @@ class TestResultWidget:
         assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 2
         res = Result(description="descr", compact=True)
         assert len(gtk4.list_children(ResultWidget(res, 0, Query("", None), noop, noop).text_container)) == 1
+        # Look density compact shrinks icons/rows. Result.compact is only for headers.
+        chrome = {"show_numbers": False, "show_result_icons": True, "density": "compact", "icon_size": 20}
+        described = Result(description="descr")
+        widget = ResultWidget(described, 0, Query("", None), noop, noop, chrome=chrome)
+        assert described.compact is False
+        assert len(gtk4.list_children(widget.text_container)) == 2
 
     def test_select(self) -> None:
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop)

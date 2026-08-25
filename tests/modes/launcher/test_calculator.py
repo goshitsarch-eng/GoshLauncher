@@ -124,7 +124,34 @@ def test_goshos_implicit_percent_factorial_and_hex() -> None:
     assert evaluate_arithmetic("0b1010", True) == 10
     assert evaluate_arithmetic("e") is None
     assert evaluate_arithmetic("e", True) == pytest.approx(math.e)
+    assert evaluate_arithmetic("e+1") == pytest.approx(math.e + 1)
+    assert evaluate_arithmetic("e+e") == pytest.approx(2 * math.e)
+    assert evaluate_arithmetic("-e") == pytest.approx(-math.e)
     assert evaluate_arithmetic("pi") == pytest.approx(math.pi)
+    assert evaluate_arithmetic("log(100)") == 2
+    assert evaluate_arithmetic("log2(8)") == 3
+    assert evaluate_arithmetic("2log2(8)") == 6
+    assert evaluate_arithmetic("ln(1)") == 0
+    assert evaluate_arithmetic("asin(1)") == 90
+    assert evaluate_arithmetic("acos(0)") == 90
+    assert evaluate_arithmetic("atan(0)") == 0
+    assert evaluate_arithmetic("asin(2)") is None
+    assert evaluate_arithmetic("round(1.5)") == 2
+    assert evaluate_arithmetic("floor(1.9)") == 1
+    assert evaluate_arithmetic("ceil(1.1)") == 2
+    assert evaluate_arithmetic("(-3)!") is None
+    assert evaluate_arithmetic("1e3+2") == 1002
+    assert evaluate_arithmetic("1e-3*1000") == 1
+    assert evaluate_arithmetic("2·3") == 6
+    assert evaluate_arithmetic("2+2\n") == 4
+    assert evaluate_arithmetic("abs(-3)") == 3
+    assert evaluate_arithmetic("sin(90)") == 1
+    assert evaluate_arithmetic("2pi / 2") == pytest.approx(math.pi)
+    assert evaluate_arithmetic("2(3+1)") == 8
+    assert evaluate_arithmetic("2^3*2") == 16
+    assert evaluate_arithmetic("50 %") == 0.5
+    assert evaluate_arithmetic("0xff * 2") == 510
+    assert evaluate_arithmetic("sqrt") is None
     assert format_hex(255) == "0xff"
     assert format_hex(-1) == ""
     assert calculator_description(255) == "0xff · press Enter to copy"
@@ -137,3 +164,4 @@ def test_format_number_is_stable() -> None:
     assert format_number(0.1 + 0.2) == "0.3"
     assert format_number(-0.0) == "0"
     assert format_number(256) == "256"
+    assert format_number(1.2300000000001) == "1.23"

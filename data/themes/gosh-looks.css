@@ -1474,8 +1474,3 @@ window.gosh-popup.background {
 .app.gosh-theme-anyrun.gosh-no-search-icon .input {
   padding-left: 12px;
 }
-
-.gosh-theme-omarchy .item-box,
-.gosh-theme-anyrun .item-box {
-  border-left: 3px solid transparent;
-}
