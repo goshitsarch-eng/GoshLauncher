@@ -211,6 +211,24 @@ def focus_open_windows(app: Any, windows: list[Any] | None = None) -> bool:
     return True
 
 
+def window_app_icon(win: Any, apps: Sequence[Any] | None = None) -> str:
+    """goshos windowSearch._windowIcon via Shell.WindowTracker.get_window_app."""
+    try:
+        scan = apps if apps is not None else iter_apps()
+    except Exception:
+        return "focus-windows-symbolic"
+    for app in scan:
+        try:
+            if not _app_matches_window(app, win):
+                continue
+            icon = str(getattr(app, "icon", "") or "")
+            if icon:
+                return icon
+        except Exception:  # noqa: S112
+            continue
+    return "focus-windows-symbolic"
+
+
 def app_window_count(app: Any, windows: Sequence[Any] | None = None) -> int:
     if windows is None:
         from ulauncher.modes.launcher.windows import list_windows

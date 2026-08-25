@@ -2006,11 +2006,20 @@ def listed_current_desktop(now: float | None = None) -> int | str | None:
     return snap.value
 
 
+def _window_row_icon(win: WindowInfo, apps: Sequence[Any]) -> str:
+    try:
+        from ulauncher.modes.launcher.apps import window_app_icon
+    except Exception:
+        return "focus-windows-symbolic"
+    return window_app_icon(win, apps)
+
+
 def match_windows(
     query: str,
     limit: int = 6,
     windows: list[WindowInfo] | None = None,
     workspace_count: int | None = None,
+    apps: Sequence[Any] | None = None,
 ) -> list[dict]:
     intent, rest = parse_window_intent(query)
     workspace = parse_workspace_query(query)
@@ -2030,6 +2039,19 @@ def match_windows(
                 "id": workspace_result_id(workspace + 1),
             }
     window_rows: list[dict] = []
+    icon_apps = apps
+    if icon_apps is None:
+        # Injected window lists are tests; skip DesktopAppInfo.get_all() there.
+        if windows is None:
+            try:
+                from ulauncher.modes.launcher.apps import iter_apps
+
+                icon_apps = iter_apps()
+            except Exception:
+                logger.debug("Desktop apps unavailable for window icons", exc_info=True)
+                icon_apps = ()
+        else:
+            icon_apps = ()
     for win in windows if windows is not None else cached_windows():
         if not window_is_searchable(win):
             continue
@@ -2044,12 +2066,12 @@ def match_windows(
                 "kind": intent,
                 "title": title,
                 "description": description,
-                "icon": "focus-windows-symbolic",
+                "icon": _window_row_icon(win, icon_apps),
                 "payload": win.wid,
                 "wid": win.wid,
                 "pid": win.pid,
                 "wm_class": win.wm_class,
-                "app_id": win.app_id,
+                "app_id": win.app_id or win.gtk_app_id,
                 "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
                 "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
                 "atspi_ref": getattr(win, "atspi_ref", "") or "",

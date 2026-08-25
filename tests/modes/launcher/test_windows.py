@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import signal
+from types import SimpleNamespace
 
 import pytest
 
@@ -908,6 +909,30 @@ def test_match_windows_close_payload_keeps_real_title() -> None:
     assert rows[0]["window_title"] == "Mozilla Firefox"
     assert rows[0]["atspi_ref"] == "bus\0/w/1"
     assert rows[0]["kind"] == "close"
+
+
+def test_match_windows_uses_desktop_app_icon() -> None:
+    firefox = SimpleNamespace(app_id="firefox.desktop", icon="firefox", _executable="firefox")
+    win = WindowInfo(wid="1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=1)
+    rows = match_windows("firefox", windows=[win], apps=[firefox])
+    assert rows[0]["icon"] == "firefox"
+    assert match_windows("firefox", windows=[win], apps=[])[0]["icon"] == "focus-windows-symbolic"
+
+
+def test_match_windows_payload_uses_gtk_app_id() -> None:
+    rows = match_windows(
+        "settings",
+        windows=[
+            WindowInfo(
+                wid="0x1",
+                title="Settings",
+                wm_class="gnome-control-center",
+                desktop=0,
+                gtk_app_id="org.gnome.Settings",
+            )
+        ],
+    )
+    assert rows[0]["app_id"] == "org.gnome.Settings"
 
 
 def test_match_windows_kill_payload_keeps_overlaid_pid() -> None:

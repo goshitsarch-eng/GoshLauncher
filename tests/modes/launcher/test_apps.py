@@ -23,6 +23,7 @@ from ulauncher.modes.launcher.apps import (
     open_new_window,
     take_app_actions,
     unique_by_base_name,
+    window_app_icon,
 )
 from ulauncher.modes.launcher.windows import WindowInfo
 
@@ -318,6 +319,26 @@ def test_app_row_description_and_window_count() -> None:
     assert app_window_count(app, windows) == 2
     assert app_row_description(1) == "Switch to application"
     assert app_row_description(0) == "Application"
+
+
+def test_window_app_icon_uses_matching_desktop_icon() -> None:
+    firefox = SimpleNamespace(app_id="firefox.desktop", icon="firefox", _executable="firefox")
+    win = WindowInfo(wid="1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=1)
+    other = WindowInfo(wid="2", title="Terminal", wm_class="gnome-terminal.Gnome-terminal", desktop=0, pid=2)
+    assert window_app_icon(win, [firefox]) == "firefox"
+    assert window_app_icon(other, [firefox]) == "focus-windows-symbolic"
+    assert window_app_icon(win, []) == "focus-windows-symbolic"
+
+
+def test_window_app_icon_survives_desktop_list_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    win = WindowInfo(wid="1", title="Mozilla Firefox", wm_class="firefox.Firefox", desktop=0, pid=1)
+
+    def boom() -> list:
+        msg = "desktop list failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("ulauncher.modes.launcher.apps.iter_apps", boom)
+    assert window_app_icon(win) == "focus-windows-symbolic"
 
 
 def test_match_apps_keeps_more_used_variant(monkeypatch: pytest.MonkeyPatch) -> None:

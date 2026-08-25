@@ -156,17 +156,31 @@ class LauncherMode(Mode):
         if need_windows:
             safe_provider_results(_watch_empty_windows)
         app_rows: list[dict[str, Any]] = []
+        app_source: list[Any] = []
         if flags.get("apps"):
-            for app in safe_provider_results(lambda: list(home_apps(limit))):
+            app_source = safe_provider_results(lambda: list(home_apps(limit)))
+            for app in app_source:
                 row = _empty_app_row(app, open_windows)
                 if row is not None:
                     app_rows.append(row)
         win_rows: list[dict[str, Any]] = []
         if flags.get("windows"):
+            icon_apps: Sequence[Any] = app_source
+            scanned_all = False
             for win in open_windows:
                 if not window_is_searchable(win):
                     continue
-                row = _empty_window_row(win)
+                row = _empty_window_row(win, icon_apps)
+                # WindowTracker maps every window; frequent empty-state apps are only a cache.
+                if row is not None and row.get("icon") == "focus-windows-symbolic" and not scanned_all:
+                    from ulauncher.modes.launcher.apps import iter_apps
+
+                    try:
+                        icon_apps = list(iter_apps())
+                    except Exception:
+                        logger.debug("Desktop apps unavailable for empty-state window icons", exc_info=True)
+                    scanned_all = True
+                    row = _empty_window_row(win, icon_apps)
                 if row is not None:
                     win_rows.append(row)
                 if len(win_rows) >= limit:
@@ -503,22 +517,12 @@ class LauncherMode(Mode):
                     row_kind = "window-close"
                 else:
                     row_kind = "window"
-                add(
-                    "windows",
-                    {
-                        "kind": row_kind,
-                        "score": 65,
-                        "title": win["title"],
-                        "description": win.get("description") or "",
-                        "icon": win.get("icon") or "focus-windows-symbolic",
-                        "wid": win.get("wid") or win.get("payload") or "",
-                        "pid": win.get("pid") or 0,
-                        "wm_class": win.get("wm_class") or "",
-                        "window_kind": raw_kind,
-                        "payload": win.get("payload"),
-                        "id": win.get("id"),
-                    },
-                )
+                row = dict(win)
+                row["kind"] = row_kind
+                row["window_kind"] = raw_kind
+                row["score"] = 65
+                row["icon"] = win.get("icon") or "focus-windows-symbolic"
+                add("windows", row)
 
         if "system" in providers:
             from ulauncher.modes.launcher.system_actions import match_system_actions
@@ -685,19 +689,26 @@ def _empty_app_row(app: Any, open_windows: Sequence[Any]) -> dict[str, Any] | No
         return None
 
 
-def _empty_window_row(win: Any) -> dict[str, Any] | None:
+def _empty_window_row(win: Any, apps: Sequence[Any] | None = None) -> dict[str, Any] | None:
     try:
+        from ulauncher.modes.launcher.apps import window_app_icon
         from ulauncher.modes.launcher.windows import window_workspace_label
 
         workspace = window_workspace_label(win.desktop, win.sticky)
+        title = win.title or win.wm_class
         return {
             "kind": "window",
-            "title": win.title or win.wm_class,
+            "title": title,
             "description": workspace,
-            "icon": "focus-windows-symbolic",
+            "icon": window_app_icon(win, apps),
             "wid": win.wid,
             "pid": win.pid,
             "wm_class": win.wm_class,
+            "app_id": getattr(win, "app_id", "") or getattr(win, "gtk_app_id", "") or "",
+            "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
+            "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
+            "atspi_ref": getattr(win, "atspi_ref", "") or "",
+            "window_title": title,
             "window_kind": "focus",
         }
     except Exception:
