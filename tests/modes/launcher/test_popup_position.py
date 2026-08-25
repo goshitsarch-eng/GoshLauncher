@@ -6,6 +6,7 @@ from ulauncher.modes.launcher.popup_position import (
     MIN_RESULTS_HEIGHT,
     desktop_work_area_from_ewmh,
     empty_popup_height,
+    gtk_default_window_size,
     gtk_window_owns_popup_width,
     keyboard_overlap_from_box,
     lift_origin_for_results,
@@ -251,3 +252,10 @@ def test_popup_surface_move_requires_callable_move() -> None:
     assert popup_surface_can_move(None) is False
     popup_surface_move(surface, 24, 48)
     assert surface.pos == (24, 48)
+
+
+def test_gtk_default_window_size_unsets_one_pixel_height() -> None:
+    assert gtk_default_window_size(620, 1) == (620, -1)
+    assert gtk_default_window_size(620, 0) == (620, -1)
+    assert gtk_default_window_size(620, -1) == (620, -1)
+    assert gtk_default_window_size(620, 400) == (620, 400)

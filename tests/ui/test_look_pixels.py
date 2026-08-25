@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,14 @@ from ulauncher.ui.helpers.theme import CSS_RESET, launcher_popup_css
 pytestmark = pytest.mark.skipif(not GTK4_AVAILABLE, reason="GTK 4 is not available")
 
 if GTK4_AVAILABLE:
-    from tests.ui.look_paint import css_parsing_errors, display_available, sample_look
+    from tests.ui.look_paint import (
+        close_popup_window,
+        css_parsing_errors,
+        display_available,
+        open_popup_window,
+        sample_look,
+        sample_popup_look,
+    )
 
 # Spotlight-goshos stylesheet / README panel fills. Spotlight's .app is transparent;
 # the pill (.prompt) is rgb(28, 28, 30) / #1c1c1e.
@@ -96,4 +104,49 @@ def test_look_panel_pixels(look_id: str) -> None:
         selected_expected = _hex_rgb(selected_hex)
         assert _near(sampled["selected"], selected_expected), (
             f"{look_id} selected {sampled['selected']} != {selected_expected}"
+        )
+
+
+@pytest.fixture(scope="module")
+def popup_window() -> Iterator[object]:
+    if not GTK4_AVAILABLE:
+        pytest.skip("GTK 4 is not available")
+    if not display_available():
+        pytest.skip("no Gdk display")
+    try:
+        win = open_popup_window()
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open launcher popup: {exc}")
+    yield win
+    close_popup_window()
+
+
+def test_popup_window_is_gosh_popup_and_snapshots(popup_window: object) -> None:
+    from gi.repository import Gtk
+
+    win = popup_window
+    assert win.has_css_class("gosh-popup")
+    assert "gosh-theme-" in " ".join(win.theme_root.get_css_classes())
+    _width, height = win.get_default_size()
+    assert height != 1
+    assert win.prompt.get_width() > 40
+    assert win.prompt.get_height() > 1
+    rgb = sample_popup_look("omarchy")
+    assert _near(rgb["panel"], _hex_rgb(LOOK_PANEL_HEX["omarchy"])), rgb
+    child = win.prefs_btn.get_child()
+    assert isinstance(child, Gtk.Image)
+    assert child.get_icon_name() == "emblem-system-symbolic"
+
+
+@pytest.mark.parametrize("look_id", look_ids())
+def test_popup_look_panel_pixels(popup_window: object, look_id: str) -> None:
+    assert popup_window.has_css_class("gosh-popup")  # type: ignore[union-attr]
+    sampled = sample_popup_look(look_id)
+    expected = _hex_rgb(LOOK_PANEL_HEX[look_id])
+    assert _near(sampled["panel"], expected), f"{look_id} popup panel {sampled['panel']} != {expected}"
+    selected_hex = LOOK_SELECTED_HEX.get(look_id)
+    if selected_hex:
+        selected_expected = _hex_rgb(selected_hex)
+        assert _near(sampled["selected"], selected_expected), (
+            f"{look_id} popup selected {sampled['selected']} != {selected_expected}"
         )

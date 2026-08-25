@@ -112,6 +112,18 @@ def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
     return pixels[idx], pixels[idx + 1], pixels[idx + 2]
 
 
+def widget_rgb_retry(widget: object, x: int, y: int, tries: int = 24) -> tuple[int, int, int]:
+    last: Exception | None = None
+    for _ in range(tries):
+        try:
+            return widget_rgb(widget, x, y)
+        except RuntimeError as exc:
+            last = exc
+            pump(4)
+    assert last is not None
+    raise last
+
+
 def sample_look(look_id: str) -> dict[str, tuple[int, int, int]]:
     from gi.repository import GLib
 
@@ -161,3 +173,192 @@ def css_parsing_errors(css: str) -> list[str]:
     provider.connect("parsing-error", on_error)
     provider.load_from_data(css.encode())
     return errors
+
+
+_popup: dict[str, object] = {}
+
+
+def _find_css_class(widget: object, class_name: str) -> object | None:
+    from ulauncher.ui import gtk4
+
+    has_class = getattr(widget, "has_css_class", None)
+    if callable(has_class) and has_class(class_name):
+        return widget
+    for child in gtk4.iter_children(widget):
+        found = _find_css_class(child, class_name)
+        if found is not None:
+            return found
+    return None
+
+
+def restyle_popup(win: object, look_id: str) -> None:
+    from ulauncher.modes.launcher.looks import chrome_from_settings
+
+    win.settings.look_id = look_id  # type: ignore[attr-defined]
+    win._chrome = chrome_from_settings(win.settings)  # type: ignore[attr-defined]
+    win._apply_look_classes()  # type: ignore[attr-defined]
+    win._sync_search_entry()  # type: ignore[attr-defined]
+    win.apply_theme()  # type: ignore[attr-defined]
+    win.position_window()  # type: ignore[attr-defined]
+    pump(12)
+
+
+def _fill_selected_result(win: object) -> object:
+    from ulauncher.internals.query import Query
+    from ulauncher.internals.result import Result
+    from ulauncher.internals.results_update import results_update
+
+    win.show_results(  # type: ignore[attr-defined]
+        results_update(
+            [
+                Result(
+                    name="Result",
+                    highlightable=True,
+                    compact=True,
+                    actions={"open": {"name": "Open"}},
+                )
+            ],
+            Query("pixel", None),
+        )
+    )
+    pump(16)
+    widgets = getattr(win.results_view, "_widgets", [])  # type: ignore[attr-defined]
+    if not widgets:
+        msg = "popup window has no result widgets"
+        raise RuntimeError(msg)
+    selected = widgets[0].item_box
+    if selected.get_width() <= 0:
+        selected = _find_css_class(win.theme_root, "selected")  # type: ignore[attr-defined]
+    if selected is None:
+        msg = "popup window has no selected result row"
+        raise RuntimeError(msg)
+    return selected
+
+
+def open_popup_window() -> object:
+    if "win" in _popup:
+        return _popup["win"]
+
+    from contextlib import ExitStack
+    from unittest.mock import patch
+
+    from gi.repository import Adw, Gio, GLib
+
+    from ulauncher.ui.ulauncher_window import UlauncherWindow
+
+    ensure_look_css()
+    Adw.init()
+
+    class LookPixelApp(Adw.Application):
+        query = ""
+
+        def window_ready(self) -> None:
+            return
+
+        def show_preferences(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def query_changed(self, query_str: str) -> None:
+            self.query = (query_str or "").lstrip()
+
+        def request_close(self, _save_query: bool = False) -> None:
+            return
+
+        def close_launcher(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def set_query(self, value: str, update_input: bool = True) -> None:
+            self.query = value
+            if not update_input:
+                return
+
+        def activate_result(self, *_args: object, **_kwargs: object) -> None:
+            return
+
+        def handle_backspace(self, _query_str: str) -> bool:
+            return False
+
+    def _skip_backdrop(_self: object) -> None:
+        return
+
+    def _skip_unredirect(_self: object, _want_held: bool = False) -> None:
+        return
+
+    def _skip_watch(_self: object) -> None:
+        return
+
+    def _skip_grab(_self: object, _grab: bool) -> None:
+        return
+
+    app = LookPixelApp(application_id="io.ulauncher.LookPixelTest", flags=Gio.ApplicationFlags.NON_UNIQUE)
+    app.register()
+    stack = ExitStack()
+    stack.enter_context(patch.object(UlauncherWindow, "_show_backdrop", _skip_backdrop))
+    stack.enter_context(patch.object(UlauncherWindow, "_apply_unredirect", _skip_unredirect))
+    stack.enter_context(patch.object(UlauncherWindow, "_start_live_search", _skip_watch))
+    stack.enter_context(patch.object(UlauncherWindow, "_start_osk_watch", _skip_watch))
+    stack.enter_context(patch.object(UlauncherWindow, "_start_session_watch", _skip_watch))
+    stack.enter_context(patch.object(UlauncherWindow, "_start_limits_timer", _skip_watch))
+    stack.enter_context(patch.object(UlauncherWindow, "toggle_grab_pointer_device", _skip_grab))
+    win = UlauncherWindow(application=app)
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 4_000_000
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        if win.get_opacity() == 1 and win.prompt.get_width() > 40:
+            break
+    if win.get_opacity() != 1 or win.prompt.get_width() <= 40:
+        opacity = win.get_opacity()
+        prompt_size = (win.prompt.get_width(), win.prompt.get_height())
+        win.close()
+        stack.close()
+        pump(8)
+        msg = f"popup window did not style (opacity {opacity}, prompt {prompt_size[0]}x{prompt_size[1]})"
+        raise RuntimeError(msg)
+    _popup["app"] = app
+    _popup["win"] = win
+    _popup["stack"] = stack
+    return win
+
+
+def close_popup_window() -> None:
+    win = _popup.pop("win", None)
+    stack = _popup.pop("stack", None)
+    _popup.pop("app", None)
+    closer = getattr(win, "close", None)
+    if callable(closer):
+        closer()
+    closer = getattr(stack, "close", None)
+    if callable(closer):
+        closer()
+    pump(8)
+
+
+def sample_popup_look(look_id: str) -> dict[str, tuple[int, int, int]]:
+    from gi.repository import GLib
+
+    win = open_popup_window()
+    restyle_popup(win, look_id)
+    selected = _fill_selected_result(win)
+    prompt = win.prompt  # type: ignore[attr-defined]
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 2_000_000
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        if prompt.get_width() > 40 and selected.get_width() > 40 and selected.get_height() > 10:
+            break
+    if prompt.get_width() <= 40 or selected.get_width() <= 40:
+        msg = (
+            f"popup look {look_id} did not allocate "
+            f"(prompt {prompt.get_width()}x{prompt.get_height()}, "
+            f"selected {selected.get_width()}x{selected.get_height()})"
+        )
+        raise RuntimeError(msg)
+    panel = prompt if look_id == "spotlight" else win.theme_root  # type: ignore[attr-defined]
+    # Top-center sits in look padding, past rounded-corner border and the search icon.
+    panel_x = max(int(panel.get_width()) // 2, 8)
+    panel_rgb = widget_rgb_retry(panel, panel_x, 2)
+    selected_x = max(int(selected.get_width()) - 16, 4)
+    selected_y = max(int(selected.get_height()) // 2, 4)
+    selected_rgb = widget_rgb_retry(selected, selected_x, selected_y)
+    return {"panel": panel_rgb, "selected": selected_rgb}

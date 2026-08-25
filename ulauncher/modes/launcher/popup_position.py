@@ -31,6 +31,11 @@ def empty_popup_height(measured: float, fallback: int = 80) -> int:
     return fallback
 
 
+def gtk_default_window_size(width: int, height: int) -> tuple[int, int]:
+    """GTK 4 treats a default height of 1 as a real 1px window and never builds a GSK tree."""
+    return width, height if height > 1 else -1
+
+
 def gtk_window_owns_popup_width(desktop_id: str, is_x11_compatible: bool) -> bool:
     """GNOME Wayland is a fullscreen overlay; the card width is margin insets."""
     return desktop_id != "GNOME" or is_x11_compatible

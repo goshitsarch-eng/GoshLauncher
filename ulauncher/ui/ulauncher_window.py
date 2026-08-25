@@ -17,7 +17,6 @@ from ulauncher.ui import gtk4
 from ulauncher.ui.helpers import layer_shell
 from ulauncher.ui.helpers.monitor import get_monitor, get_monitor_geometries, monitor_work_geometry
 from ulauncher.ui.helpers.theme import launcher_popup_css
-from ulauncher.ui.load_icon_surface import load_icon_paintable
 from ulauncher.ui.results_view import ResultsView
 from ulauncher.utils import scheduling
 from ulauncher.utils.environment import DESKTOP_ID, IS_X11_COMPATIBLE
@@ -55,6 +54,7 @@ def _event_time_us(controller: Any) -> int:
 class UlauncherWindow(Gtk.ApplicationWindow):
     _css_provider: Gtk.CssProvider | None = None
     _css_on_display = False
+    _styled = False
     is_dragging = False
     layer_shell_enabled = False
     settings: Settings
@@ -82,6 +82,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             width_request = layout_size.width
             height_request = layout_size.height
 
+        from ulauncher.modes.launcher.popup_position import gtk_default_window_size
+
         super().__init__(
             decorated=False,
             deletable=False,
@@ -90,8 +92,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             **kwargs,
         )
         gtk4.add_css_class(self, "gosh-popup")
-        self.set_default_size(width_request, height_request if height_request > 0 else 1)
-        self.set_opacity(0)
+        default_w, default_h = gtk_default_window_size(width_request, height_request)
+        self.set_default_size(default_w, default_h)
 
         if not IS_X11_COMPATIBLE and DESKTOP_ID != "GNOME" and self.settings.layer_shell and layer_shell.is_supported():
             self.layer_shell_enabled = layer_shell.enable(self)
@@ -167,6 +169,8 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.connect("map", self.on_initial_draw)
         self.prefs_btn.connect("clicked", lambda *_: self.get_app().show_preferences())
 
+        # Style before the first map so GSK builds a tree (opacity 0 skipped paints).
+        self.apply_styling()
         self._apply_unredirect(True)
         self._show_backdrop()
         self.present()
@@ -176,8 +180,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self.set_input(self.query_str)
 
     def apply_styling(self) -> None:
-        if self.get_opacity() == 1:
+        if self._styled:
             return
+        self._styled = True
 
         self._apply_look_classes()
         self._sync_search_entry()
@@ -185,8 +190,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         gtk4.add_css_class(self.results_view, "result-box")
         gtk4.add_css_class(self.prompt_input, "input")
         gtk4.add_css_class(self.prefs_btn, "prefs-btn")
-        paintable = load_icon_paintable(f"{paths.ASSETS}/icons/gear.svg", 16, self.get_scale_factor())
-        self.prefs_btn.set_child(Gtk.Image.new_from_paintable(paintable))
+        prefs_icon = Gtk.Image.new_from_icon_name("emblem-system-symbolic")
+        prefs_icon.set_pixel_size(16)
+        self.prefs_btn.set_child(prefs_icon)
 
         self.apply_theme()
         self.position_window()
