@@ -63,7 +63,7 @@ def test_reject_async_paint_blocks_in_flight_gio(monkeypatch: pytest.MonkeyPatch
     assert should_run_async_paint(True, mode._accept_paint) is False
     mode._run_repaint()
     assert painted == []
-    assert invalidated == ["path", "command", "bookmarks", "recents", "windows"]
+    assert invalidated == ["path", "command", "bookmarks", "recents"]
     mode.handle_query(Query(None, "2+2"), lambda *_args: None)
     assert mode._accept_paint is True
 

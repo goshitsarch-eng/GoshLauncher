@@ -20,6 +20,9 @@ def test_preferences_view_omits_ulauncher_color_theme_and_window_shadow() -> Non
     assert "Jump keys" not in text
     assert "Number of frequent apps" not in text
     assert "max_recent_apps" not in text
+    assert "Auto-resume" not in text
+    assert "Gosh Is Launcher" in text
+    assert "The primary screen" in text
     about_path = Path(__file__).resolve().parents[2] / "ulauncher" / "ui" / "preferences" / "views" / "about.py"
     assert not about_path.exists()
 

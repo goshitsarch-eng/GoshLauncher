@@ -19,6 +19,16 @@ def time_limits_state(manager: Any) -> int:
     return int(getattr(manager, "state", 0) or 0)
 
 
+def popup_open_entry_text() -> str:
+    """goshos launcherPopup.open always does this._entry.set_text('')."""
+    return ""
+
+
+def should_keep_query_on_close(_save_query: bool = False, _auto_resume: bool = False) -> bool:
+    """Leftover Ulauncher auto_resume. goshos never restores the previous query."""
+    return False
+
+
 def can_open_popup(
     is_open: bool,
     visible: bool,

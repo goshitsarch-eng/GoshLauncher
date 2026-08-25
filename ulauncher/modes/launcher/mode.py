@@ -157,13 +157,14 @@ class LauncherMode(Mode):
         from ulauncher.modes.launcher.commands import invalidate_command_lookup
         from ulauncher.modes.launcher.paths import invalidate_path_lookup
         from ulauncher.modes.launcher.recents import invalidate_recent_files
-        from ulauncher.modes.launcher.windows import invalidate_windows
 
         invalidate_path_lookup()
         invalidate_command_lookup()
         invalidate_bookmarks()
         invalidate_recent_files()
-        invalidate_windows()
+        # goshos close/open does not wipe searchWindows. Keeping the snapshot
+        # lets empty-state paint windows on the first frame instead of waiting
+        # for another compositor round-trip after every dismiss.
 
     def _drop_typed_async_paint(self) -> None:
         """goshos _showEmptyState: bump path/command load ids and drop the pending Gio idle.

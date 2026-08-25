@@ -11,6 +11,7 @@ _settings_file = f"{paths.CONFIG}/settings.json"
 class Settings(JsonConf):
     # Leftover Ulauncher JSON. Goshos navigates with arrows / Ctrl+j k n p, not hjkl.
     arrow_key_aliases: str = ""
+    # Leftover Ulauncher JSON. goshos always clears the entry on open.
     auto_resume: bool = False
     base_width: int = 600
     close_on_focus_out: bool = True
@@ -25,7 +26,8 @@ class Settings(JsonConf):
     # Leftover Ulauncher JSON. Empty-state length uses max_per_category like goshos.
     max_recent_apps: int = 6
     raise_if_started: bool = False
-    render_on_screen: str = "mouse-pointer-monitor"
+    # goshos popupPosition uses the primary work area, not the pointer monitor.
+    render_on_screen: str = "default-monitor"
     show_tray_icon: bool = True
     terminal_command: str = ""
     # Leftover Ulauncher JSON. Popup colors come from look_id / gosh-looks.css, not this.

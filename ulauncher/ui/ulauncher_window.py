@@ -171,9 +171,6 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.present()
         super().set_visible(True)
 
-        if self.query_str:
-            self.set_input(self.query_str)
-
     def apply_styling(self) -> None:
         if self._styled:
             return
@@ -939,7 +936,9 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self._reject_async_paints,
             )
         )
-        if not save_query or not self.settings.auto_resume:
+        from ulauncher.modes.launcher.popup_gate import should_keep_query_on_close
+
+        if not should_keep_query_on_close(save_query, self.settings.auto_resume):
             self.get_app().set_query("", update_input=False)
         if self.settings.grab_mouse_pointer:
             self.toggle_grab_pointer_device(False)

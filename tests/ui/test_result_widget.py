@@ -31,6 +31,12 @@ class TestResultWidget:
         widget = ResultWidget(described, 0, Query("", None), noop, noop, chrome=chrome)
         assert described.compact is False
         assert len(gtk4.list_children(widget.text_container)) == 2
+        from ulauncher.modes.launcher.results import LauncherResult
+
+        launched = LauncherResult(name="Firefox", description="Application", kind="app")
+        compact_row = ResultWidget(launched, 0, Query("", None), noop, noop, chrome=chrome)
+        assert launched.compact is False
+        assert len(gtk4.list_children(compact_row.text_container)) == 2
 
     def test_select(self) -> None:
         result_wgt = ResultWidget(Result(), 0, Query("query", None), noop, noop)

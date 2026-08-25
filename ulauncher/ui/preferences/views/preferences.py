@@ -188,7 +188,7 @@ class PreferencesView:
         page = Adw.PreferencesPage(title="Shortcut", icon_name="preferences-desktop-keyboard-symbolic")
         group = Adw.PreferencesGroup(
             title="Keyboard Shortcut",
-            description="Set the shortcut to open GoshLauncher",
+            description="Set the shortcut to open Gosh Is Launcher",
         )
 
         shortcut_row = plain_action_row("Toggle shortcut", "Click here, then press a key combination")
@@ -440,16 +440,9 @@ class PreferencesView:
             self.settings.grab_mouse_pointer,
             self._on_grab_mouse_toggled,
         )
-        add_switch_row(
-            session,
-            "Auto-resume unfinished sessions",
-            "If you close without running the query, restore it next time.",
-            self.settings.auto_resume,
-            self._on_auto_resume_toggled,
-        )
         screen_items = (
+            {"id": "default-monitor", "label": "The primary screen"},
             {"id": "mouse-pointer-monitor", "label": "The screen with the mouse pointer"},
-            {"id": "default-monitor", "label": "The default screen"},
         )
         self._screen_combo = add_combo_row(
             session,
@@ -664,11 +657,6 @@ class PreferencesView:
         is_enabled = switch.get_active()
         self.settings.save({"show_tray_icon": is_enabled})
         events.emit("app:toggle_tray_icon", is_enabled)
-
-    def _on_auto_resume_toggled(self, switch: Gtk.Switch, _: Any) -> None:
-        if self._updating_chrome:
-            return
-        self.settings.save({"auto_resume": switch.get_active()})
 
     def _on_close_focus_toggled(self, switch: Gtk.Switch, _: Any) -> None:
         if self._updating_chrome:
