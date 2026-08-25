@@ -51,7 +51,8 @@ def drain_x11_live_events(display: Any, interned: Mapping[int, str]) -> bool:
         event = display.next_event()
         if getattr(event, "type", None) != X11_PROPERTY_NOTIFY:
             continue
-        if interned.get(getattr(event, "atom", None)):
+        atom = getattr(event, "atom", None)
+        if isinstance(atom, int) and interned.get(atom):
             changed = True
     return changed
 
@@ -69,9 +70,9 @@ class X11LiveWatch:
         if self._display is not None:
             return True
         try:
-            from Xlib import X
-            from Xlib import display as xdisplay
-            from Xlib import error as xerror
+            from Xlib import X  # pyrefly: ignore[missing-import]
+            from Xlib import display as xdisplay  # pyrefly: ignore[missing-import]
+            from Xlib import error as xerror  # pyrefly: ignore[missing-import]
         except ImportError:
             return False
         x11_errors: tuple[type[BaseException], ...] = (

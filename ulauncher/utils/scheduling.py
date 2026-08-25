@@ -85,7 +85,7 @@ def watch_fd(fd: int, func: Callable[P, Any], *args: P.args, **kwargs: P.kwargs)
     Used by live-search host watches (X11 PropertyNotify, ext-workspace-v1) so
     compositor events do not need a Python thread.
     """
-    condition = GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR
+    condition = GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR
     return Context(GLib.unix_fd_source_new(fd, condition), func, True, args, kwargs)
 
 
