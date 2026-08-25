@@ -491,9 +491,7 @@ def test_match_windows_reads_cached_snapshot() -> None:
 
     invalidate_windows()
     try:
-        store_window_snapshot(
-            [WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox", desktop=0, pid=11)]
-        )
+        store_window_snapshot([WindowInfo(wid="0x1", title="Mozilla Firefox", wm_class="firefox", desktop=0, pid=11)])
         rows = match_windows("fire", 6)
         assert rows[0]["title"] == "Mozilla Firefox"
         assert rows[0]["wid"] == "0x1"
@@ -524,7 +522,7 @@ def test_ensure_windows_skips_on_ready_when_cache_is_fresh(monkeypatch: pytest.M
 
     invalidate_windows()
     idle: list[object] = []
-    monkeypatch.setattr("ulauncher.utils.scheduling.run_when_idle", lambda fn: idle.append(fn))
+    monkeypatch.setattr("ulauncher.utils.scheduling.run_when_idle", idle.append)
     try:
         store_window_snapshot([WindowInfo(wid="0x1", title="Term", wm_class="foot", desktop=0)])
         assert windows_cache_is_fresh()

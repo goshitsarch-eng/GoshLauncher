@@ -11,11 +11,12 @@ def test_prefs_view_reload_stops_when_toplevel_is_gone() -> None:
 
 
 def test_prefs_view_reload_stops_when_destroyed() -> None:
+    native = object()
     toplevel = SimpleNamespace(in_destruction=lambda: True)
-    widget = SimpleNamespace(in_destruction=lambda: False, get_mapped=lambda: True, get_native=lambda: object())
+    widget = SimpleNamespace(in_destruction=lambda: False, get_mapped=lambda: True, get_native=lambda: native)
     assert prefs_view_reload_action(toplevel, widget) == "stop"
     live = SimpleNamespace(in_destruction=lambda: False)
-    dying = SimpleNamespace(in_destruction=lambda: True, get_mapped=lambda: True, get_native=lambda: object())
+    dying = SimpleNamespace(in_destruction=lambda: True, get_mapped=lambda: True, get_native=lambda: native)
     assert prefs_view_reload_action(live, dying) == "stop"
 
 
@@ -26,8 +27,9 @@ def test_prefs_view_reload_skips_unrealized_unmapped_widget() -> None:
 
 
 def test_prefs_view_reload_keeps_hidden_mapped_or_realized_pages() -> None:
+    native = object()
     toplevel = SimpleNamespace(in_destruction=lambda: False)
-    hidden = SimpleNamespace(in_destruction=lambda: False, get_mapped=lambda: False, get_native=lambda: object())
+    hidden = SimpleNamespace(in_destruction=lambda: False, get_mapped=lambda: False, get_native=lambda: native)
     mapped = SimpleNamespace(in_destruction=lambda: False, get_mapped=lambda: True, get_native=lambda: None)
     assert prefs_view_reload_action(toplevel, hidden) == "reload"
     assert prefs_view_reload_action(toplevel, mapped) == "reload"
