@@ -196,9 +196,7 @@ def match_settings_panels(
     # goshos matchSettingsPanels: omitted isAvailable lists the whole catalog,
     # including wellbeing. Live search passes settings_panel_available.
     catalog = (
-        SETTINGS_PANELS
-        if is_available is None
-        else [panel for panel in SETTINGS_PANELS if is_available(panel["id"])]
+        SETTINGS_PANELS if is_available is None else [panel for panel in SETTINGS_PANELS if is_available(panel["id"])]
     )
     lower = query.lower()
     normalized = lower.replace("-", "").replace("_", "").replace(" ", "")

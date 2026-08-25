@@ -264,7 +264,7 @@ def windows_from_introspect_payload(payload: Any) -> list[WindowInfo]:
         if props.get("is-hidden") or props.get("hidden"):
             continue
         skip_taskbar = bool(props.get("is-skip-taskbar") or props.get("skip-taskbar"))
-        has_workspace = props["workspace"] if "workspace" in props else True
+        has_workspace = props.get("workspace", True)
         if not should_list_window(has_workspace, skip_taskbar, _introspect_window_type(props)):
             continue
         title = str(props.get("title") or "")
