@@ -155,6 +155,21 @@ class TestCLIHelp:
         assert "\nApp commands:\n  start" in help_text
         assert "\nExtension commands:\n  extensions (e)" in help_text
         assert f"start {start_summary}" in " ".join(help_text.split())
+        assert "file browser" not in help_text
+        assert "custom themes" not in help_text
+        assert "Ctrl+Space" in help_text
+        assert "Spotlight-goshos" in help_text
+
+    def test_man_page_describes_goshos_launcher(self) -> None:
+        from pathlib import Path
+
+        text = Path(__file__).resolve().parents[1] / "ulauncher.1"
+        man = text.read_text()
+        assert "file browser" not in man
+        assert "custom themes" not in man
+        assert "Ctrl+Space" in man
+        assert "Spotlight-goshos" in man
+        assert "Seventeen looks" in man
 
     def test_subcommand_help_does_not_repeat_top_level_command_groups(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:

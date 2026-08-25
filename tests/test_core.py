@@ -104,7 +104,7 @@ def test_launcher_paint_merges_shortcut_triggers_not_apps(mocker: MockerFixture)
     assert core._mode_map[trigger] is shortcut_mode
 
 
-def test_launcher_paint_adds_fallbacks_only_without_local_hits(mocker: MockerFixture) -> None:
+def test_launcher_paint_does_not_add_default_search_fallbacks_next_to_web(mocker: MockerFixture) -> None:
     fallback = ShortcutResult(name="GoogleFallback", is_default_search=True, cmd="https://example/%s")
 
     class ShortcutMode:
@@ -127,11 +127,21 @@ def test_launcher_paint_adds_fallbacks_only_without_local_hits(mocker: MockerFix
             final=True,
         )
     )
-    assert fallback in outer.call_args.args[0]["results"]
-    assert core._mode_map[fallback] is shortcut_mode
+    assert fallback not in outer.call_args.args[0]["results"]
 
     emit(effects.render_results([LauncherResult(name="Firefox", kind="app")], final=True))
     assert fallback not in outer.call_args.args[0]["results"]
+
+
+def test_set_query_does_not_treat_g_as_a_keyword_without_shortcuts(mocker: MockerFixture) -> None:
+    core = UlauncherCore()
+    launcher = LauncherMode()
+    mocker.patch("ulauncher.core.get_modes", return_value=[launcher])
+    mocker.patch.object(launcher, "handle_query")
+    core.set_query("g firefox", MagicMock())
+    assert isinstance(core._mode, LauncherMode)
+    assert core.query.keyword is None
+    assert str(core.query) == "g firefox"
 
 
 def test_launcher_paint_skips_legacy_merge_for_keyword_queries(mocker: MockerFixture) -> None:

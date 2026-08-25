@@ -319,7 +319,7 @@ manpage:
 		echo -e "${BOLD}${RED}You need help2man to (re)generate the manpage${RESET}"
 		exit 1
 	fi
-	help2man --section=1 --name="Feature rich application Launcher for Linux" --no-info ./bin/ulauncher > ulauncher.1
+	help2man --section=1 --name="GTK 4 Adwaita launcher matching Spotlight-goshos" --no-info ./bin/ulauncher > ulauncher.1
 	# help2man renders any heading with a trailing colon as .SS (indented subsection).
 	# Convert those to .SH with uppercased names, which is the man page section convention.
 	sed -i 's/^\.SS "\(.*\):"$$/.SH \U\1/' ulauncher.1

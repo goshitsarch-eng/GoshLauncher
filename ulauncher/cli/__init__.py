@@ -42,8 +42,11 @@ class CLICommand(BaseDataClass):
 
 
 CLI_DESCRIPTION = (
-    "Ulauncher is a GTK application launcher with support for extensions, "
-    "shortcuts (scripts), calculator, file browser and custom themes."
+    "GoshLauncher is a GTK 4 + libadwaita launcher. Open with Ctrl+Space. "
+    "Search follows Spotlight-goshos (URLs, paths, folders, bookmarks, apps, calculator, "
+    "units, color, clock, windows, system actions, GNOME Settings, recent files, then web). "
+    "Seventeen looks with chrome. Prefixes: = calc, @ web, # settings, $ windows, . recents, "
+    "! command (off by default)."
 )
 
 

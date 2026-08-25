@@ -77,3 +77,9 @@ def test_launcher_popup_css_does_not_layer_ulauncher_color_themes() -> None:
     assert ".gosh-theme-spotlight" in css
     assert "@define-color bg_color" not in css
     assert ".prefs-btn" in css
+
+
+def test_packaged_themes_are_gosh_looks_only() -> None:
+    themes = Path(__file__).resolve().parents[2] / "data" / "themes"
+    names = sorted(path.name for path in themes.iterdir() if path.suffix == ".css")
+    assert names == ["gosh-looks.css"]

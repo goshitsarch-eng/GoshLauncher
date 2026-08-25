@@ -21,8 +21,8 @@ def run(_: CLIArguments) -> int:
     from ulauncher.utils.v5_killer import kill_ulauncher_v5
 
     gtk_version = UlauncherApp.get_gtk_version()
-    if gtk_version < (3, 22, 0):
-        print("Ulauncher requires GTK+ version 3.22 or newer. Please upgrade your GTK version.")  # noqa: T201
+    if gtk_version < (4, 6, 0):
+        print("GoshLauncher requires GTK 4.6 and libadwaita 1.1 or newer.")  # noqa: T201
         return 1
 
     logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def run(_: CLIArguments) -> int:
 
     logger.info("Ulauncher version %s", version)
     logger.info("Extension API version %s", api_version)
-    logger.info("GTK+ %s.%s.%s", *gtk_version)
+    logger.info("GTK %s.%s.%s", *gtk_version)
     logger.info("PyGObject+ %i.%i.%i", *UlauncherApp.get_pygobject_version())
 
     if XDG_SESSION_TYPE != "X11":

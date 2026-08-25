@@ -1,40 +1,18 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
-from time import time
 from typing import Any
 
 from ulauncher import paths
 from ulauncher.data import BaseDataClass, JsonKeyValueConf
 from ulauncher.utils.fold_user_path import fold_user_path
 
-INITIAL_SHORTCUTS: list[dict[str, Any]] = [
-    {
-        "id": "googlesearch",
-        "keyword": "g",
-        "name": "Google Search",
-        "cmd": "https://google.com/search?q=%s",
-        "icon": f"{paths.ASSETS}/icons/google-search.png",
-        "is_default_search": True,
-    },
-    {
-        "id": "stackoverflow",
-        "keyword": "so",
-        "name": "Stack Overflow",
-        "cmd": "https://stackoverflow.com/search?q=%s",
-        "icon": f"{paths.ASSETS}/icons/stackoverflow.svg",
-        "is_default_search": True,
-    },
-    {
-        "id": "wikipedia",
-        "keyword": "wiki",
-        "name": "Wikipedia",
-        "cmd": "https://en.wikipedia.org/wiki/%s",
-        "icon": f"{paths.ASSETS}/icons/wikipedia.png",
-        "is_default_search": True,
-    },
-]
+# First-run used to seed these. They steal `g query` from Spotlight-goshos (web last unless @).
+_STOCK_WEB_SHORTCUT_CMDS = {
+    "googlesearch": "https://google.com/search?q=%s",
+    "stackoverflow": "https://stackoverflow.com/search?q=%s",
+    "wikipedia": "https://en.wikipedia.org/wiki/%s",
+}
 
 
 class Shortcut(BaseDataClass):
@@ -59,14 +37,18 @@ class Shortcut(BaseDataClass):
         super().__setitem__(key, value)
 
 
+def is_stock_web_shortcut(shortcut_id: str, cmd: str) -> bool:
+    return _STOCK_WEB_SHORTCUT_CMDS.get(shortcut_id) == cmd
+
+
 class Shortcuts(JsonKeyValueConf[str, Shortcut]):
     @classmethod
     def load(cls) -> Shortcuts:  # type: ignore[override]
         file_path = f"{paths.CONFIG}/shortcuts.json"
         instance = super().load(file_path)
-        if not Path(file_path).exists():
-            added = int(time())
-            keywords = [Shortcut(**kw, added=added) for kw in INITIAL_SHORTCUTS]
-            instance.save({keyword.id: keyword for keyword in keywords})
-
+        dropped = [key for key, shortcut in instance.items() if is_stock_web_shortcut(key, shortcut.cmd)]
+        if dropped:
+            for key in dropped:
+                del instance[key]
+            instance.save()
         return instance

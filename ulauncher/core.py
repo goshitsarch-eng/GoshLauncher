@@ -186,25 +186,14 @@ class UlauncherCore:
         hits.sort(key=lambda item: item.search_score(query_str), reverse=True)
         return hits[:limit]
 
-    def _legacy_fallback_results(self) -> list[Result]:
-        results: list[Result] = []
-        query_str = str(self.query)
-        for mode in get_modes():
-            if not is_legacy_trigger_mode(mode):
-                continue
-            for fallback_result in mode.get_fallback_results(query_str):
-                results.append(fallback_result)
-                self._mode_map[fallback_result] = mode
-        return results
-
     def _should_merge_legacy(self, valid_mode: Mode | None) -> bool:
         return valid_mode is not None and type(valid_mode).__name__ == "LauncherMode" and self.query.keyword is None
 
     def _merge_legacy_into_launcher(self, results: list[Result]) -> list[Result]:
+        # Keyword shortcuts can still appear beside goshos rows. Default-search
+        # fallbacks must not: web last unless @ is already a LauncherMode result.
         merged = list(results)
         merged.extend(self.search_legacy_triggers())
-        if not launcher_has_local_hits(results):
-            merged.extend(self._legacy_fallback_results())
         return merged
 
     def get_home_results(self) -> Iterable[Result]:
