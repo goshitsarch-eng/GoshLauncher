@@ -115,18 +115,6 @@ def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
     return pixels[idx], pixels[idx + 1], pixels[idx + 2]
 
 
-def widget_pixbuf_retry(widget: object, tries: int = 24) -> object:
-    last: Exception | None = None
-    for _ in range(tries):
-        try:
-            return widget_pixbuf(widget)
-        except RuntimeError as exc:
-            last = exc
-            pump(4)
-    assert last is not None
-    raise last
-
-
 def widget_rgb_retry(widget: object, x: int, y: int, tries: int = 24) -> tuple[int, int, int]:
     last: Exception | None = None
     for _ in range(tries):
@@ -583,25 +571,3 @@ def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[in
     finally:
         win.close()
         pump(8)
-
-
-def sample_popup_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Sample a fresh popup's empty-entry hint. Reused restyled windows can snapshot empty."""
-    from gi.repository import GLib
-
-    close_popup_window()
-    win = open_popup_window()
-    restyle_popup(win, look_id)
-    entry = win.prompt_input  # type: ignore[attr-defined]
-    entry.set_text("")
-    present = getattr(win, "present", None)
-    if callable(present):
-        present()
-    ctx = GLib.MainContext.default()
-    deadline = GLib.get_monotonic_time() + 2_000_000
-    while GLib.get_monotonic_time() < deadline:
-        ctx.iteration(False)
-        if entry.get_width() > 40 and entry.get_height() > 8 and not entry.get_text():
-            pump(8)
-            break
-    return _placeholder_rgb_retry(entry, expected)

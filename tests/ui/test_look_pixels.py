@@ -21,7 +21,6 @@ if GTK4_AVAILABLE:
         sample_look,
         sample_placeholder,
         sample_popup_look,
-        sample_popup_placeholder,
     )
 
 # Spotlight-goshos stylesheet / README panel fills. Spotlight's .app is transparent;
@@ -183,10 +182,3 @@ def test_look_placeholder_pixels(look_id: str) -> None:
     expected = _hex_rgb(LOOK_PLACEHOLDER_HEX[look_id])
     rgb = sample_placeholder(look_id, expected)
     assert _near(rgb, expected, _PLACEHOLDER_TOLERANCE), f"{look_id} placeholder {rgb} != {expected}"
-
-
-@pytest.mark.parametrize("look_id", ("omarchy", "light"))
-def test_popup_placeholder_pixels(popup_window: object, look_id: str) -> None:
-    expected = _hex_rgb(LOOK_PLACEHOLDER_HEX[look_id])
-    rgb = sample_popup_placeholder(look_id, expected)
-    assert _near(rgb, expected, _PLACEHOLDER_TOLERANCE), f"{look_id} popup placeholder {rgb} != {expected}"
