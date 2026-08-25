@@ -2053,6 +2053,7 @@ def match_windows(
                 "gtk_unique_bus_name": getattr(win, "gtk_unique_bus_name", "") or "",
                 "gtk_application_object_path": getattr(win, "gtk_application_object_path", "") or "",
                 "atspi_ref": getattr(win, "atspi_ref", "") or "",
+                "window_title": name,
                 "id": window_result_id(win.wid, title, win.wm_class, description),
             }
         )
@@ -2066,7 +2067,20 @@ def _grab_atspi_window(payload: Mapping[str, Any]) -> bool:
         return False
     return grab_atspi_focus(
         str(payload.get("atspi_ref") or ""),
-        str(payload.get("title") or ""),
+        str(payload.get("window_title") or payload.get("title") or ""),
+        str(payload.get("app_id") or payload.get("wm_class") or ""),
+    )
+
+
+def _close_atspi_window(payload: Mapping[str, Any]) -> bool:
+    try:
+        from ulauncher.modes.launcher.atspi_windows import atspi_close
+    except Exception:
+        return False
+    # Result title is "Close Firefox"; the real surface name is window_title.
+    return atspi_close(
+        str(payload.get("atspi_ref") or ""),
+        str(payload.get("window_title") or ""),
         str(payload.get("app_id") or payload.get("wm_class") or ""),
     )
 
@@ -2203,6 +2217,8 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
         closed = compositor_can_close or session_has_x11_window_control()
         if not closed:
             closed = gtk_muxer_close(payload, kind)
+        if not closed:
+            closed = _close_atspi_window(payload)
         if pid and not closed:
             _signal_pid(pid, signal.SIGTERM)
         return

@@ -41,4 +41,5 @@ def _no_host_live_watches(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("ulauncher.modes.launcher.atspi_windows.AtspiLiveWatch", _NoHostWatch)
     monkeypatch.setattr("ulauncher.modes.launcher.atspi_windows.list_atspi_windows", lambda *_args, **_kwargs: [])
     monkeypatch.setattr("ulauncher.modes.launcher.atspi_windows.grab_atspi_focus", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr("ulauncher.modes.launcher.atspi_windows.atspi_close", lambda *_args, **_kwargs: False)
     monkeypatch.setattr("ulauncher.modes.launcher.atspi_windows.atspi_focus_ranks", lambda *_args, **_kwargs: {})

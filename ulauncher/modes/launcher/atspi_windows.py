@@ -1,9 +1,10 @@
-"""AT-SPI stand-in for Mutter get_tab_list recency and per-window focus.
+"""AT-SPI stand-in for Mutter get_tab_list recency, raise, and win.delete.
 
 ext-foreign-toplevel-list has no activate/close, and Introspect GetWindows is
 allowlisted to portal backends. When the session a11y bus is already enabled,
-Window:Activate is the public focus order and Component.GrabFocus is the
-per-window raise. This module never writes org.a11y.Status.IsEnabled.
+Window:Activate is the public focus order, Component.GrabFocus is the
+per-window raise, and Action.DoAction("close") is win.delete for non-GTK
+surfaces. This module never writes org.a11y.Status.IsEnabled.
 """
 
 from __future__ import annotations
@@ -35,9 +36,32 @@ ATSPI_SKIP_ROLES = frozenset(
 ATSPI_ROOT_NAME = "org.a11y.atspi.Registry"
 ATSPI_ROOT_PATH = "/org/a11y/atspi/accessible/root"
 ATSPI_ACCESSIBLE = "org.a11y.atspi.Accessible"
+ATSPI_ACTION = "org.a11y.atspi.Action"
 ATSPI_COMPONENT = "org.a11y.atspi.Component"
 ATSPI_WINDOW_EVENT = "org.a11y.atspi.Event.Window"
+ATSPI_CLOSE_ACTION_NAMES = frozenset({"close", "gtk-close", "win.close"})
+ATSPI_BUTTON_ROLES = frozenset({"push button", "button"})
+ATSPI_WALK_ROLES = frozenset(
+    {
+        "frame",
+        "window",
+        "dialog",
+        "alert",
+        "file chooser",
+        "filler",
+        "panel",
+        "layered pane",
+        "title bar",
+        "tool bar",
+        "toolbar",
+        "root pane",
+        "glass pane",
+        "internal frame",
+    }
+)
 _FOCUS_HISTORY_MAX = 32
+_CLOSE_WALK_MAX = 8
+_CLOSE_WALK_DEPTH = 2
 
 _FOCUS_HISTORY: list[str] = []
 
@@ -107,6 +131,30 @@ def windows_from_atspi_nodes(nodes: Any) -> list[WindowInfo]:
     return windows
 
 
+def close_action_index(names: Sequence[str]) -> int | None:
+    for index, name in enumerate(names):
+        if str(name or "").strip().lower() in ATSPI_CLOSE_ACTION_NAMES:
+            return index
+    return None
+
+
+def is_atspi_close_button(role_name: str, accessible_name: str) -> bool:
+    role = str(role_name or "").strip().lower()
+    if role not in ATSPI_BUTTON_ROLES:
+        return False
+    label = str(accessible_name or "").strip().lower()
+    return label in ATSPI_CLOSE_ACTION_NAMES or label.startswith("close")
+
+
+def pick_close_action(role_name: str, accessible_name: str, actions: Sequence[str]) -> int | None:
+    index = close_action_index(actions)
+    if index is not None:
+        return index
+    if is_atspi_close_button(role_name, accessible_name) and actions:
+        return 0
+    return None
+
+
 def grab_atspi_focus(
     ref: str,
     title: str = "",
@@ -124,6 +172,25 @@ def grab_atspi_focus(
     if not target:
         return False
     return bool(grab_fn(target))
+
+
+def atspi_close(
+    ref: str,
+    title: str = "",
+    app_id: str = "",
+    *,
+    close_ref: Callable[[str], bool] | None = None,
+    find_ref: Callable[[str, str], str] | None = None,
+) -> bool:
+    """Ask one window to close. goshos win.delete; ext-foreign has no request."""
+    close_fn = close_ref or _close_ref
+    target = str(ref or "")
+    if not target and (title or app_id):
+        finder = find_ref or _find_ref_for_title
+        target = finder(title, app_id)
+    if not target:
+        return False
+    return bool(close_fn(target))
 
 
 def list_atspi_windows(probe: Callable[[], list[WindowInfo]] | None = None) -> list[WindowInfo]:
@@ -338,6 +405,129 @@ def _grab_ref(ref: str) -> bool:
     except Exception:
         logger.debug("AT-SPI GrabFocus failed", exc_info=True)
         return False
+
+
+def _close_ref(ref: str) -> bool:
+    parts = split_atspi_ref(ref)
+    if parts is None:
+        return False
+    bus_name, object_path = parts
+    conn = _a11y_connection()
+    if conn is None:
+        return False
+    return _close_accessible(conn, bus_name, object_path, 0, set(), [_CLOSE_WALK_MAX])
+
+
+def _should_walk_atspi_role(role_name: str, *, root: bool = False) -> bool:
+    if root:
+        return True
+    return str(role_name or "").strip().lower() in ATSPI_WALK_ROLES
+
+
+def _accessible_role(conn: Any, dest: str, path: str) -> str:
+    try:
+        return str(_dbus_call(conn, dest, path, ATSPI_ACCESSIBLE, "GetRoleName", "(s)") or "")
+    except Exception:
+        return ""
+
+
+def _action_names(conn: Any, dest: str, path: str) -> list[str]:
+    from ulauncher.gi import GLib
+
+    try:
+        rows = _dbus_call(conn, dest, path, ATSPI_ACTION, "GetActions", "(a(sss))")
+        if isinstance(rows, (list, tuple)):
+            return [str(row[0]) for row in rows if isinstance(row, (list, tuple)) and row]
+    except Exception:
+        logger.debug("AT-SPI GetActions failed", exc_info=True)
+    try:
+        count = int(
+            _dbus_call(
+                conn,
+                dest,
+                path,
+                "org.freedesktop.DBus.Properties",
+                "Get",
+                "(v)",
+                GLib.Variant("(ss)", (ATSPI_ACTION, "NActions")),
+            )
+            or 0
+        )
+    except Exception:
+        return []
+    names: list[str] = []
+    for index in range(min(max(count, 0), 16)):
+        try:
+            names.append(
+                str(
+                    _dbus_call(
+                        conn,
+                        dest,
+                        path,
+                        ATSPI_ACTION,
+                        "GetName",
+                        "(s)",
+                        GLib.Variant("(i)", (index,)),
+                    )
+                    or ""
+                )
+            )
+        except Exception:
+            names.append("")
+    return names
+
+
+def _do_action(conn: Any, dest: str, path: str, index: int) -> bool:
+    try:
+        from ulauncher.gi import GLib
+
+        result = _dbus_call(
+            conn,
+            dest,
+            path,
+            ATSPI_ACTION,
+            "DoAction",
+            "(b)",
+            GLib.Variant("(i)", (index,)),
+        )
+    except Exception:
+        logger.debug("AT-SPI DoAction failed", exc_info=True)
+        return False
+    return bool(result) if result is not None else True
+
+
+def _close_accessible(
+    conn: Any,
+    dest: str,
+    path: str,
+    depth: int,
+    seen: set[tuple[str, str]],
+    budget: list[int],
+) -> bool:
+    key = (dest, path)
+    if key in seen or depth > _CLOSE_WALK_DEPTH or budget[0] <= 0:
+        return False
+    seen.add(key)
+    budget[0] -= 1
+    names = _action_names(conn, dest, path)
+    role = _accessible_role(conn, dest, path)
+    index = pick_close_action(role, _accessible_name(conn, dest, path), names)
+    if index is not None:
+        return _do_action(conn, dest, path, index)
+    if depth >= _CLOSE_WALK_DEPTH or not _should_walk_atspi_role(role, root=depth == 0):
+        return False
+    try:
+        children = _dbus_call(conn, dest, path, ATSPI_ACCESSIBLE, "GetChildren", "(a(so))")
+    except Exception:
+        return False
+    if not isinstance(children, (list, tuple)):
+        return False
+    for item in children[:12]:
+        if not isinstance(item, tuple) or len(item) < 2:
+            continue
+        if _close_accessible(conn, str(item[0] or dest), str(item[1]), depth + 1, seen, budget):
+            return True
+    return False
 
 
 def _find_ref_for_title(title: str, app_id: str) -> str:

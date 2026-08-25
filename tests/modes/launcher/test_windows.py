@@ -822,11 +822,61 @@ def test_gtk_muxer_close_is_win_delete_for_unique_apps() -> None:
     assert calls[0] == ("org.gnome.Console", "/org/gnome/Console", "quit")
 
 
+def test_close_uses_atspi_action_when_gtk_muxer_misses(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._close_window", lambda wid: calls.append(("wm", wid)))
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.gtk_muxer_close", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._close_atspi_window",
+        lambda payload: calls.append(("atspi", payload.get("atspi_ref"), payload.get("window_title"))) or True,
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._signal_pid",
+        lambda pid, sig: calls.append(("sig", pid, sig)),
+    )
+    activate_window(
+        {
+            "kind": "close",
+            "wid": "ext:abc",
+            "pid": 9,
+            "app_id": "firefox",
+            "atspi_ref": ":1.2\0/w/1",
+            "window_title": "Mozilla Firefox",
+        }
+    )
+    assert calls == [("wm", "ext:abc"), ("atspi", ":1.2\0/w/1", "Mozilla Firefox")]
+
+
+def test_match_windows_close_payload_keeps_real_title() -> None:
+    rows = match_windows(
+        "close firefox",
+        windows=[
+            WindowInfo(
+                wid="ext:abc",
+                title="Mozilla Firefox",
+                wm_class="firefox",
+                desktop=0,
+                app_id="firefox",
+                atspi_ref="bus\0/w/1",
+            )
+        ],
+    )
+    assert rows[0]["title"] == "Close Mozilla Firefox"
+    assert rows[0]["window_title"] == "Mozilla Firefox"
+    assert rows[0]["atspi_ref"] == "bus\0/w/1"
+    assert rows[0]["kind"] == "close"
+
+
 def test_close_prefers_gtk_actions_before_sigterm(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[object, ...]] = []
     monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
     monkeypatch.setattr("ulauncher.modes.launcher.windows._close_window", lambda wid: calls.append(("wm", wid)))
     monkeypatch.setattr("ulauncher.modes.launcher.windows.gtk_muxer_close", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._close_atspi_window",
+        lambda _payload: calls.append(("atspi",)) or True,
+    )
     monkeypatch.setattr(
         "ulauncher.modes.launcher.windows._signal_pid",
         lambda pid, sig: calls.append(("sig", pid, sig)),

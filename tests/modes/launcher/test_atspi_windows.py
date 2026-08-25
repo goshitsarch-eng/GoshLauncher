@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from ulauncher.modes.launcher.atspi_windows import (
     AtspiLiveWatch,
+    atspi_close,
     atspi_focus_ranks,
     atspi_ref,
     atspi_role_is_listed,
     atspi_role_is_skip_taskbar,
     atspi_window_type,
+    close_action_index,
     grab_atspi_focus,
+    is_atspi_close_button,
     note_atspi_focus,
+    pick_close_action,
     reset_atspi_focus_history,
     split_atspi_ref,
     windows_from_atspi_nodes,
@@ -78,6 +82,53 @@ def test_grab_atspi_focus_prefers_ref_then_title() -> None:
     assert grab_atspi_focus("", "Firefox", "firefox", grab=grab, find_ref=lambda title, app: f"{title}:{app}") is True
     assert grabbed == ["Firefox:firefox"]
     assert grab_atspi_focus("", grab=grab, find_ref=lambda *_args: "") is False
+
+
+def test_atspi_close_prefers_ref_then_title() -> None:
+    closed: list[str] = []
+
+    def close_ref(ref: str) -> bool:
+        closed.append(ref)
+        return True
+
+    assert close_action_index(("activate", "close")) == 1
+    assert close_action_index(("gtk-close",)) == 0
+    assert close_action_index(("activate",)) is None
+    assert is_atspi_close_button("push button", "Close") is True
+    assert is_atspi_close_button("push button", "OK") is False
+    assert is_atspi_close_button("frame", "Close") is False
+    assert pick_close_action("frame", "Firefox", ("activate", "close")) == 1
+    assert pick_close_action("push button", "Close window", ("click",)) == 0
+    assert pick_close_action("frame", "Firefox", ("activate",)) is None
+    assert atspi_close(atspi_ref(":1.2", "/w/1"), close_ref=close_ref, find_ref=lambda *_args: "") is True
+    assert closed == [atspi_ref(":1.2", "/w/1")]
+    closed.clear()
+    found = atspi_close(
+        "",
+        "Mozilla Firefox",
+        "firefox",
+        close_ref=close_ref,
+        find_ref=lambda title, app: f"{title}:{app}",
+    )
+    assert found is True
+    assert closed == ["Mozilla Firefox:firefox"]
+    assert atspi_close("", close_ref=close_ref, find_ref=lambda *_args: "") is False
+
+
+def test_overlay_copies_atspi_ref_onto_ext_foreign() -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo, overlay_window_info
+
+    ext = WindowInfo(wid="ext:ident", title="Mozilla Firefox", wm_class="firefox", desktop=0, app_id="firefox")
+    a11y = WindowInfo(
+        wid="atspi:/w/1",
+        title="Mozilla Firefox",
+        wm_class="firefox",
+        desktop=0,
+        app_id="firefox",
+        atspi_ref=atspi_ref(":1.2", "/w/1"),
+    )
+    assert overlay_window_info(ext, a11y).atspi_ref == atspi_ref(":1.2", "/w/1")
+    assert overlay_window_info(ext, a11y).wid == "ext:ident"
 
 
 def test_atspi_live_watch_records_activate_and_notifies() -> None:
