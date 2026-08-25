@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import struct
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ulauncher.modes.launcher.wayland_toplevels import (
@@ -83,7 +83,7 @@ def collect_ext_workspace_handles(
     return [handles[item_id] for item_id in order]
 
 
-def pick_ext_workspace(items: list[Mapping[str, Any]], index: int) -> dict[str, Any] | None:
+def pick_ext_workspace(items: Sequence[Mapping[str, Any]], index: int) -> dict[str, Any] | None:
     """Match goshos get_workspace_by_index: 1D coords, then name, then creation order."""
     live = [dict(item) for item in items if not item.get("removed")]
     number = index + 1
