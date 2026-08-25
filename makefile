@@ -181,10 +181,10 @@ rumdl:
 pytest: venv
 	@set -euo pipefail
 	if [ -z $(shell eval "command -v xvfb-run") ]; then
-		GSK_RENDERER=cairo pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
+		GSK_RENDERER=cairo GTK_A11Y=none GDK_BACKEND=x11 pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
 	else
 		echo -e "xvfb-run detected. Running pytest in a virtual X server environment."
-		GSK_RENDERER=cairo xvfb-run --auto-servernum -- pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
+		GSK_RENDERER=cairo GTK_A11Y=none GDK_BACKEND=x11 xvfb-run --auto-servernum -- pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
 	fi
 
 # Print the median first-draw time (in ms) across $$ITERATIONS runs of `bin/ulauncher start`.

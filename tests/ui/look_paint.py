@@ -79,13 +79,46 @@ def build_look_tree(look_id: str) -> tuple[object, object, object, object]:
     return win, app, prompt, selected
 
 
+def _gtk_version() -> str:
+    from gi.repository import Gtk
+
+    return f"{Gtk.MAJOR_VERSION}.{Gtk.MINOR_VERSION}.{Gtk.MICRO_VERSION}"
+
+
+def _native_renderer(widget: object) -> object | None:
+    native = widget.get_native()
+    if native is None:
+        return None
+    surface = native.get_surface()
+    if surface is not None:
+        queue = getattr(surface, "queue_render", None)
+        if callable(queue):
+            queue()
+    renderer = native.get_renderer()
+    if renderer is not None:
+        return renderer
+    # GTK 4.6 on xvfb often has a mapped window before GskRenderer exists.
+    from gi.repository import Gsk
+
+    cairo_renderer = getattr(Gsk, "CairoRenderer", None)
+    if cairo_renderer is None or surface is None:
+        return None
+    renderer = cairo_renderer()
+    realize = getattr(renderer, "realize", None)
+    if callable(realize):
+        try:
+            realize(surface)
+        except (TypeError, ValueError, RuntimeError, OSError):
+            return None
+    return renderer
+
+
 def widget_pixbuf(widget: object) -> object:
     from gi.repository import Gdk, Graphene, Gtk
 
-    native = widget.get_native()
-    renderer = native.get_renderer() if native is not None else None
+    renderer = _native_renderer(widget)
     if renderer is None:
-        msg = "look widget has no GSK renderer"
+        msg = f"look widget has no GSK renderer (GTK {_gtk_version()})"
         raise RuntimeError(msg)
     width = max(int(widget.get_width()), 1)
     height = max(int(widget.get_height()), 1)
@@ -94,14 +127,24 @@ def widget_pixbuf(widget: object) -> object:
     paintable.snapshot(snapshot, width, height)
     node = snapshot.to_node()
     if node is None:
-        msg = "look widget produced no render node"
+        native = widget.get_native()
+        if native is not None and native is not widget:
+            native_w = max(int(native.get_width()), width)
+            native_h = max(int(native.get_height()), height)
+            native_paint = Gtk.WidgetPaintable.new(native)
+            native_snap = Gtk.Snapshot()
+            native_paint.snapshot(native_snap, native_w, native_h)
+            node = native_snap.to_node()
+            width, height = native_w, native_h
+    if node is None:
+        msg = f"look widget produced no render node (GTK {_gtk_version()})"
         raise RuntimeError(msg)
     viewport = Graphene.Rect()
     viewport.init(0, 0, float(width), float(height))
     texture = renderer.render_texture(node, viewport)
     pixbuf = Gdk.pixbuf_get_from_texture(texture)
     if pixbuf is None:
-        msg = "could not read look texture"
+        msg = f"could not read look texture (GTK {_gtk_version()})"
         raise RuntimeError(msg)
     return pixbuf
 
@@ -118,15 +161,33 @@ def widget_rgb(widget: object, x: int, y: int) -> tuple[int, int, int]:
 
 
 def widget_rgb_retry(widget: object, x: int, y: int, tries: int = 24) -> tuple[int, int, int]:
-    last: Exception | None = None
+    last_msg = ""
     for _ in range(tries):
         try:
             return widget_rgb(widget, x, y)
         except RuntimeError as exc:
-            last = exc
+            last_msg = str(exc)
             pump(4)
-    assert last is not None
-    raise last
+    raise RuntimeError(last_msg or "look widget produced no pixels")
+
+
+def _without_gi_traceback(func: object, *args: object) -> object:
+    """Re-raise as a string so pytest GC cannot collect GI objects in the traceback.
+
+    Ubuntu 22.04's pygobject SIGSEGVs while pytest formats a failure whose frames
+    still hold Gtk.Snapshot / GskRenderer wrappers.
+    """
+
+    def _run() -> tuple[str, object]:
+        try:
+            return ("ok", func(*args))  # type: ignore[operator]
+        except Exception as exc:  # noqa: BLE001
+            return ("err", f"{type(exc).__name__}: {exc}")
+
+    status, payload = _run()
+    if status == "err":
+        raise RuntimeError(str(payload))
+    return payload
 
 
 def widget_panel_rgb(widget: object) -> tuple[int, int, int]:
@@ -190,7 +251,7 @@ def _placeholder_label(entry: object) -> object:
 
 
 def _placeholder_rgb(entry: object, expected: tuple[int, int, int]) -> tuple[int, int, int]:
-    last: Exception | None = None
+    last_msg = ""
     targets = [_placeholder_label(entry), entry]
     seen: set[int] = set()
     for target in targets:
@@ -202,26 +263,26 @@ def _placeholder_rgb(entry: object, expected: tuple[int, int, int]) -> tuple[int
             pixbuf = widget_pixbuf(target)
             return _nearest_colored_rgb(pixbuf, expected)
         except RuntimeError as exc:
-            last = exc
-    if last is not None:
-        raise last
-    msg = "placeholder produced no colored pixels"
-    raise RuntimeError(msg)
+            last_msg = str(exc)
+    raise RuntimeError(last_msg or "placeholder produced no colored pixels")
 
 
 def _placeholder_rgb_retry(entry: object, expected: tuple[int, int, int], tries: int = 24) -> tuple[int, int, int]:
-    last: Exception | None = None
+    last_msg = ""
     for _ in range(tries):
         try:
             return _placeholder_rgb(entry, expected)
         except RuntimeError as exc:
-            last = exc
+            last_msg = str(exc)
             pump(4)
-    assert last is not None
-    raise last
+    raise RuntimeError(last_msg or "placeholder produced no colored pixels")
 
 
 def sample_look(look_id: str) -> dict[str, tuple[int, int, int]]:
+    return _without_gi_traceback(_sample_look_impl, look_id)  # type: ignore[return-value]
+
+
+def _sample_look_impl(look_id: str) -> dict[str, tuple[int, int, int]]:
     from gi.repository import GLib
 
     win, app, prompt, selected = build_look_tree(look_id)
@@ -236,7 +297,13 @@ def sample_look(look_id: str) -> dict[str, tuple[int, int, int]]:
     deadline = GLib.get_monotonic_time() + 2_000_000
     while GLib.get_monotonic_time() < deadline:
         ctx.iteration(False)
-        if mapped["ok"] and prompt.get_width() > 40 and selected.get_width() > 40 and selected.get_height() > 10:
+        if (
+            mapped["ok"]
+            and prompt.get_width() > 40
+            and selected.get_width() > 40
+            and selected.get_height() > 10
+            and _native_renderer(prompt) is not None
+        ):
             break
     if prompt.get_width() <= 40 or selected.get_width() <= 40:
         _destroy_tree(win)
@@ -453,6 +520,10 @@ def close_popup_window() -> None:
 
 
 def sample_popup_look(look_id: str) -> dict[str, tuple[int, int, int]]:
+    return _without_gi_traceback(_sample_popup_look_impl, look_id)  # type: ignore[return-value]
+
+
+def _sample_popup_look_impl(look_id: str) -> dict[str, tuple[int, int, int]]:
     from gi.repository import GLib
 
     win = open_popup_window()
@@ -516,14 +587,15 @@ def _sample_selected_entry(app: object, entry: object) -> tuple[int, int, int]:
             return sampled
     if rgb is not None:
         return rgb
-    if last_error is not None:
-        raise last_error
-    msg = "entry selection produced no pixels"
-    raise RuntimeError(msg)
+    raise RuntimeError(str(last_error) if last_error is not None else "entry selection produced no pixels")
 
 
 def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
     """Paint a selected query so GTK4 ``selection`` CSS can be sampled."""
+    return _without_gi_traceback(_sample_entry_selection_impl, look_id)  # type: ignore[return-value]
+
+
+def _sample_entry_selection_impl(look_id: str) -> tuple[int, int, int]:
     from gi.repository import GLib
 
     win, app, prompt, _selected = build_look_tree(look_id)
@@ -556,6 +628,10 @@ def sample_entry_selection(look_id: str) -> tuple[int, int, int]:
 
 def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
     """Paint an empty search hint so look ``text.placeholder`` CSS can be sampled."""
+    return _without_gi_traceback(_sample_placeholder_impl, look_id, expected)  # type: ignore[return-value]
+
+
+def _sample_placeholder_impl(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
     from gi.repository import GLib
 
     from ulauncher.modes.launcher.looks import get_look
