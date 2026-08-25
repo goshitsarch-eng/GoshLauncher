@@ -156,6 +156,7 @@ def test_take_window_results_workspace_consumes_a_slot() -> None:
     assert taken == [switch]
     taken = take_window_results(switch, windows, 2)
     assert [row["title"] for row in taken] == ["Switch to Workspace 2", "Firefox"]
+    assert take_window_results(switch, windows, 0) == []
 
 
 def test_window_recency_prefers_front_tab_then_user_time() -> None:

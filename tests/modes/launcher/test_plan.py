@@ -76,6 +76,10 @@ def test_merge_empty_suggestions_windows_first() -> None:
     assert merged == ["w1", "w2", "a1"]
     merged_apps = merge_empty_suggestions("default", ["w1"], ["a1", "a2"], 2)
     assert merged_apps == ["a1", "a2"]
+    assert merge_empty_suggestions("default", ["w"], ["a"], 6) == ["a", "w"]
+    assert merge_empty_suggestions("windows-first", ["w"], ["a"], 6) == ["w", "a"]
+    assert merge_empty_suggestions("windows-first", ["w1", "w2"], ["a1", "a2"], 2) == ["w1", "w2"]
+    assert merge_empty_suggestions("default", ["w1"], ["a1"], 0) == []
 
 
 def test_should_refresh_path_only_for_path_queries() -> None:

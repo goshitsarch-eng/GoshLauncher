@@ -99,10 +99,23 @@ def test_basename_from_uri_keeps_latin1_percent_bytes() -> None:
 def test_icon_for_basename_and_exists_budget() -> None:
     assert icon_for_basename("notes.pdf") == "x-office-document-symbolic"
     assert icon_for_basename("shot.png") == "image-x-generic-symbolic"
+    assert icon_for_basename("song.mp3") == "audio-x-generic-symbolic"
     assert icon_for_basename("README") == "document-open-recent-symbolic"
+    assert icon_for_basename(".bashrc") == "document-open-recent-symbolic"
     assert recent_exists_should_settle(0, 10, 800) is True
     assert recent_exists_should_settle(2, 100, 800) is False
     assert recent_exists_should_settle(2, 800, 800) is True
+
+
+def test_goshos_recent_file_match_needles() -> None:
+    from ulauncher.modes.launcher.recents import recent_file_matches
+
+    assert recent_file_matches("notes.txt", "~/Documents", "docu")
+    assert recent_file_matches("notes.txt", "~/Documents", "notes")
+    assert recent_file_matches("notes.txt", "~/Documents", "notes documents")
+    assert not recent_file_matches("notes.txt", "~/Documents", "chrome")
+    assert not recent_file_matches("notes.txt", "~/Documents", "o")
+    assert not recent_file_matches("notes.txt", "/home/u", "ome")
 
 
 def test_search_recents_empty_until_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

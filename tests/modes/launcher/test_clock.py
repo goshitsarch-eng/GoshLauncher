@@ -8,6 +8,7 @@ from ulauncher.modes.launcher.clock import (
     format_iso_date,
     match_clock,
     month_name,
+    normalize_time_query,
     time_query_kind,
     weekday_name,
 )
@@ -90,3 +91,7 @@ def test_goshos_clock_false_positives() -> None:
     assert time_query_kind("day of the week") == "date"
     assert time_query_kind("current date") == "date"
     assert time_query_kind("what the time is") == "time"
+    assert time_query_kind("what's the current day") == "date"
+    assert time_query_kind("tell me the day please") == "date"
+    assert normalize_time_query("time right now") == "time"
+    assert normalize_time_query("now") == "now"
