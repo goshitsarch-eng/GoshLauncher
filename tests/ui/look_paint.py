@@ -308,7 +308,7 @@ def open_popup_window() -> object:
         def query_changed(self, query_str: str) -> None:
             self.query = (query_str or "").lstrip()
 
-        def request_close(self, _save_query: bool = False) -> None:
+        def request_close(self, save_query: bool = False) -> None:  # noqa: ARG002
             return
 
         def close_launcher(self, *_args: object, **_kwargs: object) -> None:

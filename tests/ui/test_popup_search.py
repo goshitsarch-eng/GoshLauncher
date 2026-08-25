@@ -283,6 +283,28 @@ def test_krunner_look_applies_compact_density() -> None:
         assert "gosh-theme-krunner" in classes
         assert "gosh-density-compact" in classes
         assert "gosh-no-search-icon" not in classes
+        assert "calculator" in probe.type_query("2+2")
+        assert probe.number_hints()[:1] == ["1"]
+    finally:
+        probe.close()
+
+
+def test_rofi_hides_search_icon() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    settings = Settings()
+    settings.look_id = "rofi"
+    settings.applied_look = ""
+    try:
+        probe = open_search_popup(settings=settings)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        classes = probe.css_classes()
+        assert "gosh-theme-rofi" in classes
+        assert "gosh-no-search-icon" in classes
+        assert probe.win.search_icon.get_visible() is False
+        assert probe.win.prompt_input.get_placeholder_text() == "Filter"
     finally:
         probe.close()
 
@@ -292,3 +314,82 @@ def test_spotlight_popup_keeps_default_look_css(popup: SearchPopup) -> None:
     assert "app" in classes
     assert "gosh-theme-spotlight" in classes
     assert "gosh-density-comfortable" in classes
+    assert popup.win.prompt_input.get_placeholder_text() == "Search apps..."
+
+
+def test_no_results_copy_when_web_fallback_is_off() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    settings = _web_fallback_settings()
+    settings.show_web_search = False
+    try:
+        probe = open_search_popup(settings=settings)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        assert probe.type_query("zzzxqwerty999nomatch") == []
+        copy = probe.no_results_copy()
+        assert copy[0] == "No Results"
+        assert copy[1] == 'No results for "zzzxqwerty999nomatch"'
+        assert probe.win.results_view.get_visible() is True
+    finally:
+        probe.close()
+
+
+def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup) -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    hits = [
+        {
+            "title": "UniqueBookmarkLabelXYZ",
+            "uri": "file:///tmp",
+            "description": "/tmp",
+            "icon": "folder-symbolic",
+        }
+    ]
+    recents = [
+        {
+            "title": "UniqueRecentNotesXYZ.txt",
+            "uri": "file:///tmp/UniqueRecentNotesXYZ.txt",
+            "description": "/tmp",
+            "icon": "text-x-generic-symbolic",
+        }
+    ]
+    try:
+        probe = open_search_popup(bookmark_hits=hits, recent_hits=recents)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        assert "bookmark" in probe.type_query("UniqueBookmarkLabelXYZ")
+        assert "file" in probe.type_query("UniqueRecentNotesXYZ")
+    finally:
+        probe.close()
+    assert "path" in popup.type_query("/tmp")
+    assert "Open in Terminal" in popup.names()
+    popup.type_query("/no/such/goshlauncher/path-xyz")
+    paths = [row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "path"]
+    assert any(row.description == "Path not found" for row in paths)
+
+
+def test_click_row_activates_and_click_outside_closes(popup: SearchPopup) -> None:
+    from types import SimpleNamespace
+
+    kinds = popup.type_query("2+2")
+    assert "calculator" in kinds
+    popup.app.activated = None
+    calc = next(
+        widget for widget in popup.win.results_view._widgets if getattr(widget.result, "kind", "") == "calculator"
+    )
+    gesture = SimpleNamespace(
+        get_current_button=lambda: 1,
+        get_device=lambda: None,
+        set_state=lambda *_args: None,
+    )
+    calc.on_pointer_press(gesture, 1, 0.0, 0.0)
+    calc.on_click(gesture, 1, 0.0, 0.0)
+    chosen, alt = popup.app.activated
+    assert alt is False
+    assert chosen.kind == "calculator"
+    popup.app.closed = False
+    popup.win.on_backdrop_released(SimpleNamespace(), 1, -8.0, -8.0)
+    assert popup.app.closed is True

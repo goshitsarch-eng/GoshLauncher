@@ -30,6 +30,24 @@ class SearchPopup:
     def names(self) -> list[str]:
         return [str(row.name) for row in self.win.results_view.get_result_objects() if getattr(row, "name", "")]
 
+    def number_hints(self) -> list[str]:
+        return [
+            widget.shortcut_label.get_text()
+            for widget in self.win.results_view._widgets
+            if getattr(widget.result, "highlightable", False) and widget.shortcut_label.get_visible()
+        ]
+
+    def no_results_copy(self) -> list[str]:
+        from gi.repository import Gtk
+
+        from ulauncher.ui import gtk4
+
+        labels: list[str] = []
+        for child in gtk4.list_children(self.win.results_view._box):
+            if isinstance(child, Gtk.Box) and child.has_css_class("gosh-no-results"):
+                labels.extend(label.get_text() for label in gtk4.list_children(child) if isinstance(label, Gtk.Label))
+        return labels
+
     def css_classes(self) -> list[str]:
         return list(self.win.theme_root.get_css_classes())
 
@@ -77,6 +95,8 @@ def open_search_popup(
     settings: Any | None = None,
     home_apps: list | None = None,
     home_windows: list | None = None,
+    bookmark_hits: list | None = None,
+    recent_hits: list | None = None,
 ) -> SearchPopup:
     from contextlib import ExitStack
     from unittest.mock import patch
@@ -96,6 +116,8 @@ def open_search_popup(
     conf = settings if settings is not None else Settings()
     apps = list(home_apps) if home_apps is not None else []
     windows = list(home_windows) if home_windows is not None else []
+    bookmarks = list(bookmark_hits) if bookmark_hits is not None else []
+    recents = list(recent_hits) if recent_hits is not None else []
 
     class SearchProbeApp(Adw.Application):
         query = ""
@@ -158,8 +180,10 @@ def open_search_popup(
     stack.enter_context(patch("ulauncher.modes.launcher.windows.cached_windows", lambda: windows))
     stack.enter_context(patch("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None))
     # Real XBEL / GTK bookmark files on the VM must not steal last-resort web fallback.
-    stack.enter_context(patch("ulauncher.modes.launcher.recents.search_recents", lambda *_args, **_kwargs: []))
-    stack.enter_context(patch("ulauncher.modes.launcher.bookmarks.search_bookmarks", lambda *_args, **_kwargs: []))
+    stack.enter_context(patch("ulauncher.modes.launcher.recents.search_recents", lambda *_args, **_kwargs: recents))
+    stack.enter_context(
+        patch("ulauncher.modes.launcher.bookmarks.search_bookmarks", lambda *_args, **_kwargs: bookmarks)
+    )
     win = UlauncherWindow(application=app)
     try:
         wait_popup_styled(win)

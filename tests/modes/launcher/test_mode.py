@@ -282,8 +282,11 @@ def test_clock_and_units_copy_prompt_enter() -> None:
 
 
 def test_path_query_returns_path_results() -> None:
-    kinds = _kinds(_handle("/tmp"))
-    assert "path" in kinds
+    results = _handle("/tmp")
+    assert "path" in _kinds(results)
+    assert any(row.name == "Open in Terminal" for row in results)
+    missing = [row for row in _handle("/no/such/goshlauncher/path-xyz") if getattr(row, "kind", "") == "path"]
+    assert any(row.description == "Path not found" for row in missing)
 
 
 def test_path_first_paint_is_checking_until_flush() -> None:

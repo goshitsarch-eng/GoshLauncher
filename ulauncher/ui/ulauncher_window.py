@@ -626,7 +626,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         from ulauncher.modes.launcher.click_outside import backdrop_should_close
 
         if self._click_outside_card(x, y) and backdrop_should_close("button-release"):
-            self.close(save_query=True)
+            self.get_app().request_close(save_query=True)
 
     def get_app(self) -> UlauncherApp:
         return cast("UlauncherApp", self.get_application())
