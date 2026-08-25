@@ -332,6 +332,7 @@ def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
     assert [row.title for row in windows_from_introspect_payload(payload)] == [
         "Firefox",
         "Panel",
+        "Dock",
         "Dialog",
         "Stand-in",
         "First ws",
@@ -340,8 +341,10 @@ def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
     ]
     by_title = {row.title: row for row in windows_from_introspect_payload(payload)}
     assert by_title["Panel"].skip_taskbar is True
+    assert by_title["Dock"].window_type == "dock"
     assert window_is_searchable(by_title["Firefox"])
     assert not window_is_searchable(by_title["Panel"])
+    assert not window_is_searchable(by_title["Dock"])
     assert by_title["First ws"].desktop == 0
     assert by_title["Second ws"].desktop == 1
     assert window_matches(by_title["Second ws"], "workspace 2")
@@ -421,9 +424,12 @@ def test_wmctrl_list_drops_skip_taskbar_when_inspect_knows() -> None:
         return None
 
     kept = filter_listed_windows(rows, inspect)
-    assert [row.title for row in kept] == ["Mozilla Firefox", "Top Bar"]
+    assert [row.title for row in kept] == ["Mozilla Firefox", "Top Bar", "Dock"]
     assert kept[0].skip_taskbar is False
     assert kept[1].skip_taskbar is True
+    assert kept[2].window_type == "dock"
+    assert not window_is_searchable(kept[1])
+    assert not window_is_searchable(kept[2])
     assert filter_listed_windows(rows, None) == rows
     unknown = filter_listed_windows(rows, lambda _wid: None)
     assert [row.title for row in unknown] == ["Mozilla Firefox", "Top Bar", "Dock"]
@@ -438,13 +444,15 @@ def test_wmctrl_list_drops_skip_taskbar_when_inspect_knows() -> None:
         return None
 
     enriched = filter_listed_windows(rows, inspect_gtk)
-    assert [row.title for row in enriched] == ["Mozilla Firefox", "Top Bar"]
+    assert [row.title for row in enriched] == ["Mozilla Firefox", "Top Bar", "Dock"]
     assert enriched[0].gtk_app_id == "org.mozilla.firefox"
     assert enriched[0].gtk_unique_bus_name == ":1.9"
     assert "org.mozilla.firefox" in enriched[0].wm_class
     assert is_unique_gtk_window(enriched[0]) is True
     assert enriched[1].skip_taskbar is True
     assert not window_is_searchable(enriched[1])
+    assert enriched[2].window_type == "dock"
+    assert not window_is_searchable(enriched[2])
 
 
 def test_xprop_window_parse_skip_taskbar_and_gtk_unique() -> None:
@@ -1320,10 +1328,13 @@ def test_match_windows_hides_skip_taskbar() -> None:
         pid=11,
         skip_taskbar=True,
     )
-    rows = match_windows("firefox", windows=[hidden, listed])
+    dock = WindowInfo(wid="0x3", title="Dock", wm_class="dock", desktop=0, pid=1, window_type="dock")
+    rows = match_windows("firefox", windows=[hidden, listed, dock])
     assert [row["wid"] for row in rows] == ["0x1"]
     assert window_is_searchable(listed)
     assert not window_is_searchable(hidden)
+    assert not window_is_searchable(dock)
+    assert match_windows("dock", windows=[dock]) == []
 
 
 def test_windows_cache_ttl_and_freshness() -> None:
