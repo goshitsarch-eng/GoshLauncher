@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any, Callable
 
-from ulauncher.modes.launcher.search_live import windows_fingerprint, windows_for_live_track
+from ulauncher.modes.launcher.search_live import live_search_fingerprint, windows_for_live_track
 from ulauncher.utils import scheduling
 
 _POLL_SEC = 0.8
@@ -24,15 +24,17 @@ class LiveSearchWatcher:
         on_change: Callable[[], None],
         list_windows: Callable[[], list[Any]] | None = None,
         poll_interval: float = _POLL_SEC,
+        workspace_count: Callable[[], int | None] | None = None,
     ) -> None:
         self._on_change = on_change
         self._list_windows = list_windows
         self._poll_interval = poll_interval
+        self._workspace_count = workspace_count
         self._listening = False
         self._timer: scheduling.Context | None = None
         self._apps: Any = None
         self._apps_handler = 0
-        self._fingerprint: tuple[tuple[Any, ...], ...] = ()
+        self._fingerprint: tuple[Any, ...] = ()
         self._bus: Any = None
         self._windows_changed_ids: list[int] = []
 
@@ -44,7 +46,7 @@ class LiveSearchWatcher:
         if self._listening:
             return
         self._listening = True
-        self._fingerprint = windows_fingerprint(self._current_windows())
+        self._fingerprint = self._snapshot()
         self._listen_apps()
         self._listen_shell_windows()
         if self._poll_interval > 0:
@@ -68,10 +70,32 @@ class LiveSearchWatcher:
     def poll(self) -> None:
         if not self._listening:
             return
-        fingerprint = windows_fingerprint(self._current_windows())
+        self._invalidate_window_state()
+        fingerprint = self._snapshot()
         if fingerprint == self._fingerprint:
             return
         self._fingerprint = fingerprint
+        self._on_change()
+
+    def _snapshot(self) -> tuple[Any, ...]:
+        count_fn = self._workspace_count
+        if count_fn is None:
+            from ulauncher.modes.launcher.windows import listed_workspace_count
+
+            count_fn = listed_workspace_count
+        return live_search_fingerprint(self._current_windows(), count_fn())
+
+    def _invalidate_window_state(self) -> None:
+        from ulauncher.modes.launcher.windows import invalidate_windows, invalidate_workspace_count
+
+        invalidate_windows()
+        invalidate_workspace_count()
+
+    def _notify(self) -> None:
+        if not self._listening:
+            return
+        self._invalidate_window_state()
+        self._fingerprint = self._snapshot()
         self._on_change()
 
     def _current_windows(self) -> list[Any]:
@@ -91,7 +115,7 @@ class LiveSearchWatcher:
             return
         self._apps = monitor
         try:
-            self._apps_handler = monitor.connect("changed", lambda *_args: self._on_change())
+            self._apps_handler = monitor.connect("changed", lambda *_args: self._notify())
         except (TypeError, RuntimeError):
             self._apps = None
             self._apps_handler = 0
@@ -117,7 +141,7 @@ class LiveSearchWatcher:
                     path,
                     None,
                     Gio.DBusSignalFlags.NONE,
-                    lambda *_args: self._on_change(),
+                    lambda *_args: self._notify(),
                 )
             except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
                 continue
