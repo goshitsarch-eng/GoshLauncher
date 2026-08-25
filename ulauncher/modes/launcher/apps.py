@@ -234,21 +234,52 @@ def take_app_actions(actions: list[Any], max_results: int) -> list[Any]:
     return actions[:max_results]
 
 
+def can_open_new_window(window_count: int) -> bool:
+    return window_count > 0
+
+
+def open_new_window(app: Any) -> bool:
+    from ulauncher.modes.apps.launch_app import launch_app
+
+    app_id = str(getattr(app, "app_id", "") or "")
+    if not app_id:
+        return False
+    for key in getattr(app, "actions", None) or {}:
+        if not str(key).startswith(ACTION_PREFIX):
+            continue
+        action_id = str(key)[len(ACTION_PREFIX) :]
+        if is_new_window_action(action_id):
+            return launch_app(app_id, action_name=action_id)
+    return launch_app(app_id, raise_existing=False)
+
+
 def app_action_rows(app: Any, limit: int, window_count: int = 0) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     rows: list[dict[str, Any]] = []
+    if can_open_new_window(window_count):
+        rows.append(
+            {
+                "title": new_window_title(app.name),
+                "description": "Application action",
+                "icon": getattr(app, "icon", "") or "application-x-executable",
+                "app_id": getattr(app, "app_id", ""),
+                "action_name": "new-window",
+                "synthetic_new_window": True,
+            }
+        )
+        if len(rows) >= limit:
+            return take_app_actions(rows, limit)
     for key, meta in (getattr(app, "actions", None) or {}).items():
         if key == "launch" or not str(key).startswith(ACTION_PREFIX):
             continue
         action_id = str(key)[len(ACTION_PREFIX) :]
-        if is_new_window_action(action_id) and window_count <= 0:
+        if is_new_window_action(action_id):
             continue
         name = (meta or {}).get("name") or action_id
-        title = new_window_title(app.name) if is_new_window_action(action_id) else desktop_action_title(name, app.name)
         rows.append(
             {
-                "title": title,
+                "title": desktop_action_title(name, app.name),
                 "description": "Application action",
                 "icon": getattr(app, "icon", "") or "application-x-executable",
                 "app_id": getattr(app, "app_id", ""),

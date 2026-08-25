@@ -114,7 +114,8 @@ def test_file_extensions_are_not_urls() -> None:
 def test_real_domains_match() -> None:
     hit = match_url("example.com")
     assert hit is not None
-    assert hit["url"].startswith("https://")
+    assert hit["url"] == "https://example.com"
+    assert hit["label"] == "https://example.com"
     assert hit["icon"] == "web-browser-symbolic"
     assert match_url("https://ulauncher.io") is not None
 

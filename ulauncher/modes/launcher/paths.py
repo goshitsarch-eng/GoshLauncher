@@ -212,14 +212,23 @@ def path_row_meta(trimmed: str, resolved: str, kind: str, home: str | None = Non
     }
 
 
-def path_rows(trimmed: str, resolved: str, kind: str, home: str | None = None) -> list[dict]:
+def path_rows(
+    trimmed: str,
+    resolved: str,
+    kind: str,
+    home: str | None = None,
+    find_in_path: Callable[[str], str | None] | None = None,
+) -> list[dict]:
     rows = [path_row_meta(trimmed, resolved, kind, home)]
-    if kind == "directory":
-        term = terminal_row_meta(resolved, home)
-        term["exists"] = True
-        term["checking"] = False
-        term["is_dir"] = True
-        rows.append(term)
+    if kind != "directory":
+        return rows
+    if not terminal_command(resolved, find_in_path=find_in_path):
+        return rows
+    term = terminal_row_meta(resolved, home)
+    term["exists"] = True
+    term["checking"] = False
+    term["is_dir"] = True
+    rows.append(term)
     return rows
 
 

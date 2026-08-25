@@ -21,6 +21,7 @@ from ulauncher.modes.launcher.paths import (
     match_path,
     path_from_file_uri,
     path_row_meta,
+    path_rows,
     search_path,
     terminal_command,
     terminal_row_meta,
@@ -91,6 +92,22 @@ def test_terminal_row_meta() -> None:
     assert row["id"] == "terminal:/home/me/code"
     assert row["type"] == "path"
     assert row["description"] == "~/code"
+    place = terminal_row_meta("/home/me/docs", home="/home/me", kind="place")
+    assert place["type"] == "place"
+
+
+def test_path_rows_omit_terminal_when_missing() -> None:
+    missing = path_rows("/tmp", "/tmp", "directory", find_in_path=lambda _name: None)
+    assert len(missing) == 1
+    assert missing[0].get("in_terminal") is False
+    present = path_rows(
+        "/tmp",
+        "/tmp",
+        "directory",
+        find_in_path=lambda name: name if name == "xdg-terminal-exec" else None,
+    )
+    assert present[1]["title"] == "Open in Terminal"
+    assert present[1]["in_terminal"] is True
 
 
 def test_bookmark_uri_canonicalizes_and_rejects_unsafe() -> None:

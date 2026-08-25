@@ -15,6 +15,7 @@ from ulauncher.modes.launcher.apps import (
     is_new_window_action,
     match_apps,
     new_window_title,
+    open_new_window,
     take_app_actions,
     unique_by_base_name,
 )
@@ -135,8 +136,20 @@ def test_app_action_rows_hide_new_window_when_not_running() -> None:
     running = app_action_rows(app, 6, window_count=1)
     assert [row["action_name"] for row in running] == ["new-window", "private"]
     assert running[0]["title"] == "New window — Firefox"
+    assert running[0]["synthetic_new_window"] is True
     assert running[1]["title"] == "Private — Firefox"
     assert running[0]["description"] == "Application action"
+    notes = SimpleNamespace(
+        name="Notes",
+        icon="notes",
+        app_id="notes.desktop",
+        actions={"launch": {"name": "Launch"}, "action:new": {"name": "New Document"}},
+    )
+    synthesized = app_action_rows(notes, 6, window_count=2)
+    assert [row["action_name"] for row in synthesized] == ["new-window", "new"]
+    assert synthesized[0]["title"] == "New window — Notes"
+    assert synthesized[0]["synthetic_new_window"] is True
+    assert app_action_rows(notes, 6, window_count=0)[0]["action_name"] == "new"
 
 
 def test_app_row_description_and_window_count() -> None:
@@ -256,3 +269,24 @@ def test_home_apps_skips_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), notes])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
     assert [app.name for app in home_apps(6)] == ["Notes"]
+
+
+def test_open_new_window_uses_desktop_action_then_launch(monkeypatch: pytest.MonkeyPatch) -> None:
+    launched: list[tuple[str, str | None, bool]] = []
+
+    def _launch(app_id: str, action_name: str | None = None, *, raise_existing: bool = True) -> bool:
+        launched.append((app_id, action_name, raise_existing))
+        return True
+
+    monkeypatch.setattr("ulauncher.modes.apps.launch_app.launch_app", _launch)
+    firefox = SimpleNamespace(
+        name="Firefox",
+        app_id="firefox.desktop",
+        actions={"action:new-window": {"name": "New Window"}},
+    )
+    assert open_new_window(firefox) is True
+    assert launched == [("firefox.desktop", "new-window", True)]
+    launched.clear()
+    notes = SimpleNamespace(name="Notes", app_id="notes.desktop", actions={"launch": {"name": "Launch"}})
+    assert open_new_window(notes) is True
+    assert launched == [("notes.desktop", None, False)]

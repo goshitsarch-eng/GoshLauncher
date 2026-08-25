@@ -195,7 +195,11 @@ class LauncherMode(Mode):
                 return
             action_name = payload.get("action_name")
             launched = False
-            if action_id.startswith(ACTION_PREFIX):
+            if payload.get("synthetic_new_window"):
+                from ulauncher.modes.launcher.apps import open_new_window
+
+                launched = open_new_window(app)
+            elif action_id.startswith(ACTION_PREFIX):
                 launched = launch_app(app_id, action_name=action_id[len(ACTION_PREFIX) :])
             elif action_name:
                 launched = launch_app(app_id, action_name=str(action_name))
@@ -338,25 +342,21 @@ class LauncherMode(Mode):
                 )
 
         if "places" in providers:
-            from ulauncher.modes.launcher.places import match_places
+            from ulauncher.modes.launcher.places import search_places
 
-            for index, hit in enumerate(safe_provider_results(lambda: match_places(q))[:cap]):
+            for hit in safe_provider_results(lambda: search_places(q, cap)):
                 add(
                     "places",
                     {
                         "kind": "place",
-                        "score": 80,
+                        "score": 79 if hit.get("in_terminal") else 80,
                         "title": hit["title"],
                         "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "folder-symbolic",
                         "path": hit["path"],
-                        "in_terminal": False,
+                        "in_terminal": bool(hit.get("in_terminal")),
                     },
                 )
-                if index == 0:
-                    from ulauncher.modes.launcher.paths import terminal_row_meta
-
-                    term = terminal_row_meta(str(hit["path"]))
-                    add("places", {"kind": "path", "score": 79, **term})
 
         if "bookmarks" in providers:
             from ulauncher.modes.launcher.bookmarks import search_bookmarks
@@ -404,6 +404,7 @@ class LauncherMode(Mode):
                             "icon": action.get("icon") or "application-x-executable",
                             "app_id": action["app_id"],
                             "action_name": action["action_name"],
+                            "synthetic_new_window": bool(action.get("synthetic_new_window")),
                             "actions": {"activate": {"name": "Activate"}},
                         },
                     )
@@ -568,38 +569,38 @@ class LauncherMode(Mode):
                 )
 
         if "web" in providers:
-            from ulauncher.modes.launcher.web import web_result
+            from ulauncher.modes.launcher.web import search_web
 
             engine_id = getattr(settings, "web_search_engine", "google")
-            hit = web_result(q, engine_id)
-            add(
-                "web",
-                {
-                    "kind": "web",
-                    "score": 10,
-                    "title": hit["title"],
-                    "description": hit.get("description") or "",
-                    "icon": hit.get("icon") or "web-browser-symbolic",
-                    "url": hit["url"],
-                },
-            )
+            for hit in search_web(q, engine_id):
+                add(
+                    "web",
+                    {
+                        "kind": "web",
+                        "score": 10,
+                        "title": hit["title"],
+                        "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "web-browser-symbolic",
+                        "url": hit["url"],
+                    },
+                )
 
         rows = [row for name in providers for row in buckets.get(name, [])]
         if web_fallback and not rows:
-            from ulauncher.modes.launcher.web import web_result
+            from ulauncher.modes.launcher.web import search_web
 
             engine_id = getattr(settings, "web_search_engine", "google")
-            hit = web_result(q, engine_id)
-            rows.append(
-                {
-                    "kind": "web",
-                    "score": 10,
-                    "title": hit["title"],
-                    "description": hit.get("description") or "",
-                    "icon": hit.get("icon") or "web-browser-symbolic",
-                    "url": hit["url"],
-                }
-            )
+            for hit in search_web(q, engine_id):
+                rows.append(
+                    {
+                        "kind": "web",
+                        "score": 10,
+                        "title": hit["title"],
+                        "description": hit.get("description") or "",
+                        "icon": hit.get("icon") or "web-browser-symbolic",
+                        "url": hit["url"],
+                    }
+                )
 
         return rows
 

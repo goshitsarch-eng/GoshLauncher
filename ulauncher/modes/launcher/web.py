@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote_plus
+from urllib.parse import quote
 
 SEARCH_ENGINES = [
     {"id": "google", "label": "Google", "url": "https://www.google.com/search?q="},
@@ -30,10 +30,12 @@ def get_engine(engine_id: str) -> dict:
 
 def search_url(query: str, engine_id: str) -> str:
     engine = get_engine(engine_id)
-    return engine["url"] + quote_plus(query)
+    return engine["url"] + quote(query, safe="!~*'()")
 
 
-def web_result(query: str, engine_id: str) -> dict:
+def web_result(query: str, engine_id: str) -> dict | None:
+    if not query:
+        return None
     engine = get_engine(engine_id)
     return {
         "title": f'Search {engine["label"]} for "{query}"',
@@ -41,3 +43,8 @@ def web_result(query: str, engine_id: str) -> dict:
         "url": search_url(query, engine_id),
         "icon": "web-browser-symbolic",
     }
+
+
+def search_web(query: str, engine_id: str) -> list[dict]:
+    hit = web_result(query, engine_id)
+    return [hit] if hit else []

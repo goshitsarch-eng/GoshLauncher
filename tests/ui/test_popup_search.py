@@ -419,7 +419,7 @@ def test_no_results_copy_when_web_fallback_is_off() -> None:
         probe.close()
 
 
-def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup) -> None:
+def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup, monkeypatch: pytest.MonkeyPatch) -> None:
     if not display_available():
         pytest.skip("no Gdk display")
     hits = [
@@ -447,6 +447,10 @@ def test_bookmarks_recents_missing_path_and_terminal(popup: SearchPopup) -> None
         assert "file" in probe.type_query("UniqueRecentNotesXYZ")
     finally:
         probe.close()
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.terminal_command",
+        lambda directory, **_kwargs: {"argv": ["xdg-terminal-exec"], "cwd": directory},
+    )
     assert "path" in popup.type_query("/tmp")
     assert "Open in Terminal" in popup.names()
     popup.type_query("/no/such/goshlauncher/path-xyz")

@@ -98,9 +98,7 @@ SYSTEM_ACTIONS: list[SystemAction] = [
             "unlock orientation",
             "unlock rotation",
         ],
-        "commands": [
-            ["gsettings", "set", "org.gnome.settings-daemon.peripherals.touchscreen", "orientation-lock", "true"]
-        ],
+        "commands": [],
     },
     {
         "id": "screenshot",
@@ -180,14 +178,79 @@ def action_is_available(action_id: str, can_map: dict[str, str] | None = None) -
     return str(answer).lower() not in {"no", "na"}
 
 
-def match_system_actions(query: str, limit: int = 6, can_map: dict[str, str] | None = None) -> list[SystemAction]:
+ORIENTATION_SCHEMA = "org.gnome.settings-daemon.peripherals.touchscreen"
+ORIENTATION_KEY = "orientation-lock"
+
+
+def _orientation_settings() -> Any | None:
+    try:
+        from ulauncher.gi import Gio, GLib
+    except (ImportError, AttributeError, RuntimeError, OSError):
+        return None
+    try:
+        source = Gio.SettingsSchemaSource.get_default()
+        if source is None or source.lookup(ORIENTATION_SCHEMA, True) is None:
+            return None
+        return Gio.Settings.new(ORIENTATION_SCHEMA)
+    except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError):
+        return None
+
+
+def get_orientation_locked() -> bool:
+    settings = _orientation_settings()
+    if settings is None:
+        return False
+    return bool(settings.get_boolean(ORIENTATION_KEY))
+
+
+def set_orientation_locked(locked: bool) -> bool:
+    settings = _orientation_settings()
+    if settings is not None:
+        settings.set_boolean(ORIENTATION_KEY, locked)
+        return True
+    exe = shutil.which("gsettings")
+    if not exe:
+        return False
+    launch_detached([exe, "set", ORIENTATION_SCHEMA, ORIENTATION_KEY, "true" if locked else "false"])
+    return True
+
+
+def toggle_orientation_lock() -> bool:
+    return set_orientation_locked(not get_orientation_locked())
+
+
+def orientation_title(locked: bool) -> str:
+    return "Unlock Screen Rotation" if locked else "Lock Screen Rotation"
+
+
+def orientation_icon(locked: bool) -> str:
+    return "rotation-locked-symbolic" if locked else "rotation-allowed-symbolic"
+
+
+def match_system_actions(
+    query: str,
+    limit: int = 6,
+    can_map: dict[str, str] | None = None,
+    orientation_locked: bool | None = None,
+) -> list[SystemAction]:
     answers = can_map if can_map is not None else probe_logind()
+    locked = get_orientation_locked() if orientation_locked is None else orientation_locked
     results: list[SystemAction] = []
     for action in SYSTEM_ACTIONS:
         if not action_is_available(action["id"], answers):
             continue
-        if action_matches(action, query):
-            results.append(action)
+        if not action_matches(action, query):
+            continue
+        locked_title = action["id"] == "lock-orientation"
+        results.append(
+            {
+                "id": action["id"],
+                "title": orientation_title(locked) if locked_title else action["title"],
+                "icon": orientation_icon(locked) if locked_title else action["icon"],
+                "keywords": action["keywords"],
+                "commands": action["commands"],
+            }
+        )
         if len(results) >= limit:
             break
     return results
@@ -231,6 +294,10 @@ def run_system_action(action_id: str, screenshot_ui: Callable[[], bool] | None =
         show = screenshot_ui if screenshot_ui is not None else show_screenshot_ui
         if show():
             return
+    if action_id == "lock-orientation":
+        if not toggle_orientation_lock():
+            logger.warning("No working command for system action %s", action_id)
+        return
     for action in SYSTEM_ACTIONS:
         if action["id"] != action_id:
             continue

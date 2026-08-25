@@ -293,7 +293,7 @@ def match_url(query: str) -> Optional[dict]:
     return {
         "url": url,
         "kind": kind,
-        "label": raw,
+        "label": url,
         "description": url_row_description(url),
         "icon": url_row_icon(url),
     }

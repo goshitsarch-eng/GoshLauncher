@@ -47,6 +47,13 @@ def test_url_query_does_not_force_web() -> None:
     kinds = _kinds(_handle("example.com"))
     assert "url" in kinds
     assert "web" not in kinds
+    url = next(row for row in _handle("example.com") if getattr(row, "kind", "") == "url")
+    assert url.name == "https://example.com"
+
+
+def test_empty_at_prefix_has_no_web_row() -> None:
+    assert _kinds(_handle("@")) == []
+    assert _kinds(_handle("@ ")) == []
 
 
 def test_at_prefix_is_web() -> None:
@@ -357,6 +364,21 @@ def test_clock_and_units_copy_prompt_enter() -> None:
     assert "calculator" in _kinds(_handle("half of 80"))
 
 
+def test_places_rows_keep_folder_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.terminal_command",
+        lambda directory, **_kwargs: {"argv": ["xdg-terminal-exec"], "cwd": directory},
+    )
+    results = _handle("docs")
+    places = [row for row in results if getattr(row, "kind", "") == "place"]
+    assert places
+    docs = next(row for row in places if row.name == "Documents")
+    assert docs.description
+    assert docs.icon == "folder-documents-symbolic"
+    term = next(row for row in places if row.name == "Open in Terminal")
+    assert term.kind == "place"
+
+
 def test_compact_density_still_shows_descriptions(monkeypatch: pytest.MonkeyPatch) -> None:
     from ulauncher.utils.settings import Settings
 
@@ -371,7 +393,11 @@ def test_compact_density_still_shows_descriptions(monkeypatch: pytest.MonkeyPatc
     assert calc.compact is False
 
 
-def test_path_query_returns_path_results() -> None:
+def test_path_query_returns_path_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.paths.terminal_command",
+        lambda directory, **_kwargs: {"argv": ["xdg-terminal-exec"], "cwd": directory},
+    )
     results = _handle("/tmp")
     assert "path" in _kinds(results)
     assert any(row.name == "Open in Terminal" for row in results)

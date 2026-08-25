@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TypedDict
+from typing import Callable, TypedDict
 
 from ulauncher.modes.launcher.word_match import keyword_matches_query, word_prefix_match
 
@@ -96,15 +96,49 @@ def _xdg_dirs() -> dict[str, str]:
     return mapping
 
 
+_PLACE_GLIB_DIR = {
+    "desktop": "DIRECTORY_DESKTOP",
+    "documents": "DIRECTORY_DOCUMENTS",
+    "download": "DIRECTORY_DOWNLOAD",
+    "music": "DIRECTORY_MUSIC",
+    "pictures": "DIRECTORY_PICTURES",
+    "videos": "DIRECTORY_VIDEOS",
+    "public": "DIRECTORY_PUBLIC_SHARE",
+    "templates": "DIRECTORY_TEMPLATES",
+}
+
+
+def _glib_place_path(place_id: str) -> str | None:
+    try:
+        from ulauncher.gi import GLib
+    except (ImportError, AttributeError, RuntimeError, OSError):
+        return None
+    if place_id == "home":
+        return GLib.get_home_dir() or None
+    name = _PLACE_GLIB_DIR.get(place_id)
+    if not name:
+        return None
+    directory = getattr(GLib.UserDirectory, name, None)
+    if directory is None:
+        return None
+    path = GLib.get_user_special_dir(directory)
+    return path or None
+
+
 def place_path(place: PlaceEntry, dirs: dict[str, str] | None = None) -> str:
-    dirs = dirs or _xdg_dirs()
+    if dirs is None:
+        glib_path = _glib_place_path(place["id"])
+        if glib_path:
+            return glib_path
+        dirs = _xdg_dirs()
     if place["id"] == "home":
         return dirs.get("HOME") or str(Path.home())
     env = place.get("xdg")
     if env and dirs.get(env):
         return dirs[env]
-    fallback = Path.home() / place["title"]
-    return str(fallback) if fallback.exists() else dirs.get("HOME") or str(Path.home())
+    # GLib.get_user_special_dir still returns $HOME/Documents when the folder is
+    # missing. Mapping that to $HOME made unique-path collapse hide every place.
+    return str(Path(dirs.get("HOME") or Path.home()) / place["title"])
 
 
 def place_matches(title: str, keywords: list[str], query: str) -> bool:
@@ -122,14 +156,14 @@ def place_matches(title: str, keywords: list[str], query: str) -> bool:
     return any(keyword_matches_query(keyword, q) for keyword in keywords)
 
 
-def match_places(query: str, limit: int = 6) -> list[dict]:
-    dirs = _xdg_dirs()
+def match_places(query: str, limit: int = 6, dirs: dict[str, str] | None = None) -> list[dict]:
+    mapping = dirs
     seen: set[str] = set()
     results: list[dict] = []
     for place in PLACE_CATALOG:
         if not place_matches(place["title"], place["keywords"], query):
             continue
-        path = place_path(place, dirs)
+        path = place_path(place, mapping)
         if not path or path in seen:
             continue
         seen.add(path)
@@ -137,3 +171,48 @@ def match_places(query: str, limit: int = 6) -> list[dict]:
         if len(results) >= limit:
             break
     return results
+
+
+def search_places(
+    query: str,
+    limit: int = 6,
+    home: str | None = None,
+    find_in_path: Callable[[str], str | None] | None = None,
+    dirs: dict[str, str] | None = None,
+) -> list[dict]:
+    from ulauncher.modes.launcher.paths import collapse_home, terminal_command, terminal_row_meta
+
+    home_dir = home if home is not None else str(Path.home())
+    matches = match_places(query, limit, dirs=dirs)
+    rows: list[dict] = []
+    for place in matches:
+        path = str(place["path"])
+        rows.append(
+            {
+                "kind": "place",
+                "title": place["title"],
+                "description": collapse_home(path, home_dir),
+                "icon": place["icon"],
+                "id": place["id"],
+                "path": path,
+                "in_terminal": False,
+            }
+        )
+    if not matches or len(rows) >= limit:
+        return rows
+    first_path = str(matches[0]["path"])
+    if not terminal_command(first_path, find_in_path=find_in_path):
+        return rows
+    term = terminal_row_meta(first_path, home_dir, kind="place")
+    rows.append(
+        {
+            "kind": "place",
+            "title": term["title"],
+            "description": term["description"],
+            "icon": term["icon"],
+            "id": term["id"],
+            "path": first_path,
+            "in_terminal": True,
+        }
+    )
+    return rows
