@@ -365,13 +365,22 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.get_app().query_changed(self.prompt_input.get_text())
 
     def activate_result(self, alt: bool, fallback: bool = True) -> None:
-        from ulauncher.modes.launcher.activate import activatable_result, indexed_activatable_result
+        from ulauncher.modes.launcher.activate import (
+            activatable_result,
+            activate_popup_result,
+            indexed_activatable_result,
+        )
 
         results = self.results_view.get_result_objects()
         index = self.results_view.selected_index
         chosen = activatable_result(results, index) if fallback else indexed_activatable_result(results, index)
-        if chosen:
-            self.get_app().activate_result(chosen, alt)
+        app = self.get_app()
+        if activate_popup_result(
+            chosen,
+            lambda: app.request_close(save_query=True),
+            app.activate_result,
+            alt,
+        ):
             return
         self._refocus_entry_soon()
 
@@ -379,11 +388,18 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         self.activate_result(alt, fallback=False)
 
     def _activate_numbered(self, index: int) -> None:
-        from ulauncher.modes.launcher.activate import indexed_activatable_result
+        from ulauncher.modes.launcher.activate import activate_popup_result, indexed_activatable_result
 
         chosen = indexed_activatable_result(self.results_view.numbered_results(), index)
-        if chosen:
-            self.get_app().activate_result(chosen, False)
+        if not chosen:
+            return
+        app = self.get_app()
+        activate_popup_result(
+            chosen,
+            lambda: app.request_close(save_query=True),
+            app.activate_result,
+            False,
+        )
 
     def _apply_move(self, delta: int) -> None:
         if delta <= -999:  # noqa: PLR2004

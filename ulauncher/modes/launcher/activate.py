@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 
@@ -43,6 +44,28 @@ def activate_result_safe(result: Any) -> bool:
         if not callable(activate):
             return False
         activate()
+    except Exception:
+        # mutter and systemactions throw if the target vanished after the list
+        return False
+    return True
+
+
+def activate_popup_result(
+    result: Any,
+    close: Callable[[], None],
+    activate: Callable[[Any, bool], Any],
+    alt: bool = False,
+) -> bool:
+    """Hide first, then run the row — goshos launcherPopup.activateResult.
+
+    Alt keeps the popup open so leftover Ulauncher action lists can paint.
+    """
+    if not result_can_activate(result):
+        return False
+    if not alt:
+        close()
+    try:
+        activate(result, alt)
     except Exception:
         # mutter and systemactions throw if the target vanished after the list
         return False

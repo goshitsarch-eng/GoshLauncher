@@ -118,6 +118,8 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     chosen, alt = popup.app.activated
     assert alt is False
     assert chosen.name == "Firefox"
+    assert popup.app.closed is True
+    popup.app.closed = False
     assert popup.press(Gdk.KEY_Escape)
     assert popup.app.closed is True
 
@@ -154,6 +156,7 @@ def test_enter_activates_calculator_row(popup: SearchPopup) -> None:
     chosen, alt = popup.app.activated
     assert alt is False
     assert chosen.kind == "calculator"
+    assert popup.app.closed is True
     with patch("ulauncher.modes.launcher.mode._events.emit", emit):
         LauncherMode().activate_result("activate", chosen, Query(None, "2+2"), lambda *_args: None)
     assert copied == ["4"]
