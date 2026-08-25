@@ -55,6 +55,15 @@ class _WindowSnapshot:
 _window_snapshot = _WindowSnapshot()
 
 
+class _WorkspaceCountSnapshot:
+    value: int | None = None
+    loaded = False
+    monotonic: float = 0.0
+
+
+_workspace_count_snapshot = _WorkspaceCountSnapshot()
+
+
 def cached_windows() -> list[WindowInfo]:
     return list(_window_snapshot.windows or [])
 
@@ -82,6 +91,13 @@ def invalidate_windows() -> None:
     _window_snapshot.loading = False
     _window_snapshot.on_ready = None
     _window_snapshot.pending_idle = None
+    invalidate_workspace_count()
+
+
+def invalidate_workspace_count() -> None:
+    _workspace_count_snapshot.value = None
+    _workspace_count_snapshot.loaded = False
+    _workspace_count_snapshot.monotonic = 0.0
 
 
 def _refresh_windows() -> None:
@@ -1249,20 +1265,77 @@ def take_window_results(
     return results
 
 
-def match_windows(query: str, limit: int = 6, windows: list[WindowInfo] | None = None) -> list[dict]:
+def parse_wmctrl_desktops(text: str) -> int | None:
+    """Count `wmctrl -d` rows. None when the output is not a desktop list."""
+    count = 0
+    for line in text.splitlines():
+        if re.match(r"^\d+\s", line):
+            count += 1
+    return count or None
+
+
+def _ewmh_desktop_count() -> int | None:
+    try:
+        from ulauncher.utils.ewmh import EWMH
+
+        count = EWMH().getNumberOfDesktops()
+    except Exception:
+        return None
+    try:
+        number = int(count)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _probe_workspace_count() -> int | None:
+    from ulauncher.modes.launcher.wayland_workspaces import list_ext_workspaces
+
+    rows = list_ext_workspaces()
+    if rows is not None:
+        return len([row for row in rows if not row.get("removed")])
+    if shutil.which("wmctrl"):
+        parsed = parse_wmctrl_desktops(_text_command(["wmctrl", "-d"]) or "")
+        if parsed is not None:
+            return parsed
+    return _ewmh_desktop_count()
+
+
+def listed_workspace_count(now: float | None = None) -> int | None:
+    """Known desktop count, or None when every backend failed (do not hide the switch row)."""
+    stamp = time.monotonic() if now is None else now
+    snap = _workspace_count_snapshot
+    if snap.loaded and stamp - snap.monotonic < WINDOWS_CACHE_TTL_S:
+        return snap.value
+    snap.value = _probe_workspace_count()
+    snap.loaded = True
+    snap.monotonic = stamp
+    return snap.value
+
+
+def match_windows(
+    query: str,
+    limit: int = 6,
+    windows: list[WindowInfo] | None = None,
+    workspace_count: int | None = None,
+) -> list[dict]:
     intent, rest = parse_window_intent(query)
     workspace = parse_workspace_query(query)
     switch_row = None
     if workspace is not None and intent == "focus":
-        switch_row = {
-            "kind": "workspace",
-            "title": workspace_switch_title(workspace + 1),
-            "description": "Workspace",
-            "icon": "view-app-grid-symbolic",
-            "payload": str(workspace),
-            "wid": "",
-            "id": workspace_result_id(workspace + 1),
-        }
+        count = workspace_count
+        if count is None and windows is None:
+            count = listed_workspace_count()
+        if count is None or workspace_index_in_range(workspace, count):
+            switch_row = {
+                "kind": "workspace",
+                "title": workspace_switch_title(workspace + 1),
+                "description": "Workspace",
+                "icon": "view-app-grid-symbolic",
+                "payload": str(workspace),
+                "wid": "",
+                "id": workspace_result_id(workspace + 1),
+            }
     window_rows: list[dict] = []
     for win in windows if windows is not None else cached_windows():
         target = rest if intent != "focus" else query

@@ -23,6 +23,7 @@ from ulauncher.modes.launcher.wayland_workspaces import (
     EXT_WS_REMOVED,
     activate_ext_workspace,
     collect_ext_workspace_handles,
+    list_ext_workspaces,
     pick_ext_workspace,
 )
 
@@ -139,6 +140,12 @@ def _messages(buf: bytes) -> list[tuple[int, int, bytes]]:
     return found
 
 
+def test_list_ext_workspaces_from_scripted_display() -> None:
+    rows = list_ext_workspaces(sock=_ScriptedWorkspaceDisplay(), timeout=1.0)
+    assert rows is not None
+    assert [row["name"] for row in rows] == ["1", "2"]
+
+
 def test_activate_ext_workspace_from_scripted_display() -> None:
     display = _ScriptedWorkspaceDisplay()
     assert activate_ext_workspace(1, sock=display, timeout=1.0) is True
@@ -167,4 +174,6 @@ def test_activate_ext_workspace_missing_protocol_or_socket() -> None:
             return None
 
     assert activate_ext_workspace(0, sock=_NoManager(), timeout=1.0) is False
+    assert list_ext_workspaces(sock=_NoManager(), timeout=1.0) is None
     assert activate_ext_workspace(0, environ={"WAYLAND_DISPLAY": "missing", "XDG_RUNTIME_DIR": "/tmp"}) is False
+    assert list_ext_workspaces(environ={"WAYLAND_DISPLAY": "missing", "XDG_RUNTIME_DIR": "/tmp"}) is None

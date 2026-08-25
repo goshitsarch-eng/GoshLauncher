@@ -114,7 +114,7 @@ def _find_manager(events: list[tuple[int, int, bytes]], registry_id: int) -> tup
     return 0, 1
 
 
-def _run_activate(sock: Any, index: int, timeout: float) -> bool:
+def _bind_and_list(sock: Any, timeout: float) -> tuple[int, list[dict[str, Any]]] | None:
     deadline = time.monotonic() + timeout
     registry_id = CLIENT_ID_START
     sync_id = CLIENT_ID_START + 1
@@ -123,13 +123,21 @@ def _run_activate(sock: Any, index: int, timeout: float) -> bool:
     intro = _recv_until_callback(sock, sync_id, deadline)
     mgr_name, mgr_version = _find_manager(intro, registry_id)
     if not mgr_name:
-        return False
+        return None
     manager_id = CLIENT_ID_START + 2
     done_id = CLIENT_ID_START + 3
     sock.sendall(_bind_ext_workspace_manager(mgr_name, mgr_version, manager_id))
     sock.sendall(pack_wayland_message(WL_DISPLAY_ID, WL_DISPLAY_SYNC, struct.pack("<I", done_id)))
     listed = _recv_until_callback(sock, done_id, deadline)
-    picked = pick_ext_workspace(collect_ext_workspace_handles(listed, manager_id), index)
+    return manager_id, collect_ext_workspace_handles(listed, manager_id)
+
+
+def _run_activate(sock: Any, index: int, timeout: float) -> bool:
+    bound = _bind_and_list(sock, timeout)
+    if bound is None:
+        return False
+    manager_id, handles = bound
+    picked = pick_ext_workspace(handles, index)
     if picked is None:
         return False
     ack_id = CLIENT_ID_START + 4
@@ -139,10 +147,39 @@ def _run_activate(sock: Any, index: int, timeout: float) -> bool:
         + pack_wayland_message(WL_DISPLAY_ID, WL_DISPLAY_SYNC, struct.pack("<I", ack_id))
     )
     try:
-        _recv_until_callback(sock, ack_id, deadline)
+        _recv_until_callback(sock, ack_id, time.monotonic() + timeout)
     except TimeoutError:
         return True
     return True
+
+
+def _session(sock: Any, environ: Mapping[str, str] | None) -> tuple[Any, bool]:
+    if sock is not None:
+        return sock, False
+    conn = _connect(environ)
+    return conn, True
+
+
+def list_ext_workspaces(
+    environ: Mapping[str, str] | None = None,
+    timeout: float = 0.25,
+    sock: Any = None,
+) -> list[dict[str, Any]] | None:
+    """Current workspaces, or None when the protocol is missing or the socket fails."""
+    conn, owned = _session(sock, environ)
+    if conn is None:
+        return None
+    bound: tuple[int, list[dict[str, Any]]] | None = None
+    try:
+        bound = _bind_and_list(conn, timeout)
+    except (OSError, struct.error, ValueError, TimeoutError):
+        return None
+    finally:
+        if owned:
+            conn.close()
+    if bound is None:
+        return None
+    return bound[1]
 
 
 def activate_ext_workspace(
@@ -152,8 +189,7 @@ def activate_ext_workspace(
     sock: Any = None,
 ) -> bool:
     """Activate the workspace at 0-based index. False when the protocol is missing."""
-    owned = sock is None
-    conn = sock if sock is not None else _connect(environ)
+    conn, owned = _session(sock, environ)
     if conn is None:
         return False
     try:

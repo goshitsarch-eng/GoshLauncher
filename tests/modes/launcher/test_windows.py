@@ -16,9 +16,11 @@ from ulauncher.modes.launcher.windows import (
     gtk_unique_props_from_mapping,
     gtk_unique_props_from_xprop,
     is_unique_gtk_window,
+    listed_workspace_count,
     match_windows,
     parse_window_close_query,
     parse_window_intent,
+    parse_wmctrl_desktops,
     parse_wmctrl_lx,
     parse_workspace_query,
     parse_workspace_switch_query,
@@ -73,6 +75,10 @@ def test_workspace_query_needs_the_word() -> None:
     assert parse_workspace_switch_query("workspace") is None
     assert workspace_index_in_range(1, 3) is True
     assert workspace_index_in_range(3, 3) is False
+    desktops = "0  * DG: 1920x1080  VP: 0,0  WA: 0,0 1920x1080  1\n1  - DG: 1920x1080  VP: 0,0  WA: 0,0 1920x1080  2\n"
+    assert parse_wmctrl_desktops(desktops) == 2
+    assert parse_wmctrl_desktops("") is None
+    assert parse_wmctrl_desktops("Cannot get client list properties.\n") is None
 
 
 def test_close_and_kill_intents() -> None:
@@ -116,6 +122,12 @@ def test_window_class_text_and_workspace_label_match_goshos() -> None:
     rows = match_windows("workspace 2", windows=[])
     assert rows
     assert rows[0]["icon"] == "view-app-grid-symbolic"
+    assert match_windows("workspace 99", windows=[], workspace_count=3) == []
+    in_range = match_windows("workspace 2", windows=[], workspace_count=3)
+    assert in_range[0]["kind"] == "workspace"
+    assert in_range[0]["id"] == "workspace:2"
+    unknown = match_windows("workspace 99", windows=[])
+    assert unknown[0]["kind"] == "workspace"
     nav = WindowInfo(
         wid="0x2",
         title="Mozilla Firefox",
@@ -593,6 +605,30 @@ def test_activate_window_uses_application_activate_on_wayland(monkeypatch: pytes
         application_activate=lambda app: calls.append(("app", app)) or True,
     )
     assert calls == [("x11", wlr_wid)]
+
+
+def test_listed_workspace_count_prefers_ext_then_wmctrl(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces",
+        lambda: [{"removed": False}, {"removed": True}, {"name": "3"}],
+    )
+    assert listed_workspace_count() == 2
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows.shutil.which",
+        lambda name: "wmctrl" if name == "wmctrl" else None,
+    )
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._text_command",
+        lambda _argv: "0  * DG: 1x1  VP: 0,0  WA: 0,0 1x1  1\n1  - DG: 1x1  VP: 0,0  WA: 0,0 1x1  2\n",
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_desktop_count", lambda: 9)
+    assert listed_workspace_count() == 2
+    invalidate_workspace_count()
 
 
 def test_wayland_workspace_switch_prefers_compositor_ipc() -> None:
