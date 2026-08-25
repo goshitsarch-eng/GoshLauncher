@@ -27,6 +27,8 @@ def test_spoken_lock_sign_out_and_power_off() -> None:
     assert shutdown[0]["id"] == "shutdown"
     assert match_system_actions("lock now")
     assert match_system_actions("sleep")
+    assert match_system_actions("sign off")[0]["id"] == "logout"
+    assert match_system_actions("lock orientation")[0]["id"] == "lock-orientation"
 
 
 def test_logind_no_hides_power_actions_screenshot_stays() -> None:

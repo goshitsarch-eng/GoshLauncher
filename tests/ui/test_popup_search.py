@@ -300,6 +300,11 @@ def test_more_goshos_queries(popup: SearchPopup) -> None:
     assert "color" in popup.type_query("red")
     color = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "color")
     assert color.name == "#ff0000"
+    assert "color" in popup.type_query("rebeccapurple")
+    purple = next(row for row in popup.win.results_view.get_result_objects() if getattr(row, "kind", "") == "color")
+    assert purple.name == "#663399"
+    assert "system" in popup.type_query("sign off")
+    assert "system" in popup.type_query("lock orientation")
     assert "url" in popup.type_query("sftp://nas.example/share")
     assert "url" in popup.type_query("smb://nas/Public")
     assert "url" in popup.type_query("::1")

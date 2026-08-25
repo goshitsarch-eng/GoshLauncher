@@ -72,6 +72,10 @@ def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     publish = (ROOT / ".github" / "workflows" / "publish-release.yml").read_text()
     assert "scripts/ci-install-gtk4.sh" in publish
     assert "ubuntu-22.04" in publish
+    assert "help2man" in publish
+    assert "help2man" in draft
+    makefile = (ROOT / "makefile").read_text()
+    assert "command -v help2man" in makefile
     assert "gir1.2-gtk-4.0" in script
     assert "gir1.2-adw-1" in script
     assert "libadwaita-1-0" in script

@@ -24,6 +24,7 @@ def test_settings_prefix_is_not_a_color() -> None:
 
 def test_named_and_rgb() -> None:
     assert parse_color("red")["hex"] == "#ff0000"
+    assert parse_color("rebeccapurple")["hex"] == "#663399"
     assert parse_color("rgb 255 0 0")["hex"] == "#ff0000"
     assert parse_color("rgb(255, 0, 0)")["hex"] == "#ff0000"
 
