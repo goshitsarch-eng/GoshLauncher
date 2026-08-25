@@ -30,6 +30,9 @@ class SearchPopup:
     def names(self) -> list[str]:
         return [str(row.name) for row in self.win.results_view.get_result_objects() if getattr(row, "name", "")]
 
+    def css_classes(self) -> list[str]:
+        return list(self.win.theme_root.get_css_classes())
+
     def type_query(self, text: str) -> list[str]:
         from gi.repository import GLib
 
@@ -43,10 +46,15 @@ class SearchPopup:
             self.launcher.flush_lookups()
             kinds = self.kinds()
             if kinds:
+                last = kinds
                 settle = GLib.get_monotonic_time() + 80_000
                 while GLib.get_monotonic_time() < settle:
                     ctx.iteration(False)
-                self.launcher.flush_lookups()
+                    self.launcher.flush_lookups()
+                    now = self.kinds()
+                    if now != last:
+                        last = now
+                        settle = GLib.get_monotonic_time() + 80_000
                 return self.kinds()
         return kinds
 
@@ -92,6 +100,8 @@ def open_search_popup(
     class SearchProbeApp(Adw.Application):
         query = ""
         activated: Any = None
+        closed = False
+        preferences_shown = False
 
         def __init__(self) -> None:
             super().__init__(application_id=app_id, flags=Gio.ApplicationFlags.NON_UNIQUE)
@@ -113,10 +123,10 @@ def open_search_popup(
                     return
 
         def show_preferences(self, *_args: object, **_kwargs: object) -> None:
-            return
+            self.preferences_shown = True
 
         def request_close(self, _save_query: bool = False) -> None:
-            return
+            self.closed = True
 
         def close_launcher(self, *_args: object, **_kwargs: object) -> None:
             return
@@ -147,6 +157,9 @@ def open_search_popup(
     stack.enter_context(patch("ulauncher.modes.launcher.apps.home_apps", lambda limit: apps[:limit]))
     stack.enter_context(patch("ulauncher.modes.launcher.windows.cached_windows", lambda: windows))
     stack.enter_context(patch("ulauncher.modes.launcher.windows.ensure_windows", lambda _on_ready: None))
+    # Real XBEL / GTK bookmark files on the VM must not steal last-resort web fallback.
+    stack.enter_context(patch("ulauncher.modes.launcher.recents.search_recents", lambda *_args, **_kwargs: []))
+    stack.enter_context(patch("ulauncher.modes.launcher.bookmarks.search_bookmarks", lambda *_args, **_kwargs: []))
     win = UlauncherWindow(application=app)
     try:
         wait_popup_styled(win)

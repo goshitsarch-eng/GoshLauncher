@@ -84,11 +84,20 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     popup.win._chrome["show_numbers"] = True
     popup.win.show_results(results_update([pending, ready, later], Query(None, "/tmp")))
     popup.app.activated = None
+    popup.app.closed = False
     # Checking path is listed (Alt+1) but is not a selectable/activatable row.
     assert popup.win.results_view.selected_index == 1
     assert popup.press(Gdk.KEY_Down)
     assert popup.win.results_view.selected_index == 2
     assert popup.press(Gdk.KEY_k, Gdk.ModifierType.CONTROL_MASK)
+    assert popup.win.results_view.selected_index == 1
+    assert popup.press(Gdk.KEY_Tab)
+    assert popup.win.results_view.selected_index == 2
+    assert popup.press(Gdk.KEY_n, Gdk.ModifierType.CONTROL_MASK)
+    assert popup.win.results_view.selected_index == 1
+    assert popup.press(Gdk.KEY_End)
+    assert popup.win.results_view.selected_index == 2
+    assert popup.press(Gdk.KEY_Home)
     assert popup.win.results_view.selected_index == 1
     assert popup.press(Gdk.KEY_1, Gdk.ModifierType.ALT_MASK)
     assert popup.app.activated is None
@@ -96,6 +105,8 @@ def test_keyboard_nav_and_alt_number_skips_checking_path(popup: SearchPopup) -> 
     chosen, alt = popup.app.activated
     assert alt is False
     assert chosen.name == "Firefox"
+    assert popup.press(Gdk.KEY_Escape)
+    assert popup.app.closed is True
 
 
 def test_places_system_path_and_spoken_math(popup: SearchPopup) -> None:
@@ -169,3 +180,114 @@ def test_empty_state_windows_first_on_popos() -> None:
         assert probe.names()[:2] == ["Mozilla Firefox", "Firefox"]
     finally:
         probe.close()
+
+
+def _web_fallback_settings() -> Settings:
+    settings = Settings()
+    settings.show_web_search = True
+    for attr in (
+        "enable_application_mode",
+        "enable_url_open",
+        "enable_path_open",
+        "enable_places",
+        "enable_bookmarks",
+        "enable_calculator",
+        "enable_unit_convert",
+        "enable_color_hex",
+        "enable_time_date",
+        "enable_window_search",
+        "enable_system_actions",
+        "enable_settings_search",
+        "enable_recent_files",
+        "enable_command_run",
+    ):
+        setattr(settings, attr, False)
+    return settings
+
+
+def test_web_fallback_and_at_prefix_with_fallback_off() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    try:
+        probe = open_search_popup(settings=_web_fallback_settings())
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.type_query("zzzxqwerty999nomatch")
+        assert kinds == ["web"]
+        assert "Search Google" in probe.names()[0]
+    finally:
+        probe.close()
+
+    settings = Settings()
+    settings.show_web_search = False
+    try:
+        probe = open_search_popup(settings=settings)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        assert probe.type_query("@ cats") == ["web"]
+        kinds = probe.type_query("zzzxqwerty999nomatch")
+        assert "web" not in kinds
+    finally:
+        probe.close()
+
+
+def test_javascript_is_not_a_url_and_mailto_is(popup: SearchPopup) -> None:
+    kinds = popup.type_query("javascript:alert(1)")
+    assert "url" not in kinds
+    assert "url" in popup.type_query("mailto:nin@example.com")
+    assert "url" in popup.type_query("localhost:3000")
+    assert "url" not in popup.type_query("https://example.com/foo bar")
+
+
+def test_more_goshos_queries(popup: SearchPopup) -> None:
+    assert "color" in popup.type_query("rgb 255 0 0")
+    assert "color" in popup.type_query("hsl(0deg 100% 50%)")
+    assert "color" in popup.type_query("hwb(0 0% 0%)")
+    assert "clock" in popup.type_query("tomorrow")
+    assert "units" in popup.type_query("32 f to c")
+    assert "calculator" in popup.type_query("half of 80")
+    assert "place" in popup.type_query("open my documents")
+
+
+def test_command_prefix_when_enabled() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    settings = Settings()
+    settings.enable_command_run = True
+    try:
+        probe = open_search_popup(settings=settings)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        kinds = probe.type_query("! definitely-not-a-ulauncher-binary-xyz")
+        assert "command" in kinds
+    finally:
+        probe.close()
+
+
+def test_krunner_look_applies_compact_density() -> None:
+    if not display_available():
+        pytest.skip("no Gdk display")
+    settings = Settings()
+    settings.look_id = "krunner"
+    settings.applied_look = ""
+    try:
+        probe = open_search_popup(settings=settings)
+    except (RuntimeError, TypeError, OSError) as exc:
+        pytest.skip(f"could not open search popup: {exc}")
+    try:
+        classes = probe.css_classes()
+        assert "gosh-theme-krunner" in classes
+        assert "gosh-density-compact" in classes
+        assert "gosh-no-search-icon" not in classes
+    finally:
+        probe.close()
+
+
+def test_spotlight_popup_keeps_default_look_css(popup: SearchPopup) -> None:
+    classes = popup.css_classes()
+    assert "app" in classes
+    assert "gosh-theme-spotlight" in classes
+    assert "gosh-density-comfortable" in classes

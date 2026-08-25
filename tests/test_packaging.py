@@ -77,3 +77,18 @@ def test_ci_installs_gtk4_on_ubuntu_22_04() -> None:
     assert "libadwaita-1-0" in script
     makefile = (ROOT / "makefile").read_text()
     assert 'export PATH="/usr/sbin:/usr/bin:/sbin:/bin"' in makefile
+
+
+def test_prerelease_banner_uses_goshlauncher() -> None:
+    from ulauncher.cli.commands.start import _boxed_warning
+
+    banner = _boxed_warning(f"YOU ARE RUNNING A PRE-RELEASE of {app_display_name.upper()}.")
+    assert "GOSHLAUNCHER" in banner
+    assert "PRE-RELEASE of ULAUNCHER" not in banner
+    start = (ROOT / "ulauncher" / "cli" / "commands" / "start.py").read_text()
+    assert "PRE-RELEASE of ULAUNCHER" not in start
+    assert "render Ulauncher correctly" not in start
+    assert "app_display_name" in start
+    plasma = _boxed_warning(f"Plasma Desktop needs Layer Shell to render {app_display_name} correctly on Wayland.")
+    assert "GoshLauncher" in plasma
+    assert "Ulauncher" not in plasma

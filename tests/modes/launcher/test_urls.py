@@ -151,3 +151,24 @@ def test_davs_and_spaced_file_share() -> None:
     assert share is not None
     assert " " not in share["url"]
     assert share["kind"] == "file"
+
+
+def test_mailto_magnet_localhost_and_https_with_space() -> None:
+    mail = match_url("mailto:nin@example.com")
+    assert mail is not None
+    assert mail["url"] == "mailto:nin@example.com"
+    assert mail["description"] == "Write email"
+    magnet = match_url("magnet:?xt=urn:btih:abc")
+    assert magnet is not None
+    assert magnet["url"].startswith("magnet:")
+    local = match_url("localhost:3000")
+    assert local is not None
+    assert local["url"] == "http://localhost:3000"
+    loopback = match_url("127.0.0.1")
+    assert loopback is not None
+    assert loopback["url"] == "http://127.0.0.1"
+    assert match_url("https://example.com/foo bar") is None
+    assert match_url("999.999.999.999") is None
+    assert match_url("localhostx") is None
+    assert match_url("magnet:?xt=urn:btih:abc") is not None
+    assert match_url("magnet:xt=urn:btih:abc") is not None

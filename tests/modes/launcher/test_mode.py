@@ -374,6 +374,59 @@ def test_get_modes_launcher_owns_typed_search() -> None:
     assert "AppMode" in names
 
 
+def test_web_fallback_when_nothing_local_matches(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.show_web_search = True
+    for attr in (
+        "enable_application_mode",
+        "enable_url_open",
+        "enable_path_open",
+        "enable_places",
+        "enable_bookmarks",
+        "enable_calculator",
+        "enable_unit_convert",
+        "enable_color_hex",
+        "enable_time_date",
+        "enable_window_search",
+        "enable_system_actions",
+        "enable_settings_search",
+        "enable_recent_files",
+        "enable_command_run",
+    ):
+        setattr(settings, attr, False)
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    results = _handle("zzzxqwerty999nomatch")
+    assert _kinds(results) == ["web"]
+    web = next(row for row in results if getattr(row, "kind", "") == "web")
+    assert web.payload["url"].startswith("https://www.google.com/search?q=")
+    assert "zzzxqwerty999nomatch" in web.payload["url"]
+
+
+def test_at_prefix_still_searches_when_web_fallback_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.utils.settings import Settings
+
+    settings = Settings()
+    settings.show_web_search = False
+    monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
+    kinds = _kinds(_handle("@ cats"))
+    assert kinds == ["web"]
+    kinds = _kinds(_handle("zzzxqwerty999nomatch"))
+    assert "web" not in kinds
+
+
+def test_javascript_alert_is_not_a_url() -> None:
+    kinds = _kinds(_handle("javascript:alert(1)"))
+    assert "url" not in kinds
+
+
+def test_mailto_and_localhost_are_urls() -> None:
+    assert "url" in _kinds(_handle("mailto:nin@example.com"))
+    assert "url" in _kinds(_handle("localhost:3000"))
+    assert "url" not in _kinds(_handle("https://example.com/foo bar"))
+
+
 def test_calculator_activate_copies_and_closes(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[str, str]] = []
     monkeypatch.setattr(
