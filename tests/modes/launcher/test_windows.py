@@ -226,6 +226,15 @@ def test_window_recency_prefers_front_tab_then_user_time() -> None:
     assert [win.title for win in ordered] == ["Old", "New"]
     tabbed = sort_windows_most_recent([older, newer], tab_ranks={"new": 0, "old": 1})
     assert [win.title for win in tabbed] == ["New", "Old"]
+    twins = [
+        WindowInfo(wid="0x1", title="A", wm_class="firefox", desktop=0),
+        WindowInfo(wid="0x2", title="B", wm_class="firefox", desktop=0),
+    ]
+    # two windows share a class; alt-tab rank is per window id like goshos MetaWindow keys
+    assert [win.title for win in sort_windows_most_recent(twins, tab_ranks={"0x1": 1, "0x2": 0, "firefox": 1})] == [
+        "B",
+        "A",
+    ]
     assert window_recency_value(0, 3, 0) > window_recency_value(-1, 0, 999)
 
 

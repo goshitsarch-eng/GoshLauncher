@@ -458,12 +458,12 @@ def sort_windows_most_recent(
         else:
             user_time = 0
         if tab_ranks:
-            key = (win.wm_class or "").lower()
-            if key in tab_ranks:
-                return window_recency_value(tab_ranks[key], tab_count, 0)
             ident = str(win.wid)
             if ident in tab_ranks:
                 return window_recency_value(tab_ranks[ident], tab_count, 0)
+            key = (win.wm_class or "").lower()
+            if key in tab_ranks:
+                return window_recency_value(tab_ranks[key], tab_count, 0)
         return user_time
 
     return sorted(windows, key=recency, reverse=True)
