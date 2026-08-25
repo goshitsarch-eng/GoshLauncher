@@ -24,9 +24,11 @@ from ulauncher.modes.launcher.windows import (
     listed_current_desktop,
     listed_workspace_count,
     match_windows,
+    merge_window_lists,
     niri_current_desktop,
     niri_focus_user_time,
     niri_workspace_count,
+    overlay_window_info,
     parse_window_close_query,
     parse_window_intent,
     parse_wmctrl_current_desktop,
@@ -249,6 +251,11 @@ def test_window_recency_prefers_front_tab_then_user_time() -> None:
         "A",
     ]
     assert window_recency_value(0, 3, 0) > window_recency_value(-1, 0, 999)
+    titled = [
+        WindowInfo(wid="a", title="Firefox", wm_class="x", desktop=0, user_time=1),
+        WindowInfo(wid="b", title="Term", wm_class="y", desktop=0, user_time=9),
+    ]
+    assert [win.title for win in sort_windows_most_recent(titled, tab_ranks={"firefox": 0})] == ["Firefox", "Term"]
 
 
 def test_window_and_workspace_result_ids() -> None:
@@ -304,17 +311,65 @@ def test_introspect_payload_lists_wayland_windows() -> None:
     assert sandboxed[0].wm_class == "firefox org.mozilla.firefox"
     assert sandboxed[0].app_id == "firefox.desktop"
     assert window_matches(sandboxed[0], "mozilla")
+
+
+def test_pick_window_list_merges_native_skip_taskbar_onto_compositor() -> None:
     native = [WindowInfo(wid="0x1", title="Only X11", wm_class="x", desktop=0)]
-    wayland = windows_from_introspect_payload(payload)
-    picked = pick_window_list(native, [], wayland)
-    assert picked == wayland
+    wayland = [
+        WindowInfo(wid="0x1a00001", title="Firefox", wm_class="firefox", desktop=0),
+        WindowInfo(wid="0x2", title="Term", wm_class="org.gnome.Console", desktop=0, app_id="org.gnome.Console"),
+    ]
+    assert [row.title for row in pick_window_list(native, [], wayland)] == ["Only X11", "Firefox", "Term"]
     assert pick_window_list(native, [], []) == native
     assert pick_window_list([], [], []) == []
     compositor = [WindowInfo(wid="hypr:0x1", title="Wayland", wm_class="app", desktop=0)]
     assert pick_window_list([], [], [], compositor) == compositor
     native_one = [WindowInfo(wid="0x1", title="X", wm_class="x", desktop=0)]
     compositor_two = [*compositor, WindowInfo(wid="hypr:0x2", title="Other", wm_class="b", desktop=0)]
-    assert pick_window_list(native_one, [], [], compositor_two) == compositor_two
+    assert [row.title for row in pick_window_list(native_one, [], [], compositor_two)] == ["X", "Wayland", "Other"]
+    ewmh = [
+        WindowInfo(
+            wid="0xabc",
+            title="Mozilla Firefox",
+            wm_class="firefox",
+            desktop=2,
+            pid=42,
+            skip_taskbar=False,
+            user_time=99,
+            gtk_unique_bus_name=":1.9",
+            gtk_application_object_path="/org/mozilla/Firefox",
+            gtk_app_id="firefox",
+        )
+    ]
+    ext = [WindowInfo(wid="ext:ident", title="Mozilla Firefox", wm_class="firefox", desktop=0, pid=0, app_id="firefox")]
+    merged = pick_window_list(ewmh, [], [], ext)
+    assert len(merged) == 1
+    row = merged[0]
+    assert row.wid == "0xabc"
+    assert row.desktop == 2
+    assert row.pid == 42
+    assert row.user_time == 99
+    assert row.gtk_unique_bus_name == ":1.9"
+    dock_native = [
+        WindowInfo(wid="0x2", title="Dash", wm_class="dash-to-dock", desktop=0, skip_taskbar=True, window_type="dock")
+    ]
+    dock_ext = [WindowInfo(wid="ext:dash", title="Dash", wm_class="dash-to-dock", desktop=0, app_id="dash-to-dock")]
+    dock = overlay_window_info(dock_ext[0], dock_native[0])
+    assert dock.skip_taskbar is True
+    assert dock.window_type == "dock"
+    assert window_is_searchable(dock) is False
+    twins_native = [
+        WindowInfo(wid="0x10", title="Terminal", wm_class="kgx", desktop=1, pid=8),
+        WindowInfo(wid="0x11", title="Terminal", wm_class="org.gnome.Console", desktop=3, pid=9),
+    ]
+    twins_ext = [
+        WindowInfo(wid="ext:a", title="Terminal", wm_class="kgx", desktop=0, app_id="kgx"),
+        WindowInfo(wid="ext:b", title="Terminal", wm_class="org.gnome.Console", desktop=0, app_id="org.gnome.Console"),
+    ]
+    paired = merge_window_lists(twins_native, twins_ext)
+    assert [row.wid for row in paired] == ["0x10", "0x11"]
+    assert [row.desktop for row in paired] == [1, 3]
+    assert [row.app_id for row in paired] == ["kgx", "org.gnome.Console"]
 
 
 def test_introspect_payload_honors_skip_taskbar_and_type() -> None:
@@ -695,6 +750,18 @@ def test_activate_window_uses_application_activate_on_wayland(monkeypatch: pytes
         application_activate=lambda app: calls.append(("app", app)) or True,
     )
     assert calls == [("x11", wlr_wid)]
+
+
+def test_activate_window_skips_app_activate_when_atspi_grabs(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.session_has_x11_window_control", lambda: False)
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._focus_window", lambda wid: calls.append(("x11", wid)))
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._grab_atspi_window", lambda _payload: True)
+    activate_window(
+        {"kind": "focus", "wid": "ext:ident", "app_id": "firefox", "title": "Mozilla Firefox"},
+        application_activate=lambda app: calls.append(("app", app)) or True,
+    )
+    assert calls == [("x11", "ext:ident")]
 
 
 def test_listed_workspace_count_prefers_ext_then_wmctrl(monkeypatch: pytest.MonkeyPatch) -> None:

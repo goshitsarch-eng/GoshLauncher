@@ -41,6 +41,7 @@ class WindowInfo:
     gtk_application_object_path: str = ""
     skip_taskbar: bool = False
     window_type: str = "normal"
+    atspi_ref: str = ""
 
 
 WINDOWS_CACHE_TTL_S = 0.4
@@ -489,12 +490,14 @@ def sort_windows_most_recent(
         else:
             user_time = 0
         if tab_ranks:
-            ident = str(win.wid)
-            if ident in tab_ranks:
-                return window_recency_value(tab_ranks[ident], tab_count, 0)
-            key = (win.wm_class or "").lower()
-            if key in tab_ranks:
-                return window_recency_value(tab_ranks[key], tab_count, 0)
+            for key in (
+                str(win.wid),
+                (win.wm_class or "").lower(),
+                (win.app_id or "").lower(),
+                (win.title or "").lower(),
+            ):
+                if key and key in tab_ranks:
+                    return window_recency_value(tab_ranks[key], tab_count, 0)
         return user_time
 
     return sorted(windows, key=recency, reverse=True)
@@ -613,18 +616,225 @@ def tab_ranks_from_introspect_payload(payload: Any) -> dict[str, int]:
     return ranks
 
 
+_NO_DESKTOP_PREFIXES = ("ext:", "lswt:", "wlr:", "atspi:")
+_CHROME_WINDOW_TYPES = frozenset(
+    {
+        "dock",
+        "desktop",
+        "toolbar",
+        "menu",
+        "splash",
+        "utility",
+        "dropdown_menu",
+        "tooltip",
+        "notification",
+        "combo",
+        "dnd",
+    }
+)
+
+
+def _wid_key(wid: str) -> str:
+    text = str(wid or "").strip().lower()
+    if text.startswith("0x"):
+        try:
+            return hex(int(text, 16))
+        except ValueError:
+            return text
+    if text.isdigit():
+        return hex(int(text))
+    return text
+
+
+def _is_x11_wid(wid: str) -> bool:
+    text = str(wid or "").strip()
+    if text.startswith("0x") or text.startswith("0X"):
+        try:
+            int(text, 16)
+        except ValueError:
+            return False
+        else:
+            return True
+    return text.isdigit()
+
+
+def _desktop_unknown(win: WindowInfo) -> bool:
+    if win.sticky or win.desktop not in {0, -1}:
+        return False
+    text = str(win.wid or "").lower()
+    return any(text.startswith(prefix) for prefix in _NO_DESKTOP_PREFIXES)
+
+
+def _window_class_tokens(win: WindowInfo) -> set[str]:
+    blob = " ".join(part for part in (win.wm_class, win.app_id, win.gtk_app_id) if part)
+    tokens: set[str] = set()
+    for raw in blob.lower().replace("-", " ").replace(".", " ").split():
+        if len(raw) >= 2:
+            tokens.add(raw)
+    return tokens
+
+
+def _classes_compatible(left: WindowInfo, right: WindowInfo) -> bool:
+    tokens_a = _window_class_tokens(left)
+    tokens_b = _window_class_tokens(right)
+    if not tokens_a or not tokens_b:
+        return True
+    return bool(tokens_a & tokens_b)
+
+
+def _window_group_key(win: WindowInfo) -> str | None:
+    title = (win.title or "").strip().lower()
+    return title or None
+
+
+def _pick_window_type(primary: str, extra: str) -> str:
+    if primary in _CHROME_WINDOW_TYPES:
+        return primary
+    if extra in _CHROME_WINDOW_TYPES:
+        return extra
+    if primary == "normal" and extra != "normal":
+        return extra
+    return primary
+
+
+def _pick_wid(primary: WindowInfo, extra: WindowInfo) -> str:
+    if _is_x11_wid(extra.wid) and not _is_x11_wid(primary.wid):
+        return extra.wid
+    if compositor_window_argv(extra.wid, "focus") and not compositor_window_argv(primary.wid, "focus"):
+        return extra.wid
+    return primary.wid
+
+
+def _pick_desktop(primary: WindowInfo, extra: WindowInfo) -> tuple[int, bool]:
+    sticky = primary.sticky or extra.sticky
+    if primary.desktop < 0 or extra.desktop < 0 or sticky:
+        return -1, True
+    if _desktop_unknown(primary) and not _desktop_unknown(extra):
+        return extra.desktop, extra.sticky
+    return primary.desktop, sticky
+
+
+def overlay_window_info(primary: WindowInfo, extra: WindowInfo) -> WindowInfo:
+    """Copy skip-taskbar, workspace, pid, and GTK unique fields onto one row."""
+    desktop, sticky = _pick_desktop(primary, extra)
+    wm_class = primary.wm_class if len(primary.wm_class) >= len(extra.wm_class) else extra.wm_class
+    return replace(
+        primary,
+        wid=_pick_wid(primary, extra),
+        title=primary.title or extra.title,
+        wm_class=wm_class,
+        desktop=desktop,
+        pid=primary.pid or extra.pid,
+        sticky=sticky,
+        user_time=max(int(primary.user_time or 0), int(extra.user_time or 0)),
+        app_id=primary.app_id or extra.app_id,
+        gtk_app_id=primary.gtk_app_id or extra.gtk_app_id,
+        gtk_unique_bus_name=primary.gtk_unique_bus_name or extra.gtk_unique_bus_name,
+        gtk_application_object_path=primary.gtk_application_object_path or extra.gtk_application_object_path,
+        skip_taskbar=primary.skip_taskbar or extra.skip_taskbar,
+        window_type=_pick_window_type(primary.window_type, extra.window_type),
+        atspi_ref=primary.atspi_ref or extra.atspi_ref,
+    )
+
+
+def _match_extra_by_wid(win: WindowInfo, extra_by_wid: dict[str, int], used: set[int]) -> int | None:
+    index = extra_by_wid.get(_wid_key(win.wid))
+    if index is None or index in used:
+        return None
+    return index
+
+
+def _match_extra_by_pid(win: WindowInfo, extra_by_pid: dict[int, list[int]], used: set[int]) -> int | None:
+    if win.pid <= 0:
+        return None
+    candidates = [index for index in extra_by_pid.get(win.pid, []) if index not in used]
+    if len(candidates) != 1:
+        return None
+    return candidates[0]
+
+
+def _pair_group_windows(
+    base_wins: list[WindowInfo],
+    extra_indexes: list[int],
+    extra: list[WindowInfo],
+    used: set[int],
+) -> tuple[list[tuple[WindowInfo, int]], list[WindowInfo]]:
+    leftover: list[WindowInfo] = []
+    pairs: list[tuple[WindowInfo, int]] = []
+    available = [index for index in extra_indexes if index not in used]
+    for win in base_wins:
+        found: int | None = None
+        for index in available:
+            if _classes_compatible(win, extra[index]):
+                found = index
+                break
+        if found is None:
+            leftover.append(win)
+            continue
+        available.remove(found)
+        pairs.append((win, found))
+    return pairs, leftover
+
+
+def merge_window_lists(base: list[WindowInfo], extra: list[WindowInfo]) -> list[WindowInfo]:
+    """Union host snapshots. Overlay X11 skip-taskbar onto ext-foreign rows."""
+    if not extra:
+        return list(base)
+    if not base:
+        return list(extra)
+    extra_by_wid = {_wid_key(win.wid): index for index, win in enumerate(extra)}
+    extra_by_pid: dict[int, list[int]] = {}
+    for index, win in enumerate(extra):
+        if win.pid > 0:
+            extra_by_pid.setdefault(win.pid, []).append(index)
+    used: set[int] = set()
+    merged: list[WindowInfo] = []
+    unmatched: list[WindowInfo] = []
+    for win in base:
+        index = _match_extra_by_wid(win, extra_by_wid, used)
+        if index is None:
+            index = _match_extra_by_pid(win, extra_by_pid, used)
+        if index is None:
+            unmatched.append(win)
+            continue
+        used.add(index)
+        merged.append(overlay_window_info(win, extra[index]))
+    extra_groups: dict[str, list[int]] = {}
+    for index, win in enumerate(extra):
+        key = _window_group_key(win)
+        if index in used or key is None:
+            continue
+        extra_groups.setdefault(key, []).append(index)
+    base_groups: dict[str, list[WindowInfo]] = {}
+    leftovers: list[WindowInfo] = []
+    for win in unmatched:
+        key = _window_group_key(win)
+        if key is None:
+            leftovers.append(win)
+            continue
+        base_groups.setdefault(key, []).append(win)
+    for key, group in base_groups.items():
+        pairs, rest = _pair_group_windows(group, extra_groups.get(key, []), extra, used)
+        for win, index in pairs:
+            used.add(index)
+            merged.append(overlay_window_info(win, extra[index]))
+        leftovers.extend(rest)
+    merged.extend(leftovers)
+    merged.extend(win for index, win in enumerate(extra) if index not in used)
+    return merged
+
+
 def pick_window_list(
     ewmh: list[WindowInfo],
     wmctrl: list[WindowInfo],
     introspect: list[WindowInfo],
     compositor: list[WindowInfo] | None = None,
+    overlay: list[WindowInfo] | None = None,
 ) -> list[WindowInfo]:
     native = ewmh or wmctrl
-    extra = compositor or []
-    wayland = introspect if len(introspect) >= len(extra) else extra
-    if len(wayland) > len(native):
-        return wayland
-    return native or wayland
+    merged = merge_window_lists(native, introspect)
+    merged = merge_window_lists(merged, compositor or [])
+    return merge_window_lists(merged, overlay or [])
 
 
 def windows_from_hypr_clients(payload: Any) -> list[WindowInfo]:
@@ -1280,8 +1490,19 @@ def list_windows() -> list[WindowInfo]:
     payload = _introspect_windows_payload()
     introspect = windows_from_introspect_payload(payload)
     compositor = _compositor_windows()
-    windows = pick_window_list(ewmh, wmctrl, introspect, compositor)
+    overlay: list[WindowInfo] = []
+    extra_ranks: dict[str, int] = {}
+    try:
+        from ulauncher.modes.launcher.atspi_windows import atspi_focus_ranks, list_atspi_windows
+
+        overlay = list_atspi_windows()
+        extra_ranks = atspi_focus_ranks()
+    except Exception:
+        logger.debug("AT-SPI window overlay failed", exc_info=True)
+    windows = pick_window_list(ewmh, wmctrl, introspect, compositor, overlay)
     ranks = tab_ranks_from_introspect_payload(payload)
+    for key, index in extra_ranks.items():
+        ranks.setdefault(key, index)
     return store_window_snapshot(sort_windows_most_recent(windows, tab_ranks=ranks or None))
 
 
@@ -1829,10 +2050,23 @@ def match_windows(
                 "pid": win.pid,
                 "wm_class": win.wm_class,
                 "app_id": win.app_id,
+                "atspi_ref": getattr(win, "atspi_ref", "") or "",
                 "id": window_result_id(win.wid, title, win.wm_class, description),
             }
         )
     return take_window_results(switch_row, window_rows, limit)
+
+
+def _grab_atspi_window(payload: Mapping[str, Any]) -> bool:
+    try:
+        from ulauncher.modes.launcher.atspi_windows import grab_atspi_focus
+    except Exception:
+        return False
+    return grab_atspi_focus(
+        str(payload.get("atspi_ref") or ""),
+        str(payload.get("title") or ""),
+        str(payload.get("app_id") or payload.get("wm_class") or ""),
+    )
 
 
 def application_bus_name(app_id: str) -> str:
@@ -1876,7 +2110,10 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
             _signal_pid(pid, signal.SIGTERM)
         return
     _focus_window(wid)
-    if app_id and not session_has_x11_window_control() and not compositor_can_focus:
+    grabbed = False
+    if not compositor_can_focus:
+        grabbed = _grab_atspi_window(payload)
+    if app_id and not session_has_x11_window_control() and not compositor_can_focus and not grabbed:
         activate = application_activate or _focus_application
         activate(app_id)
 

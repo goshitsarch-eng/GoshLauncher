@@ -55,6 +55,7 @@ class LiveSearchWatcher:
         self._x11: Any = None
         self._ext_ws: Any = None
         self._ext_list: Any = None
+        self._atspi: Any = None
 
     @property
     def listening(self) -> bool:
@@ -184,7 +185,9 @@ class LiveSearchWatcher:
     def _listen_host_signals(self) -> None:
         # goshos connects to workspace_manager and per-window unmanaged. GTK
         # stand-ins: EWMH PropertyNotify on X11, ext-workspace-v1 and
-        # ext-foreign-toplevel-list on Wayland.
+        # ext-foreign-toplevel-list on Wayland, AT-SPI Window events when a11y
+        # is already enabled.
+        from ulauncher.modes.launcher.atspi_windows import AtspiLiveWatch
         from ulauncher.modes.launcher.wayland_toplevels import ExtForeignLiveWatch
         from ulauncher.modes.launcher.wayland_workspaces import ExtWorkspaceLiveWatch
         from ulauncher.modes.launcher.x11_live import X11LiveWatch
@@ -198,6 +201,9 @@ class LiveSearchWatcher:
         ext_list = ExtForeignLiveWatch()
         if ext_list.start(self._notify):
             self._ext_list = ext_list
+        atspi = AtspiLiveWatch()
+        if atspi.start(self._notify):
+            self._atspi = atspi
 
     def _unlisten_host_signals(self) -> None:
         if self._x11 is not None:
@@ -212,3 +218,7 @@ class LiveSearchWatcher:
             with contextlib.suppress(AttributeError, OSError, RuntimeError, TypeError):
                 self._ext_list.stop()
             self._ext_list = None
+        if self._atspi is not None:
+            with contextlib.suppress(AttributeError, OSError, RuntimeError, TypeError):
+                self._atspi.stop()
+            self._atspi = None
