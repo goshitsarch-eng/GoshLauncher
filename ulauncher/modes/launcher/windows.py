@@ -444,16 +444,11 @@ def sort_windows_most_recent(
     get_user_time: Any = None,
     tab_ranks: dict[str, int] | None = None,
 ) -> list[WindowInfo]:
-    indexed = list(windows)
-    count = len(indexed)
+    # goshos: compositor list order is stacking, not focus. sortWindowsMostRecent
+    # orders by getUserTime; tab ranks already store windowRecencyValue(i, n, 0).
+    tab_count = (max(tab_ranks.values()) + 1) if tab_ranks else 0
 
-    def recency(item: tuple[int, WindowInfo]) -> int:
-        index, win = item
-        if tab_ranks:
-            key = (win.wm_class or "").lower()
-            tab_index = tab_ranks.get(key, tab_ranks.get(str(win.wid), index))
-        else:
-            tab_index = index
+    def recency(win: WindowInfo) -> int:
         stamp = get_user_time(win) if callable(get_user_time) else win.user_time
         if isinstance(stamp, (int, float, str)):
             try:
@@ -462,9 +457,16 @@ def sort_windows_most_recent(
                 user_time = 0
         else:
             user_time = 0
-        return window_recency_value(tab_index, count, user_time)
+        if tab_ranks:
+            key = (win.wm_class or "").lower()
+            if key in tab_ranks:
+                return window_recency_value(tab_ranks[key], tab_count, 0)
+            ident = str(win.wid)
+            if ident in tab_ranks:
+                return window_recency_value(tab_ranks[ident], tab_count, 0)
+        return user_time
 
-    return [win for _index, win in sorted(enumerate(indexed), key=recency, reverse=True)]
+    return sorted(windows, key=recency, reverse=True)
 
 
 INTROSPECT_DESTS = ("org.gnome.Shell.Introspect", "org.gnome.Shell")

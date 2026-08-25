@@ -218,11 +218,15 @@ def test_take_window_results_workspace_consumes_a_slot() -> None:
 
 def test_window_recency_prefers_front_tab_then_user_time() -> None:
     assert window_recency_value(0, 3, 10) > window_recency_value(1, 3, 999999)
+    assert window_recency_value(-1, 3, 50) == 50
     older = WindowInfo(wid="1", title="Old", wm_class="old", desktop=0, user_time=50)
     newer = WindowInfo(wid="2", title="New", wm_class="new", desktop=0, user_time=5)
-    # stacking/tab order: newer is index 0
+    # compositor list order is stacking not focus — goshos sorts by user_time
     ordered = sort_windows_most_recent([newer, older])
-    assert [win.title for win in ordered] == ["New", "Old"]
+    assert [win.title for win in ordered] == ["Old", "New"]
+    tabbed = sort_windows_most_recent([older, newer], tab_ranks={"new": 0, "old": 1})
+    assert [win.title for win in tabbed] == ["New", "Old"]
+    assert window_recency_value(0, 3, 0) > window_recency_value(-1, 0, 999)
 
 
 def test_window_and_workspace_result_ids() -> None:
