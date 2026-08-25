@@ -50,6 +50,7 @@ from ulauncher.modes.launcher.windows import (
     windows_from_qtile_windows,
     windows_from_sway_tree,
     windows_from_wlrctl_list,
+    workspace_desktop_from_name,
     workspace_index_in_range,
     workspace_label_matches,
     workspace_result_id,
@@ -835,6 +836,92 @@ def test_qtile_windows_list_and_activate() -> None:
     wrapped = windows_from_qtile_windows({"windows": [{"id": 4, "title": "Foot", "wm_class": "foot"}]})
     assert wrapped[0].wid == "qtile:4"
     assert wrapped[0].title == "Foot"
+
+
+def test_named_sway_i3_qtile_workspaces_are_not_workspace_one() -> None:
+    assert workspace_desktop_from_name("3") == 2
+    assert workspace_desktop_from_name("code") == -1
+    assert workspace_desktop_from_name("2:www") == 1
+    assert workspace_desktop_from_name("www", 3) == 2
+    assert workspace_desktop_from_name("code", -1) == -1
+    assert workspace_desktop_from_name("code", True) == -1
+
+    sway = windows_from_sway_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "code",
+                    "nodes": [
+                        {
+                            "id": 7,
+                            "type": "con",
+                            "name": "Editor",
+                            "app_id": "code",
+                            "pid": 3,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    assert sway[0].desktop == -1
+    assert window_workspace_label(sway[0].desktop) == "Switch to window"
+    assert not window_matches(sway[0], "1")
+    assert not window_matches(sway[0], "workspace 1")
+
+    i3 = windows_from_i3_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "2:www",
+                    "nodes": [
+                        {
+                            "id": 9,
+                            "type": "con",
+                            "name": "Firefox",
+                            "window_properties": {"class": "firefox", "title": "Firefox"},
+                            "pid": 4,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    assert i3[0].desktop == 1
+    assert window_matches(i3[0], "2")
+    assert not window_matches(i3[0], "1")
+
+    i3_num = windows_from_i3_tree(
+        {
+            "type": "root",
+            "nodes": [
+                {
+                    "type": "workspace",
+                    "name": "www",
+                    "num": 3,
+                    "nodes": [
+                        {
+                            "id": 10,
+                            "type": "con",
+                            "name": "Chrome",
+                            "window_properties": {"class": "google-chrome"},
+                            "pid": 5,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    assert i3_num[0].desktop == 2
+
+    qtile = windows_from_qtile_windows([{"id": 1, "name": "Term", "wm_class": "foot", "group": "code"}])
+    assert qtile[0].desktop == -1
+    assert window_workspace_label(qtile[0].desktop) == "Switch to window"
+    assert not window_matches(qtile[0], "1")
 
 
 def test_match_windows_reads_cached_snapshot() -> None:

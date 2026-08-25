@@ -696,11 +696,10 @@ def _walk_sway_tree(node: Any, windows: list[WindowInfo], desktop: int, prefix: 
         return
     next_desktop = desktop
     if node.get("type") == "workspace":
-        name = str(node.get("name") or "1")
+        name = str(node.get("name") or "")
         if name.startswith("__"):
             return
-        if name.isdigit():
-            next_desktop = max(int(name) - 1, 0)
+        next_desktop = workspace_desktop_from_name(name, node.get("num"))
     children = list(node.get("nodes") or []) + list(node.get("floating_nodes") or [])
     is_leaf = not children
     has_window = bool(node.get("pid") or node.get("app_id") or node.get("window_properties"))
@@ -885,6 +884,24 @@ def one_based_workspace_desktop(number: int) -> int:
     return number - 1
 
 
+def workspace_desktop_from_name(name: str, num: Any = None) -> int:
+    """Map a Sway/i3/Qtile workspace name onto WindowInfo.desktop.
+
+    Digit names and i3-style ``2:www`` become 0-based indexes. Named
+    workspaces (``code``) have no GNOME-style index, so the label is Switch
+    to window rather than the leftover Workspace 1 of desktop 0.
+    """
+    if isinstance(num, int) and not isinstance(num, bool) and num >= 1:
+        return one_based_workspace_desktop(num)
+    text = str(name or "").strip()
+    if text.isdigit():
+        return one_based_workspace_desktop(int(text))
+    head = text.split(":", 1)[0].strip()
+    if head.isdigit():
+        return one_based_workspace_desktop(int(head))
+    return -1
+
+
 def _kwin_placement(item: Mapping[str, Any]) -> tuple[int, bool, int]:
     sticky = bool(item.get("onAllDesktops") or item.get("on_all_desktops"))
     try:
@@ -979,11 +996,7 @@ def windows_from_qtile_windows(payload: Any) -> list[WindowInfo]:
         title = str(item.get("name") or item.get("title") or "")
         if not title and not klass:
             continue
-        group = str(item.get("group") or "")
-        try:
-            desktop = max(int(group) - 1, 0) if group.isdigit() else 0
-        except ValueError:
-            desktop = 0
+        desktop = workspace_desktop_from_name(str(item.get("group") or ""))
         try:
             pid = int(item.get("pid") or 0)
         except (TypeError, ValueError):
