@@ -515,9 +515,10 @@ def test_live_prefs_keep_selected_row(popup: SearchPopup) -> None:
     kinds = popup.type_query("2+2")
     assert "calculator" in kinds
     assert "Calculator" in popup.header_names()
+    popup.win.results_view.select_jump(0)
     chosen = popup.win.results_view.get_active_result()
     assert chosen is not None
-    assert chosen.kind == "calculator"
+    assert getattr(chosen, "kind", "") == "calculator"
     name = chosen.name
     popup.settings.show_section_headers = False
     popup.win.apply_live_prefs(live_pref_actions(["show_section_headers"]))

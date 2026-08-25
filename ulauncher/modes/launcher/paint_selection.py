@@ -93,7 +93,7 @@ def paint_selection_index(previous: Any, results: Sequence[Any]) -> int:
     prev_id = previous.get("id") if isinstance(previous, dict) else _row_id(previous)
     if prev_id not in (None, ""):
         for index, result in enumerate(results):
-            if _row_id(result) == prev_id:
+            if _row_id(result) == prev_id and is_selectable_result(result):
                 return index
     prev_type = previous.get("type") if isinstance(previous, dict) else _row_type(previous)
     prev_title = previous.get("title") if isinstance(previous, dict) else _row_title(previous)
@@ -102,12 +102,14 @@ def paint_selection_index(previous: Any, results: Sequence[Any]) -> int:
     else:
         prev_desc = _row_description(previous)
     for index, result in enumerate(results):
+        if not is_selectable_result(result):
+            continue
         if _row_type(result) != prev_type or _row_title(result) != prev_title:
             continue
         if prev_desc is not None and _row_description(result) != prev_desc:
             continue
         return index
     prev_index = previous.get("index") if isinstance(previous, dict) else getattr(previous, "index", None)
-    if isinstance(prev_index, int) and 0 <= prev_index < len(results):
+    if isinstance(prev_index, int) and 0 <= prev_index < len(results) and is_selectable_result(results[prev_index]):
         return prev_index
     return first_selectable_index(results)

@@ -93,7 +93,14 @@ class ResultsView(Gtk.ScrolledWindow):
 
     def get_active_result(self) -> Result | None:
         selected = self._selected
-        return selected.result if selected else None
+        if selected is None:
+            return None
+        if selected.result.highlightable:
+            return selected.result
+        highlightable = self._highlightable_indices()
+        if highlightable:
+            return self._widgets[highlightable[0]].result
+        return None
 
     def select(self, index: int) -> None:
         self._select(index)
@@ -155,6 +162,7 @@ class ResultsView(Gtk.ScrolledWindow):
     def _replace_results(self, update: ResultsUpdate, *, keep_selection: bool) -> None:
         self._painting = True
         try:
+            previous_index = self._index
             previous_pick = self.get_active_result() if keep_selection else None
             gtk4.remove_all_children(self._box)
             self._widgets = []
@@ -176,7 +184,7 @@ class ResultsView(Gtk.ScrolledWindow):
                 return
 
             self._add_widgets(result_list, update["query"], start_index=0)
-            self._apply_selection(update["selected_name"], previous_pick)
+            self._apply_selection(update["selected_name"], previous_pick, previous_index)
             self._apply_css(self._box)
             gtk4.show_all(self)
             self._fit_results_height()
@@ -222,10 +230,12 @@ class ResultsView(Gtk.ScrolledWindow):
         self.select(index)
         self._activate_result(alt)
 
-    def _apply_selection(self, selected_name: str | None, previous_pick: Result | None) -> None:
+    def _apply_selection(
+        self, selected_name: str | None, previous_pick: Result | None, previous_index: int | None = None
+    ) -> None:
         rows = [widget.result for widget in self._widgets]
         if previous_pick:
-            key = result_selection_key(previous_pick, self._index)
+            key = result_selection_key(previous_pick, self._index if previous_index is None else previous_index)
             index = paint_selection_index(key, rows)
             if index >= 0:
                 if not row_matches_previous(key, rows[index]):
