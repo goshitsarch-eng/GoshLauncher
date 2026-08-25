@@ -88,22 +88,23 @@ _GTK3_WIDGET_APIS = (
 )
 
 
+def test_ui_package_does_not_install_gtk3_compat() -> None:
+    init = Path(__file__).resolve().parents[2] / "ulauncher" / "ui" / "__init__.py"
+    gtk4 = Path(__file__).resolve().parents[2] / "ulauncher" / "ui" / "gtk4.py"
+    assert "install_compat" not in init.read_text()
+    assert "def install_compat" not in gtk4.read_text()
+
+
 def test_legacy_pref_pages_use_gtk4_helpers() -> None:
     import re
 
     root = Path(__file__).resolve().parents[2] / "ulauncher" / "ui"
-    files = [
-        root / "preferences" / "utils" / "sidebar_layout.py",
-        root / "preferences" / "utils" / "ext_handlers.py",
-        root / "preferences" / "views" / "shortcuts.py",
-        root / "preferences" / "views" / "extensions.py",
-        root / "hotkey_dialog.py",
-    ]
+    files = [path for path in root.rglob("*.py") if path.name != "gtk4.py"]
     for path in files:
         text = path.read_text()
         for pattern in _GTK3_WIDGET_APIS:
             match = re.search(pattern, text)
-            assert match is None, f"{path.name} still uses GTK3 {pattern}: {match.group(0) if match else ''}"
+            assert match is None, f"{path} still uses GTK3 {pattern}: {match.group(0) if match else ''}"
         if path.name in {"sidebar_layout.py", "shortcuts.py", "extensions.py", "ext_handlers.py"}:
             assert "gtk4.pack_start" in text
 

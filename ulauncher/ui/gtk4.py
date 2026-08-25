@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from types import SimpleNamespace
 from typing import Any, Iterator
 
 from gi.repository import Gdk, GLib, Gtk
@@ -120,12 +119,6 @@ def add_provider_to_display(provider: Gtk.CssProvider, priority: int = Gtk.STYLE
         Gtk.StyleContext.add_provider_for_display(display, provider, priority)
 
 
-def add_provider_to_widget(widget: Gtk.Widget, provider: Gtk.CssProvider) -> None:
-    widget.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-    for child in iter_children(widget):
-        add_provider_to_widget(child, provider)
-
-
 def clipboard_set_text(text: str) -> None:
     display = Gdk.Display.get_default()
     if not display:
@@ -163,112 +156,3 @@ def _dialog_run(self: Gtk.Dialog, *_args: Any, **_kwargs: Any) -> int:
     loop.run()
     self.disconnect(handler)
     return result["id"]
-
-
-def install_compat() -> None:
-    """Monkey-patch a few GTK3 names so preferences views keep compiling on GTK 4.6."""
-    if not hasattr(Gtk.Box, "pack_start"):
-        Gtk.Box.pack_start = lambda self, child, expand=True, fill=True, padding=0: pack_start(
-            self, child, expand, fill, padding
-        )
-        Gtk.Box.pack_end = lambda self, child, expand=True, fill=True, padding=0: pack_end(
-            self, child, expand, fill, padding
-        )
-    if not hasattr(Gtk.Box, "add"):
-        Gtk.Box.add = lambda self, child: self.append(child)
-    for cls_name in (
-        "Window",
-        "ApplicationWindow",
-        "ScrolledWindow",
-        "Frame",
-        "Viewport",
-        "Revealer",
-        "Expander",
-        "ListBox",
-        "ListBoxRow",
-        "Overlay",
-    ):
-        cls = getattr(Gtk, cls_name, None)
-        if cls is not None and not hasattr(cls, "add"):
-            cls.add = lambda self, child: add_child(self, child)
-    if hasattr(Gtk, "ListBox") and not hasattr(Gtk.ListBox, "add"):
-        Gtk.ListBox.add = lambda self, child: self.append(child)
-    if not hasattr(Gtk.Widget, "show_all"):
-        Gtk.Widget.show_all = show_all
-    if not hasattr(Gtk.Widget, "get_children"):
-        Gtk.Widget.get_children = list_children
-    if not hasattr(Gtk.Widget, "get_toplevel"):
-        Gtk.Widget.get_toplevel = lambda self: self.get_root()
-    if hasattr(Gtk, "HeaderBar"):
-        if not hasattr(Gtk.HeaderBar, "set_show_close_button"):
-            Gtk.HeaderBar.set_show_close_button = lambda self, value: self.set_show_title_buttons(bool(value))
-        if not hasattr(Gtk.HeaderBar, "set_custom_title"):
-            Gtk.HeaderBar.set_custom_title = lambda self, widget: self.set_title_widget(widget)
-    if not hasattr(Gtk.StyleContext, "add_provider_for_screen"):
-        Gtk.StyleContext.add_provider_for_screen = lambda _screen, provider, priority: add_provider_to_display(
-            provider, priority
-        )
-    if hasattr(Gtk, "Dialog") and not hasattr(Gtk.Dialog, "run"):
-        Gtk.Dialog.run = _dialog_run
-    if hasattr(Gtk, "Dialog") and not hasattr(Gtk.Dialog, "add_buttons"):
-
-        def _add_buttons(self: Gtk.Dialog, *args: Any) -> None:
-            index = 0
-            while index + 1 < len(args):
-                self.add_button(str(args[index]), args[index + 1])
-                index += 2
-
-        Gtk.Dialog.add_buttons = _add_buttons
-        if hasattr(Gtk, "FileChooserDialog") and not hasattr(Gtk.FileChooserDialog, "add_buttons"):
-            Gtk.FileChooserDialog.add_buttons = _add_buttons
-    if not hasattr(Gtk, "DialogFlags"):
-        Gtk.DialogFlags = SimpleNamespace(MODAL=1, DESTROY_WITH_PARENT=2)
-    if not hasattr(Gdk, "Screen"):
-        Gdk.Screen = SimpleNamespace(get_default=Gdk.Display.get_default)
-    if not hasattr(Gtk, "Menu"):
-        Gtk.Menu = None
-    if not hasattr(Gtk, "EventBox"):
-        Gtk.EventBox = Gtk.Box
-    if not hasattr(Gtk, "WindowPosition"):
-        Gtk.WindowPosition = SimpleNamespace(NONE=0, CENTER=1, MOUSE=2, CENTER_ALWAYS=3, CENTER_ON_PARENT=4)
-    if not hasattr(Gtk.Widget, "set_margin"):
-
-        def _set_margin(self: Gtk.Widget, value: int) -> None:
-            self.set_margin_top(value)
-            self.set_margin_bottom(value)
-            self.set_margin_start(value)
-            self.set_margin_end(value)
-
-        Gtk.Widget.set_margin = _set_margin
-    if not hasattr(Gtk.Widget, "set_margin_left"):
-        Gtk.Widget.set_margin_left = lambda self, value: self.set_margin_start(value)
-        Gtk.Widget.set_margin_right = lambda self, value: self.set_margin_end(value)
-    if not hasattr(Gtk, "IconSize"):
-        Gtk.IconSize = SimpleNamespace(
-            INVALID=0, MENU=1, SMALL_TOOLBAR=2, LARGE_TOOLBAR=3, BUTTON=4, DND=5, DIALOG=6, INHERIT=0
-        )
-    if not hasattr(Gtk, "ShadowType"):
-        Gtk.ShadowType = SimpleNamespace(NONE=0, IN=1, OUT=2, ETCHED_IN=3, ETCHED_OUT=4)
-    if not hasattr(Gtk, "STOCK_CANCEL"):
-        Gtk.STOCK_CANCEL = "_Cancel"
-        Gtk.STOCK_OK = "_OK"
-    if not hasattr(Gtk.Button, "set_image"):
-        Gtk.Button.set_image = lambda self, image: self.set_child(image)
-    if not hasattr(Gtk.Image, "new_from_surface"):
-        Gtk.Image.new_from_surface = staticmethod(lambda paintable: Gtk.Image(paintable=paintable))
-    if hasattr(Gtk, "FileChooserDialog") and not hasattr(Gtk.FileChooserDialog, "get_filename"):
-
-        def _get_filename(self: Gtk.FileChooserDialog) -> str | None:
-            file = self.get_file()
-            return file.get_path() if file is not None else None
-
-        Gtk.FileChooserDialog.get_filename = _get_filename
-    # GTK4 Image.new_from_icon_name(name) only; GTK3 passed a size as the second argument.
-    if not getattr(Gtk.Image, "_ulauncher_icon_name_compat", False):
-        _image_from_icon = Gtk.Image.new_from_icon_name
-
-        def _new_from_icon_name(icon_name: str, _size: object = None) -> Gtk.Image:
-            return _image_from_icon(icon_name)
-
-        Gtk.Image.new_from_icon_name = staticmethod(_new_from_icon_name)  # type: ignore[assignment]
-        Gtk.Image._ulauncher_icon_name_compat = True

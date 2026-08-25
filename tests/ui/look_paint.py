@@ -178,6 +178,54 @@ def css_parsing_errors(css: str) -> list[str]:
 _popup: dict[str, object] = {}
 
 
+def _skip_backdrop(_self: object) -> None:
+    return
+
+
+def _skip_unredirect(_self: object, _want_held: bool = False) -> None:
+    return
+
+
+def _skip_watch(_self: object) -> None:
+    return
+
+
+def _skip_grab(_self: object, _grab: bool) -> None:
+    return
+
+
+def patch_window_host(stack: object) -> None:
+    """Skip compositor, tray, and session watches that hang headless GTK tests."""
+    from unittest.mock import patch
+
+    from ulauncher.ui.ulauncher_window import UlauncherWindow
+
+    enter = stack.enter_context  # type: ignore[attr-defined]
+    enter(patch.object(UlauncherWindow, "_show_backdrop", _skip_backdrop))
+    enter(patch.object(UlauncherWindow, "_apply_unredirect", _skip_unredirect))
+    enter(patch.object(UlauncherWindow, "_start_live_search", _skip_watch))
+    enter(patch.object(UlauncherWindow, "_start_osk_watch", _skip_watch))
+    enter(patch.object(UlauncherWindow, "_start_session_watch", _skip_watch))
+    enter(patch.object(UlauncherWindow, "_start_limits_timer", _skip_watch))
+    enter(patch.object(UlauncherWindow, "toggle_grab_pointer_device", _skip_grab))
+
+
+def wait_popup_styled(win: object) -> None:
+    from gi.repository import GLib
+
+    ctx = GLib.MainContext.default()
+    deadline = GLib.get_monotonic_time() + 4_000_000
+    while GLib.get_monotonic_time() < deadline:
+        ctx.iteration(False)
+        if win.get_opacity() == 1 and win.prompt.get_width() > 40:  # type: ignore[attr-defined]
+            pump(24)
+            return
+    opacity = win.get_opacity()  # type: ignore[attr-defined]
+    prompt = win.prompt  # type: ignore[attr-defined]
+    msg = f"popup window did not style (opacity {opacity}, prompt {prompt.get_width()}x{prompt.get_height()})"
+    raise RuntimeError(msg)
+
+
 def _find_css_class(widget: object, class_name: str) -> object | None:
     from ulauncher.ui import gtk4
 
@@ -240,9 +288,8 @@ def open_popup_window() -> object:
         return _popup["win"]
 
     from contextlib import ExitStack
-    from unittest.mock import patch
 
-    from gi.repository import Adw, Gio, GLib
+    from gi.repository import Adw, Gio
 
     from ulauncher.ui.ulauncher_window import UlauncherWindow
 
@@ -278,43 +325,18 @@ def open_popup_window() -> object:
         def handle_backspace(self, _query_str: str) -> bool:
             return False
 
-    def _skip_backdrop(_self: object) -> None:
-        return
-
-    def _skip_unredirect(_self: object, _want_held: bool = False) -> None:
-        return
-
-    def _skip_watch(_self: object) -> None:
-        return
-
-    def _skip_grab(_self: object, _grab: bool) -> None:
-        return
-
     app = LookPixelApp(application_id="io.ulauncher.LookPixelTest", flags=Gio.ApplicationFlags.NON_UNIQUE)
     app.register()
     stack = ExitStack()
-    stack.enter_context(patch.object(UlauncherWindow, "_show_backdrop", _skip_backdrop))
-    stack.enter_context(patch.object(UlauncherWindow, "_apply_unredirect", _skip_unredirect))
-    stack.enter_context(patch.object(UlauncherWindow, "_start_live_search", _skip_watch))
-    stack.enter_context(patch.object(UlauncherWindow, "_start_osk_watch", _skip_watch))
-    stack.enter_context(patch.object(UlauncherWindow, "_start_session_watch", _skip_watch))
-    stack.enter_context(patch.object(UlauncherWindow, "_start_limits_timer", _skip_watch))
-    stack.enter_context(patch.object(UlauncherWindow, "toggle_grab_pointer_device", _skip_grab))
+    patch_window_host(stack)
     win = UlauncherWindow(application=app)
-    ctx = GLib.MainContext.default()
-    deadline = GLib.get_monotonic_time() + 4_000_000
-    while GLib.get_monotonic_time() < deadline:
-        ctx.iteration(False)
-        if win.get_opacity() == 1 and win.prompt.get_width() > 40:
-            break
-    if win.get_opacity() != 1 or win.prompt.get_width() <= 40:
-        opacity = win.get_opacity()
-        prompt_size = (win.prompt.get_width(), win.prompt.get_height())
+    try:
+        wait_popup_styled(win)
+    except RuntimeError:
         win.close()
         stack.close()
         pump(8)
-        msg = f"popup window did not style (opacity {opacity}, prompt {prompt_size[0]}x{prompt_size[1]})"
-        raise RuntimeError(msg)
+        raise
     _popup["app"] = app
     _popup["win"] = win
     _popup["stack"] = stack

@@ -20,14 +20,8 @@ SPINNER_MIN_ANIMATION = 0.25
 
 
 def get_window_for_widget(widget: Gtk.Widget) -> Gtk.Window | None:
-    root = None
     get_root = getattr(widget, "get_root", None)
-    if callable(get_root):
-        root = get_root()
-    if root is None:
-        get_toplevel = getattr(widget, "get_toplevel", None)
-        if callable(get_toplevel):
-            root = get_toplevel()
+    root = get_root() if callable(get_root) else None
     if root and isinstance(root, Gtk.Window):
         return root
     return None

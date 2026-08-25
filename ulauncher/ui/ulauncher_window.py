@@ -88,7 +88,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             decorated=False,
             deletable=False,
             resizable=False,
-            title="Ulauncher - Application Launcher",
+            title="GoshLauncher",
             **kwargs,
         )
         gtk4.add_css_class(self, "gosh-popup")
@@ -649,9 +649,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
             self._css_provider = gtk4.load_css_provider(css)
             display = self.get_display() or Gdk.Display.get_default()
             if display:
-                Gtk.StyleContext.add_provider_for_display(
-                    display, self._css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                )
+                gtk4.add_provider_to_display(self._css_provider)
                 self._css_on_display = True
             else:
                 self.apply_css(self)

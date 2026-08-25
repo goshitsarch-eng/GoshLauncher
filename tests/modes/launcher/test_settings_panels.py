@@ -23,8 +23,51 @@ def test_wellbeing_hidden_when_desktop_missing() -> None:
     assert shown[0]["id"] == "wellbeing"
 
 
+# Catalog order from spotlight-goshos settingsPanels.js (Version 2026.08.20).
+GOSHOS_SETTINGS_PANEL_IDS = [
+    "wifi",
+    "network",
+    "wwan",
+    "bluetooth",
+    "display",
+    "sound",
+    "power",
+    "multitasking",
+    "background",
+    "notifications",
+    "search",
+    "applications",
+    "privacy",
+    "online-accounts",
+    "sharing",
+    "wellbeing",
+    "keyboard",
+    "mouse",
+    "wacom",
+    "color",
+    "printers",
+    "universal-access",
+    "users",
+    "region",
+    "datetime",
+    "about",
+    "system",
+]
+
+
 def test_settings_icons_are_symbolic() -> None:
     from ulauncher.modes.launcher.settings_panels import SETTINGS_PANELS
 
     assert SETTINGS_PANELS[0]["icon"] == "network-wireless-symbolic"
     assert all(str(panel["icon"]).endswith("-symbolic") for panel in SETTINGS_PANELS)
+
+
+def test_settings_panel_catalog_matches_goshos() -> None:
+    from ulauncher.modes.launcher.settings_panels import SETTINGS_PANELS
+
+    assert [panel["id"] for panel in SETTINGS_PANELS] == GOSHOS_SETTINGS_PANEL_IDS
+    assert len(SETTINGS_PANELS) == 27
+    by_id = {panel["id"]: panel for panel in SETTINGS_PANELS}
+    assert by_id["background"]["title"] == "Appearance"
+    assert by_id["privacy"]["title"] == "Privacy & Security"
+    assert by_id["universal-access"]["title"] == "Accessibility"
