@@ -586,9 +586,10 @@ def sample_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[in
 
 
 def sample_popup_placeholder(look_id: str, expected: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Sample the live popup's empty-entry hint after restyling to ``look_id``."""
+    """Sample a fresh popup's empty-entry hint. Reused restyled windows can snapshot empty."""
     from gi.repository import GLib
 
+    close_popup_window()
     win = open_popup_window()
     restyle_popup(win, look_id)
     entry = win.prompt_input  # type: ignore[attr-defined]
