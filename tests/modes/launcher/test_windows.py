@@ -21,6 +21,7 @@ from ulauncher.modes.launcher.windows import (
     is_unique_gtk_window,
     listed_workspace_count,
     match_windows,
+    niri_focus_user_time,
     niri_workspace_count,
     parse_window_close_query,
     parse_window_intent,
@@ -30,6 +31,7 @@ from ulauncher.modes.launcher.windows import (
     parse_workspace_switch_query,
     parse_xprop_window,
     pick_window_list,
+    qtile_workspace_count,
     should_force_quit_window,
     should_list_window,
     sort_windows_most_recent,
@@ -497,6 +499,14 @@ def test_hypr_sway_niri_window_payloads() -> None:
     assert len(niri) == 1
     assert niri[0].wid == "niri:7"
     assert niri[0].wm_class == "org.gnome.TextEditor"
+    assert niri[0].user_time == 1
+    niri_stamps = windows_from_niri_windows(
+        [
+            {"id": 1, "title": "Old", "app_id": "a", "focus_timestamp": {"secs": 1, "nanos": 0}},
+            {"id": 2, "title": "New", "app_id": "b", "focus_timestamp": {"secs": 3, "nanos": 0}},
+        ]
+    )
+    assert sort_windows_most_recent(niri_stamps)[0].title == "New"
     assert compositor_window_argv("hypr:0xabc", "focus") == [
         "hyprctl",
         "dispatch",
@@ -668,6 +678,12 @@ def test_compositor_workspace_count_uses_max_index() -> None:
     assert i3ipc_workspace_count([{"name": "code"}, {"name": "__i3_scratch"}]) is None
     assert hypr_workspace_count([{"id": 1}, {"id": 3}, {"id": -98, "name": "special"}]) == 3
     assert hypr_workspace_count([{"id": -98}]) is None
+    assert qtile_workspace_count({"1": {"name": "1"}, "5": {"name": "5"}}) == 5
+    assert qtile_workspace_count({"code": {"name": "code"}}) is None
+    assert qtile_workspace_count([{"name": "2"}, {"name": "3"}]) == 3
+    assert niri_focus_user_time({"focus_timestamp": {"secs": 2, "nanos": 5}}) == 2_000_000_005
+    assert niri_focus_user_time({"is_focused": True}) == 1
+    assert niri_focus_user_time({}) == 0
 
 
 def test_listed_workspace_count_uses_niri_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -683,6 +699,22 @@ def test_listed_workspace_count_uses_niri_when_ext_is_missing(monkeypatch: pytes
     )
     monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_desktop_count", lambda: 9)
     assert listed_workspace_count() == 2
+    invalidate_workspace_count()
+
+
+def test_listed_workspace_count_uses_qtile_when_ext_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ulauncher.modes.launcher.windows import invalidate_workspace_count
+
+    invalidate_workspace_count()
+    monkeypatch.setattr("ulauncher.modes.launcher.wayland_workspaces.list_ext_workspaces", lambda: None)
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "qtile")
+    monkeypatch.setattr("ulauncher.modes.launcher.windows.shutil.which", lambda name: name if name == "qtile" else None)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.windows._json_command",
+        lambda argv: {"1": {"name": "1"}, "4": {"name": "4"}} if argv[-1] == "groups" else None,
+    )
+    monkeypatch.setattr("ulauncher.modes.launcher.windows._ewmh_desktop_count", lambda: 9)
+    assert listed_workspace_count() == 4
     invalidate_workspace_count()
 
 

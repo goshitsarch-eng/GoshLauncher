@@ -662,6 +662,22 @@ def niri_workspace_count(payload: Any) -> int | None:
     return max(mapping.values())
 
 
+def niri_focus_user_time(item: Mapping[str, Any]) -> int:
+    """niri-ipc 26.4 ``focus_timestamp`` ({secs, nanos}); else ``is_focused``."""
+    stamp = item.get("focus_timestamp")
+    if isinstance(stamp, dict):
+        try:
+            secs = int(stamp.get("secs") or 0)
+            nanos = int(stamp.get("nanos") or 0)
+        except (TypeError, ValueError):
+            secs, nanos = 0, 0
+        if secs or nanos:
+            return secs * 1_000_000_000 + nanos
+    if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+        return int(stamp)
+    return 1 if item.get("is_focused") else 0
+
+
 def _niri_window_desktop(workspace_id: Any, idx_by_id: Mapping[Any, int]) -> int:
     if not idx_by_id:
         return _compositor_workspace_desktop(workspace_id)
@@ -701,7 +717,7 @@ def windows_from_niri_windows(payload: Any, workspaces: Any = None) -> list[Wind
                 desktop=desktop,
                 pid=pid,
                 sticky=False,
-                user_time=1 if item.get("is_focused") else 0,
+                user_time=niri_focus_user_time(item),
                 app_id=app_id,
             )
         )
@@ -1437,6 +1453,8 @@ def i3ipc_workspace_count(payload: Any) -> int | None:
 
 def hypr_workspace_count(payload: Any) -> int | None:
     """Highest 1-based Hypr workspace id. Special (negative) ids do not count."""
+    if isinstance(payload, dict):
+        payload = payload.get("workspaces") or payload.get("items") or []
     if not isinstance(payload, list) or not payload:
         return None
     highest = 0
@@ -1447,6 +1465,40 @@ def hypr_workspace_count(payload: Any) -> int | None:
         if desktop >= 0:
             highest = max(highest, desktop + 1)
     return highest or None
+
+
+def qtile_workspace_count(payload: Any) -> int | None:
+    """Highest 1-based Qtile group number. Named-only dumps are unknown."""
+    if isinstance(payload, dict):
+        nested = payload.get("groups")
+        if nested is None:
+            nested = payload.get("items")
+        if isinstance(nested, list):
+            items: list[Any] = nested
+        elif isinstance(nested, dict):
+            items = [{"name": name, **(info if isinstance(info, dict) else {})} for name, info in nested.items()]
+        else:
+            items = [{"name": name, **(info if isinstance(info, dict) else {})} for name, info in payload.items()]
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        return None
+    if not items:
+        return None
+    highest = 0
+    for item in items:
+        if isinstance(item, dict):
+            desktop = workspace_desktop_from_name(str(item.get("name") or item.get("id") or ""))
+        else:
+            desktop = workspace_desktop_from_name(str(item or ""))
+        if desktop >= 0:
+            highest = max(highest, desktop + 1)
+    return highest or None
+
+
+def _session_mentions(env: Mapping[str, str], token: str) -> bool:
+    hay = " ".join(env.get(key) or "" for key in ("XDG_CURRENT_DESKTOP", "DESKTOP_SESSION", "XDG_SESSION_DESKTOP"))
+    return token.lower() in hay.lower()
 
 
 def _session_workspace_count(environ: Mapping[str, str] | None = None) -> int | None:
@@ -1466,6 +1518,13 @@ def _session_workspace_count(environ: Mapping[str, str] | None = None) -> int | 
             return count
     if env.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
         count = hypr_workspace_count(_json_command(["hyprctl", "-j", "workspaces"]))
+        if count is not None:
+            return count
+    if _session_mentions(env, "qtile") and shutil.which("qtile"):
+        payload = _json_command(["qtile", "cmd-obj", "-f", "groups"])
+        if payload is None:
+            payload = _json_command(["qtile", "cmd-obj", "-o", "cmd", "-f", "groups"])
+        count = qtile_workspace_count(payload)
         if count is not None:
             return count
     return None
