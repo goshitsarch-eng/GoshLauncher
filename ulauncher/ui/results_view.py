@@ -215,17 +215,21 @@ class ResultsView(Gtk.ScrolledWindow):
             jump_index = jump_i if result.highlightable else -1
             if jump_index >= 0:
                 jump_i += 1
-            widget = ResultWidget(
-                result,
-                start_index + offset,
-                query,
-                self.select,
-                self._select_and_activate,
-                jump_index,
-                chrome=self._chrome,
-            )
+            try:
+                widget = ResultWidget(
+                    result,
+                    start_index + offset,
+                    query,
+                    self.select,
+                    self._select_and_activate,
+                    jump_index,
+                    chrome=self._chrome,
+                )
+                self._box.append(widget)
+            except Exception:  # noqa: BLE001, S112
+                # a bad icon must not leave the list empty
+                continue
             self._widgets.append(widget)
-            self._box.append(widget)
 
     def _select_and_activate(self, index: int, alt: bool) -> None:
         self.select(index)
