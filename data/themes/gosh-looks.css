@@ -205,7 +205,7 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-omarchy .item-header label {
-  color: #565f89;
+  color: #787c99;
 }
 
 .gosh-theme-omarchy .item-box {
@@ -226,9 +226,11 @@ window.gosh-popup.background {
   border-left-color: #7aa2f7;
 }
 
+/* #565f89 is Tokyo Night's comment colour: 2.76:1 on this panel, too faint for 11px text.
+   #787c99 is the palette's secondary foreground and clears 4:1. */
 .gosh-theme-omarchy .item-descr,
 .gosh-theme-omarchy .item-shortcut {
-  color: #565f89;
+  color: #787c99;
 }
 
 .gosh-theme-omarchy .item-box.selected .item-descr,
@@ -798,23 +800,25 @@ window.gosh-popup.background {
   padding: 5px 8px;
 }
 
+/* base2 (#eee8d5) is only 1.14:1 against base3, so the selected row was invisible. base1 is
+   the next Solarized step that actually reads as a band. */
 .gosh-theme-fuzzel .item-box:hover,
 .gosh-theme-fuzzel .item-box:focus,
 .gosh-theme-fuzzel .item-box.selected {
-  background-color: #eee8d5;
-  color: #586e75;
+  background-color: #93a1a1;
+  color: #002b36;
 }
 
 .gosh-theme-fuzzel .item-descr,
 .gosh-theme-fuzzel .item-shortcut {
-  color: #93a1a1;
+  color: #657b83;
 }
 
 .gosh-theme-fuzzel .item-box.selected .item-descr,
 .gosh-theme-fuzzel .item-box:hover .item-descr,
 .gosh-theme-fuzzel .item-box.selected .item-shortcut,
 .gosh-theme-fuzzel .item-box:hover .item-shortcut {
-  color: #586e75;
+  color: #073642;
 }
 
 .gosh-theme-fuzzel .item-header {
@@ -822,7 +826,7 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-fuzzel .item-header label {
-  color: #93a1a1;
+  color: #657b83;
 }
 
 .gosh-theme-fuzzel .gosh-no-results {
@@ -1468,7 +1472,14 @@ window.gosh-popup.background {
   padding: 5px 10px;
 }
 
-.app.gosh-density-compact .input {
+/* Compact density tightens the entry for looks that are roomy by default. The five looks that
+   are compact by definition declare their own entry type and padding, and this rule outranks
+   them on specificity whatever the order, so it has to step aside explicitly - otherwise
+   KRunner, Rofi, Wofi, Fuzzel and Tofi all render a byte-identical 16px entry. */
+.app.gosh-density-compact:not(.gosh-theme-krunner):not(.gosh-theme-rofi):not(.gosh-theme-wofi):not(
+    .gosh-theme-fuzzel
+  ):not(.gosh-theme-tofi)
+  .input {
   padding: 10px 16px 10px 0;
   font-size: 16px;
 }
@@ -1570,4 +1581,13 @@ window.gosh-popup.background {
 .item-box:focus .item-highlight,
 .item-box.selected .item-highlight {
   color: inherit;
+}
+
+/* A section title is not activatable, so hovering one must not paint the selection band that
+   says "Enter runs this". .item-header sits on the row and .item-box paints inside it. */
+.item-header .item-box:hover,
+.item-header .item-box:focus,
+.item-header .item-box.selected {
+  background-color: transparent;
+  border-left-color: transparent;
 }

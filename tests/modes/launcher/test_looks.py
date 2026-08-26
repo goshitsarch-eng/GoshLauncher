@@ -209,7 +209,8 @@ def test_hidden_search_icon_inset_follows_goshos_order() -> None:
     from pathlib import Path
 
     text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
-    compact = text.find(".app.gosh-density-compact .input")
+    # the compact entry rule steps aside for the looks that are compact by definition
+    compact = text.find(".app.gosh-density-compact:not(")
     no_icon_20 = text.find(".app.gosh-no-search-icon .input {\n  padding-left: 20px;")
     compact_no = text.find(".app.gosh-density-compact.gosh-no-search-icon .input {\n  padding-left: 16px;")
     rofi = text.find(".app.gosh-theme-rofi.gosh-no-search-icon .input")
@@ -337,3 +338,15 @@ def test_look_placeholder_colors_match_goshos_hint_text() -> None:
         assert f".gosh-theme-{look_id} .input placeholder" in text
         assert f".gosh-theme-{look_id} .input text.placeholder {{\n  color: {color};\n}}" in text
     assert ".prefs-btn" not in text
+
+
+def test_compact_entry_rule_leaves_the_compact_looks_their_own_type() -> None:
+    from pathlib import Path
+
+    # This rule outranks every `.gosh-theme-X .input` on specificity whatever the order, so
+    # without the exclusions KRunner, Rofi, Wofi, Fuzzel and Tofi all rendered the same 16px
+    # entry instead of the 14/15px each one declares.
+    text = (Path(__file__).resolve().parents[3] / "data" / "themes" / "gosh-looks.css").read_text()
+    rule = text[text.find(".app.gosh-density-compact:not(") :].split("{", 1)[0]
+    for look_id in ("krunner", "rofi", "wofi", "fuzzel", "tofi"):
+        assert f":not(\n    .gosh-theme-{look_id}\n  )" in rule or f":not(.gosh-theme-{look_id})" in rule, look_id

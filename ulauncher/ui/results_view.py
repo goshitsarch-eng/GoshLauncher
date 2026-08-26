@@ -57,7 +57,9 @@ class ResultsView(Gtk.ScrolledWindow):
         self._painting = False
         self._hover_suppressed_until_us = 0
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        gtk4.add_css_class(self._box, "result-box")
+        # `result-box` is the card: background, radius, padding, shadow. It belongs on this
+        # ScrolledWindow (UlauncherWindow adds it) so it stays put while the rows scroll under
+        # it. On the inner box too, every one of those was drawn twice.
         self.set_child(self._box)
         # overlay bars sit on the row and hide Alt+1-9 hints
         set_overlay_scrollbars(self, False)
