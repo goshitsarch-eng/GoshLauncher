@@ -442,10 +442,16 @@ def _xprop_inspect_wid(wid: str) -> tuple[bool | None, str | None, str, str, str
     return window_inspect_from_xprop(text)
 
 
+# Bound every window-manager subprocess: they all run on the GTK main thread.
+WINDOW_PROBE_TIMEOUT_SEC = 0.4
+
+
 def _wmctrl_windows() -> list[WindowInfo]:
     if not shutil.which("wmctrl"):
         return []
-    out = subprocess.check_output(["wmctrl", "-lx"], text=True, errors="replace")
+    # LiveSearchWatcher re-lists windows every 250ms on the GTK main thread, so an unbounded
+    # wait here freezes the popup for as long as wmctrl hangs. Every sibling probe is bounded.
+    out = subprocess.check_output(["wmctrl", "-lx"], text=True, errors="replace", timeout=WINDOW_PROBE_TIMEOUT_SEC)
     rows = parse_wmctrl_lx(out)
     ewmh = None
     try:
@@ -1485,7 +1491,7 @@ def list_windows() -> list[WindowInfo]:
     if not ewmh:
         try:
             wmctrl = _wmctrl_windows()
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             wmctrl = []
     payload = _introspect_windows_payload()
     introspect = windows_from_introspect_payload(payload)
@@ -2385,13 +2391,21 @@ def _focus_application(app_id: str) -> bool:
         return False
 
 
+def _run_window_argv(argv: list[str]) -> None:
+    """Fire and forget a window-manager command, bounded so a wedged CLI cannot freeze the popup."""
+    try:
+        subprocess.run(argv, check=False, capture_output=True, timeout=WINDOW_PROBE_TIMEOUT_SEC)
+    except (OSError, subprocess.TimeoutExpired):
+        logger.debug("Window command failed: %s", argv, exc_info=True)
+
+
 def _focus_window(wid: str) -> None:
     argv = compositor_window_argv(wid, "focus")
     if argv:
-        subprocess.run(argv, check=False, capture_output=True)
+        _run_window_argv(argv)
         return
     if shutil.which("wmctrl"):
-        subprocess.run(["wmctrl", "-ia", wid], check=False)
+        _run_window_argv(["wmctrl", "-ia", wid])
         return
     try:
         from ulauncher.utils.ewmh import EWMH
@@ -2410,10 +2424,10 @@ def _focus_window(wid: str) -> None:
 def _close_window(wid: str) -> None:
     argv = compositor_window_argv(wid, "close")
     if argv:
-        subprocess.run(argv, check=False, capture_output=True)
+        _run_window_argv(argv)
         return
     if shutil.which("wmctrl"):
-        subprocess.run(["wmctrl", "-ic", wid], check=False)
+        _run_window_argv(["wmctrl", "-ic", wid])
         return
     try:
         from ulauncher.utils.ewmh import EWMH
@@ -2492,9 +2506,9 @@ def _ext_workspace_activate(index: int) -> bool:
 
 def _run_workspace_argv(argv: list[str]) -> bool:
     try:
-        completed = subprocess.run(argv, check=False, capture_output=True)
+        completed = subprocess.run(argv, check=False, capture_output=True, timeout=WINDOW_PROBE_TIMEOUT_SEC)
         return completed.returncode == 0
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 

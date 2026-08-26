@@ -91,9 +91,16 @@ def remove_all_children(widget: Gtk.Widget) -> None:
 
 
 def show_all(widget: Gtk.Widget) -> None:
+    """GTK3's show_all, minus the part that resurrects a deliberately hidden child.
+
+    GTK4 widgets are visible by default, so a hidden one was hidden on purpose and GTK3's
+    set_no_show_all() has no GTK4 equivalent to say so. Recursing blindly re-showed the empty
+    Alt-number hint on every result row, which then held its 44px column as dead gutter.
+    """
     widget.set_visible(True)
     for child in iter_children(widget):
-        show_all(child)
+        if child.get_visible():
+            show_all(child)
 
 
 def add_css_class(widget: Gtk.Widget, class_name: str) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import select
 from typing import TYPE_CHECKING, Any, Callable
 
 from ulauncher.gi import GLib
@@ -24,13 +25,20 @@ class Context:
     source: GLib.Source | None
 
     def __init__(
-        self, source: GLib.Source, func: Callable[..., Any], repeat: bool, args: tuple[Any, ...], kwargs: dict[str, Any]
+        self,
+        source: GLib.Source,
+        func: Callable[..., Any],
+        repeat: bool,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        stop_when: Callable[[], bool] | None = None,
     ) -> None:
         self.source = source
         self._func = func
         self._repeat = repeat
         self._args = args
         self._kwargs = kwargs
+        self._stop_when = stop_when
         source.set_callback(self._trigger)
         source.attach(None)
 
@@ -49,6 +57,8 @@ class Context:
         except Exception:
             logger.exception("Unhandled error in scheduled call to %s", getattr(self._func, "__qualname__", self._func))
         keep_alive = self._repeat and self.source is not None
+        if keep_alive and self._stop_when is not None and self._stop_when():
+            keep_alive = False
         if not keep_alive:
             self.source = None
         return keep_alive
@@ -78,15 +88,33 @@ def interval(delay_sec: float, func: Callable[P, Any], *args: P.args, **kwargs: 
     return Context(GLib.timeout_source_new(int(delay_sec * 1000)), func, True, args, kwargs)
 
 
+def fd_is_hung_up(fd: int) -> bool:
+    """Whether fd is closed, errored, or its peer hung up. A closed fd counts as hung up."""
+    poller = select.poll()
+    try:
+        poller.register(fd, select.POLLIN | select.POLLHUP | select.POLLERR)
+        events = poller.poll(0)
+    except (OSError, ValueError):
+        return True
+    return any(event & (select.POLLHUP | select.POLLERR | select.POLLNVAL) for _fd, event in events)
+
+
 def watch_fd(fd: int, func: Callable[P, Any], *args: P.args, **kwargs: P.kwargs) -> Context:
     """
     Runs func on the GLib main thread whenever fd is readable, hung up, or in error.
 
     Used by live-search host watches (X11 PropertyNotify, ext-workspace-v1) so
     compositor events do not need a Python thread.
+
+    The watch stops itself once the fd hangs up. A hung-up fd stays permanently ready, so a
+    repeating source over one is re-dispatched as fast as the main loop can spin - a compositor
+    restart otherwise pins a core for the rest of the session. func still runs for that last
+    dispatch, so the watcher sees the EOF before the source goes away.
     """
     condition = GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR
-    return Context(GLib.unix_fd_source_new(fd, condition), func, True, args, kwargs)
+    return Context(
+        GLib.unix_fd_source_new(fd, condition), func, True, args, kwargs, stop_when=lambda: fd_is_hung_up(fd)
+    )
 
 
 def run_when_idle(func: Callable[P, Any], *args: P.args, **kwargs: P.kwargs) -> Context:

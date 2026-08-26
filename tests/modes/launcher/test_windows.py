@@ -1698,3 +1698,19 @@ def test_ensure_windows_schedules_refresh_when_stale(monkeypatch: pytest.MonkeyP
         assert windows_cache_is_fresh()
     finally:
         invalidate_windows()
+
+
+def test_window_manager_subprocesses_are_bounded() -> None:
+    """Every wm command runs on the GTK main thread, so none may wait forever.
+
+    LiveSearchWatcher re-lists windows every 250ms while the popup is open, and the wmctrl
+    listing was the one probe with no timeout: a wedged wmctrl froze the popup outright.
+    """
+    import re
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[3] / "ulauncher" / "modes" / "launcher" / "windows.py").read_text()
+    calls = re.findall(r"subprocess\.(?:run|check_output)\((?:[^()]|\([^()]*\))*\)", source)
+    assert calls
+    untimed = [call for call in calls if "timeout=" not in call]
+    assert untimed == [], untimed

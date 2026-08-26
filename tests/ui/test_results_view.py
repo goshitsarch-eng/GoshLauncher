@@ -267,3 +267,25 @@ class TestResultsViewStreaming:
         mocker.patch("ulauncher.ui.result_widget.ResultWidget", ctor)
         view.render(self._update(["ok-a", "bad", "ok-b"]))
         assert [widget.result.name for widget in view._widgets] == ["ok-a", "ok-b"]
+
+
+def test_show_all_leaves_a_deliberately_hidden_child_hidden() -> None:
+    from gi.repository import Gtk
+
+    from ulauncher.ui import gtk4
+
+    # GTK4 widgets are visible by default, so a hidden one was hidden on purpose. Recursing
+    # blindly re-showed the empty Alt-number hint, which then held its 44px column on every row.
+    root = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+    shown = Gtk.Label(label="visible")
+    hidden = Gtk.Label(label="hint")
+    hidden.set_visible(False)
+    root.append(shown)
+    root.append(hidden)
+    root.set_visible(False)
+
+    gtk4.show_all(root)
+
+    assert root.get_visible() is True
+    assert shown.get_visible() is True
+    assert hidden.get_visible() is False
