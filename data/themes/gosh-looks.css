@@ -75,12 +75,15 @@ window.gosh-popup.background {
 }
 
 .item-header {
+  padding: 8px 14px 2px 14px;
+}
+
+.item-header label {
   color: #98989d;
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  padding: 8px 14px 2px 14px;
 }
 
 .item-box {
@@ -201,7 +204,7 @@ window.gosh-popup.background {
   padding: 0 10px 0 8px;
 }
 
-.gosh-theme-omarchy .item-header {
+.gosh-theme-omarchy .item-header label {
   color: #565f89;
 }
 
@@ -305,7 +308,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.gosh-theme-popos .item-header {
+.gosh-theme-popos .item-header label {
   color: #9a9aa0;
 }
 
@@ -361,7 +364,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.gosh-theme-ulauncher .item-header {
+.gosh-theme-ulauncher .item-header label {
   color: #b0b0b0;
 }
 
@@ -421,8 +424,11 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-krunner .item-header {
-  color: #7f8c8d;
   padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-krunner .item-header label {
+  color: #7f8c8d;
 }
 
 /* gnome look - adwaita card */
@@ -476,7 +482,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.gosh-theme-gnome .item-header {
+.gosh-theme-gnome .item-header label {
   color: #c0bfbc;
 }
 
@@ -542,8 +548,11 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-rofi .item-header {
-  color: #666666;
   padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-rofi .item-header label {
+  color: #666666;
 }
 
 /* raycast look - dark rounded panel red caret */
@@ -671,7 +680,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.gosh-theme-albert .item-header {
+.gosh-theme-albert .item-header label {
   color: #7f8c8d;
 }
 
@@ -736,8 +745,11 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-wofi .item-header {
-  color: #707880;
   padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-wofi .item-header label {
+  color: #707880;
 }
 
 /* fuzzel look - solarized light rounded frame */
@@ -806,8 +818,11 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-fuzzel .item-header {
-  color: #93a1a1;
   padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-fuzzel .item-header label {
+  color: #93a1a1;
 }
 
 .gosh-theme-fuzzel .gosh-no-results {
@@ -888,7 +903,7 @@ window.gosh-popup.background {
   color: #a6adc8;
 }
 
-.gosh-theme-anyrun .item-header {
+.gosh-theme-anyrun .item-header label {
   color: #6c7086;
 }
 
@@ -959,8 +974,11 @@ window.gosh-popup.background {
 }
 
 .gosh-theme-tofi .item-header {
-  color: #888888;
   padding: 4px 8px 2px 8px;
+}
+
+.gosh-theme-tofi .item-header label {
+  color: #888888;
 }
 
 .gosh-theme-tofi .gosh-no-results {
@@ -1040,7 +1058,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.gosh-theme-light .item-header {
+.gosh-theme-light .item-header label {
   color: #5e5c64;
 }
 
@@ -1294,7 +1312,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.9);
 }
 
-.gosh-theme-powertoys .item-header {
+.gosh-theme-powertoys .item-header label {
   color: #9a9a9a;
 }
 
@@ -1365,7 +1383,7 @@ window.gosh-popup.background {
   color: rgba(255, 255, 255, 0.92);
 }
 
-.gosh-theme-synapse .item-header {
+.gosh-theme-synapse .item-header label {
   color: #a39e93;
 }
 
@@ -1437,7 +1455,7 @@ window.gosh-popup.background {
   color: #44403c;
 }
 
-.gosh-theme-onagre .item-header {
+.gosh-theme-onagre .item-header label {
   color: #a8a29e;
 }
 
@@ -1473,4 +1491,83 @@ window.gosh-popup.background {
 
 .app.gosh-theme-anyrun.gosh-no-search-icon .input {
   padding-left: 12px;
+}
+
+/* Matched-query text. `highlight_text` splits the title into item-highlight runs; without
+   these the match is indistinguishable from the rest of the row in every look. */
+.item-highlight {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.gosh-theme-omarchy .item-highlight {
+  color: #7aa2f7;
+}
+
+.gosh-theme-popos .item-highlight {
+  color: #6ba4f8;
+}
+
+.gosh-theme-ulauncher .item-highlight {
+  color: #ff8c42;
+}
+
+.gosh-theme-krunner .item-highlight {
+  color: #3daee9;
+}
+
+.gosh-theme-gnome .item-highlight {
+  color: #3584e4;
+}
+
+.gosh-theme-rofi .item-highlight {
+  color: #83a598;
+}
+
+.gosh-theme-raycast .item-highlight {
+  color: #ff6363;
+}
+
+.gosh-theme-albert .item-highlight {
+  color: #1d99f3;
+}
+
+.gosh-theme-wofi .item-highlight {
+  color: #81a2be;
+}
+
+.gosh-theme-fuzzel .item-highlight {
+  color: #cb4b16;
+}
+
+.gosh-theme-anyrun .item-highlight {
+  color: #89b4fa;
+}
+
+.gosh-theme-tofi .item-highlight {
+  color: #ffffff;
+}
+
+.gosh-theme-light .item-highlight {
+  color: #3584e4;
+}
+
+.gosh-theme-powertoys .item-highlight {
+  color: #60cdff;
+}
+
+.gosh-theme-synapse .item-highlight {
+  color: #f07746;
+}
+
+.gosh-theme-onagre .item-highlight {
+  color: #f59e0b;
+}
+
+/* Last so it beats the per-look accents: a selected row may be filled with that same
+   accent, so the run falls back to the row's own text color and stays bold. */
+.item-box:hover .item-highlight,
+.item-box:focus .item-highlight,
+.item-box.selected .item-highlight {
+  color: inherit;
 }

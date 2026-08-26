@@ -27,8 +27,12 @@ def window_icon_or_fallback(gicon: Any) -> Any:
     return "focus-windows-symbolic"
 
 
-def should_build_result_icon(show_icons: bool) -> bool:
-    return bool(show_icons)
+def should_build_result_icon(show_icons: bool, is_section_header: bool = False) -> bool:
+    """Section titles are plain text in goshos, so they get no icon column at all.
+
+    Every other row does, because ``result_icon_name`` always resolves to a fallback name.
+    """
+    return bool(show_icons) and not is_section_header
 
 
 def result_icon_source(result: Any) -> dict[str, Any]:

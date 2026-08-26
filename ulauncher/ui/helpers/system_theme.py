@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ulauncher.gi import Gio, GLib
+from ulauncher.gi import Gio
 
 
 def _get_interface_settings() -> Gio.Settings | None:
-    try:
-        return Gio.Settings.new("org.gnome.desktop.interface")
-    except GLib.Error:
-        return None
+    from ulauncher.utils.gsettings import settings_or_none
+
+    return settings_or_none("org.gnome.desktop.interface")
 
 
 def system_prefers_dark(interface_settings: Gio.Settings | None = None) -> bool:

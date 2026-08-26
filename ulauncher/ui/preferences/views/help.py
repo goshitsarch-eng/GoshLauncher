@@ -2,10 +2,33 @@ from __future__ import annotations
 
 from gi.repository import Adw
 
+from ulauncher import version
 from ulauncher.ui.preferences.adw_rows import plain_action_row
 from ulauncher.utils.launch_detached import open_detached
 
 _GOSHOS_SPEC = "https://github.com/goshitsarch-eng/spotlight-goshos"
+_ULAUNCHER = "https://github.com/Ulauncher/Ulauncher"
+_GOSHLAUNCHER = "https://github.com/goshitsarch-eng/GoshLauncher"
+
+# GPL-3.0 5(a): a modified Ulauncher has to say so where users can see it. The goshos About page
+# is fixed at three rows, so the fork's credits sit here with the rest of the GTK-host docs.
+_CREDIT_ROWS = (
+    (
+        "Ulauncher",
+        "Upstream code base. \u00a9 2015 Aleksandr Gornostal and contributors, GPL-3.0. Extension API 3.0 is theirs",
+        _ULAUNCHER,
+    ),
+    (
+        "Spotlight-goshos",
+        "Design and behaviour reference: the search order, looks, prefixes, and this keyboard map",
+        _GOSHOS_SPEC,
+    ),
+    (
+        "GoshLauncher",
+        "This fork. Source, issues, and the full credits in AUTHORS",
+        _GOSHLAUNCHER,
+    ),
+)
 
 _KEYBOARD_ROWS = (
     ("Ctrl+Space", "Open or dismiss the launcher"),
@@ -60,3 +83,17 @@ def add_usage_groups(page: Adw.PreferencesPage) -> None:
     spec_row.connect("activated", lambda *_args: open_detached(_GOSHOS_SPEC))
     spec.add(spec_row)
     page.add(spec)
+
+    credits_group = Adw.PreferencesGroup(
+        title="Credits",
+        description=(
+            f"GoshLauncher {version} \u00b7 GNU GPL v3.0. A fork of Ulauncher v6, redesigned to follow "
+            "Spotlight-goshos. Neither project endorses it."
+        ),
+    )
+    for title, subtitle, url in _CREDIT_ROWS:
+        row = plain_action_row(title, subtitle)
+        row.set_activatable(True)
+        row.connect("activated", lambda _row, link=url: open_detached(link))
+        credits_group.add(row)
+    page.add(credits_group)

@@ -6,7 +6,7 @@ from shutil import which
 from typing import Any, Callable
 
 from ulauncher import app_display_name, app_id, show_launcher_label
-from ulauncher.gi import Gio, GLib
+from ulauncher.gi import GLib
 from ulauncher.modes.launcher.shortcut import (
     hotkey_to_restore_after_failed_grab,
     shortcut_attempts,
@@ -14,6 +14,7 @@ from ulauncher.modes.launcher.shortcut import (
 )
 from ulauncher.ui.hotkey_dialog import HotkeyDialog
 from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME
+from ulauncher.utils.gsettings import settings_or_none, settings_with_path_or_none
 from ulauncher.utils.launch_detached import launch_detached
 from ulauncher.utils.systemd_controller import SystemdController
 
@@ -33,12 +34,15 @@ def _set_hotkey(hotkey: str) -> None:
         spec_schema = f"{base_schema}.custom-keybinding"
         spec_path = f"/{spec_schema.replace('.', '/')}s/ulauncher/"
 
-        spec = Gio.Settings.new_with_path(spec_schema, spec_path)
+        spec = settings_with_path_or_none(spec_schema, spec_path)
+        keybindings = settings_or_none(base_schema)
+        if spec is None or keybindings is None:
+            logger.warning("Cannot set the global shortcut: %s is not installed", base_schema)
+            return
         spec.set_string("name", show_launcher_label)
         spec.set_string("command", launch_command)
         spec.set_string("binding", hotkey)
 
-        keybindings = Gio.Settings.new(base_schema)
         enabled_keybindings = list(keybindings.get_value("custom-keybindings"))  # type: ignore[call-overload]
         if spec_path not in enabled_keybindings:
             logger.debug("Enabling global shortcut for Gnome")
@@ -210,7 +214,7 @@ def _current_gnome_grab() -> str:
         base_schema = "org.gnome.settings-daemon.plugins.media-keys"
         spec_schema = f"{base_schema}.custom-keybinding"
         spec_path = f"/{spec_schema.replace('.', '/')}s/ulauncher/"
-        spec = Gio.Settings.new_with_path(spec_schema, spec_path)
-        return spec.get_string("binding") or ""
+        spec = settings_with_path_or_none(spec_schema, spec_path)
+        return (spec.get_string("binding") or "") if spec is not None else ""
     except (GLib.GError, AttributeError, TypeError):
         return ""

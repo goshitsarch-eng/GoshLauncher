@@ -2,7 +2,7 @@
 
 A GTK 4 + libadwaita application launcher for Linux. Open with **Ctrl+Space**. Search, looks, prefixes, and keyboard navigation follow [Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos).
 
-The installed command is still `ulauncher`.
+GoshLauncher is a fork of [Ulauncher](https://github.com/Ulauncher/Ulauncher) v6, whose core, extension API, and packaging it still builds on. The installed command is still `ulauncher`. See [Credits](#credits).
 
 ## Search order
 
@@ -75,6 +75,28 @@ Preferences: Shortcut, Appearance, Features, Web Search, About (Spotlight-goshos
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `make check` runs lint and tests. Target Python 3.8+ with GTK 4.6 and libadwaita 1.1+.
 
+## Credits
+
+GoshLauncher stands on two projects and claims neither as its own.
+
+**[Ulauncher](https://github.com/Ulauncher/Ulauncher)** — Copyright © 2015 Aleksandr Gornostal and the Ulauncher
+contributors, GPL-3.0. Ulauncher v6 is the upstream code base: the mode system, extension API and extension IPC,
+preferences, packaging, and most of what is under `ulauncher/` come from it. GoshLauncher keeps Ulauncher's extension
+API (version 3.0), so extensions written for Ulauncher work here. Extension docs stay at
+[docs.ulauncher.io](https://docs.ulauncher.io/).
+
+**[Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos)** — the design and behaviour reference. The
+search order, the seventeen looks, the prefixes, the keyboard map, and the popup chrome are ported from it. Modules
+under `ulauncher/modes/launcher/` name the goshos source file they follow.
+
+Icons and look palettes quote the projects each look is named after (Rofi, KRunner, Raycast, Albert, Wofi, Fuzzel,
+Anyrun, Tofi, PowerToys, Synapse, Onagre, Pop!_OS, GNOME). Those are visual homages; none of those projects are
+affiliated with or endorse GoshLauncher.
+
 ## License
 
-GNU GPL v3.0. See [LICENSE](LICENSE).
+GNU GPL v3.0, inherited from Ulauncher. See [LICENSE](LICENSE) and [AUTHORS](AUTHORS).
+
+This is a modified version of Ulauncher, not the original. Per GPL-3.0 section 5(a): the GTK 4 + libadwaita launcher
+UI, the Spotlight-goshos search order and looks, and the rebrand to GoshLauncher were added in August 2026 by the
+GoshLauncher contributors. Ulauncher is not responsible for, and does not endorse, these changes.

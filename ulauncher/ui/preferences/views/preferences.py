@@ -126,6 +126,7 @@ _PROVIDER_SWITCHES = (
 )
 
 
+
 class PreferencesView:
     """Spotlight-goshos preference pages (Shortcut / Appearance / Features / Web Search / About)."""
 
@@ -514,7 +515,8 @@ class PreferencesView:
     def _build_about_page(self) -> Adw.PreferencesPage:
         page = Adw.PreferencesPage(title="About", icon_name="dialog-information-symbolic")
         group = Adw.PreferencesGroup(title="About")
-        # goshos prefs/aboutPage.js is title, Looks, host toolkit. Keyboard docs live on Desktop.
+        # goshos prefs/aboutPage.js is title, Looks, host toolkit. Keyboard docs, the release
+        # string, and the fork's credits are host-only copy, so they live on Desktop instead.
         group.add(plain_action_row("Gosh Is Launcher", "A compact launcher with interchangeable looks."))
         group.add(plain_action_row("Looks", look_about_subtitle()))
         group.add(

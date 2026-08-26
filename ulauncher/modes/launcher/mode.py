@@ -37,15 +37,15 @@ def _reset_reconfigure_caches(_keys: tuple[str, ...] = ()) -> None:
     re-probes. This daemon has no disable/enable cycle, so a preferences save
     is the equivalent reconfigure point: drop the cached program locations (a
     terminal or gnome-control-center may have been installed since a lookup
-    cached a miss) and clear the parental give-up flag so a parental-controls
-    lookup that previously timed out is retried. The per-keystroke program-path
+    cached a miss) and drop the cached parental-controls probe so a malcontent
+    lookup that previously failed is retried. The per-keystroke program-path
     cache is otherwise kept across popup opens, matching goshos.
     """
     from ulauncher.modes.launcher.gio_launch import reset_program_path_cache
-    from ulauncher.modes.launcher.parental import reset_parental_give_up
+    from ulauncher.modes.launcher.parental import reset_parental_controls
 
     reset_program_path_cache()
-    reset_parental_give_up()
+    reset_parental_controls()
 
 
 # goshos wires resetProgramPathCache into the extension lifecycle; the daemon
@@ -300,7 +300,9 @@ class LauncherMode(Mode):
                 return
             callback(effects.do_nothing())
             return
-        if kind in {"url", "bookmark"} and payload.get("url"):
+        # A recent file on a remote share is a "file" row carrying a url and no path, because
+        # _row_from_uri keeps the caller's kind. Open it as a uri rather than indexing "path".
+        if kind in {"url", "bookmark", "file"} and payload.get("url"):
             from ulauncher.modes.launcher.paths import canonicalize_launch_uri
 
             url = canonicalize_launch_uri(str(payload.get("url") or ""))

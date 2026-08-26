@@ -73,15 +73,11 @@ def test_prefs_saved_reprobes_program_path_and_parental(monkeypatch: pytest.Monk
     # Importing mode.py registers the goshos extension.disable() reset on the
     # daemon's reconfigure event (a settings save).
     import ulauncher.modes.launcher.mode  # noqa: F401
-    from ulauncher.modes.launcher.parental import (
-        has_parental_give_up,
-        mark_parental_give_up,
-        reset_parental_give_up,
-    )
+    from ulauncher.modes.launcher.parental import ParentalControls, parental_controls, reset_parental_controls
     from ulauncher.utils.eventbus import EventBus
 
     reset_program_path_cache()
-    reset_parental_give_up()
+    reset_parental_controls()
     try:
         holder: dict[str, str | None] = {"found": None}
         monkeypatch.setattr(
@@ -93,15 +89,17 @@ def test_prefs_saved_reprobes_program_path_and_parental(monkeypatch: pytest.Monk
         # The program is installed mid-session, but the cache still returns the miss.
         holder["found"] = "/usr/bin/goshterm"
         assert find_in_user_path("goshterm") is None
-        mark_parental_give_up()
-        assert has_parental_give_up() is True
+        # A probe that failed leaves the singleton cached, so nothing retries it on its own.
+        failed = ParentalControls(probe=lambda: {"initialized": False, "allows": lambda _app_id: False})
+        reset_parental_controls(failed)
+        assert parental_controls() is failed
 
         # A preferences save is the daemon's re-enable moment.
         EventBus().emit("app:prefs_saved", ("enable_calculator",))
 
-        # PATH is re-probed and the parental give-up flag is cleared.
+        # PATH is re-probed, and the parental probe is dropped so the next lookup re-runs it.
         assert find_in_user_path("goshterm") == "/usr/bin/goshterm"
-        assert has_parental_give_up() is False
+        assert parental_controls() is not failed
     finally:
         reset_program_path_cache()
-        reset_parental_give_up()
+        reset_parental_controls()

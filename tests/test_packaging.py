@@ -119,3 +119,56 @@ def test_prerelease_banner_uses_goshlauncher() -> None:
     plasma = _boxed_warning(f"Plasma Desktop needs Layer Shell to render {app_display_name} correctly on Wayland.")
     assert "GoshLauncher" in plasma
     assert "Ulauncher" not in plasma
+
+
+def test_fork_attribution_is_stated() -> None:
+    # GPL-3.0 5(a): a modified Ulauncher has to carry prominent notices saying so.
+    authors = (ROOT / "AUTHORS").read_text()
+    assert "fork of Ulauncher" in authors
+    assert "Aleksandr Gornostal" in authors
+    assert "spotlight-goshos" in authors
+    assert "GoshLauncher" in authors
+
+    readme = (ROOT / "README.md").read_text()
+    assert "## Credits" in readme
+    assert "https://github.com/Ulauncher/Ulauncher" in readme
+    assert "https://github.com/goshitsarch-eng/spotlight-goshos" in readme
+    assert "GPL-3.0 section 5(a)" in readme
+
+    copyright_file = (ROOT / "debian" / "copyright").read_text()
+    assert "goshitsarch-eng/GoshLauncher" in copyright_file
+    assert "Aleksandr Gornostal" in copyright_file
+
+
+def test_desktop_page_credits_upstreams_with_the_version() -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher import version
+    from ulauncher.ui.preferences.views.help import add_usage_groups
+
+    page = Adw.PreferencesPage(title="Desktop")
+    add_usage_groups(page)
+
+    rows: list[str] = []
+    descriptions: list[str] = []
+
+    def walk(widget: object) -> None:
+        from ulauncher.ui import gtk4
+
+        if isinstance(widget, Adw.ActionRow):
+            rows.append(str(widget.get_title()))
+        if isinstance(widget, Adw.PreferencesGroup):
+            descriptions.append(str(widget.get_description() or ""))
+        for child in gtk4.list_children(widget):
+            walk(child)
+
+    walk(page)
+    assert "Ulauncher" in rows
+    assert "Spotlight-goshos" in rows
+    assert "GoshLauncher" in rows
+    assert any(version in text and "GPL" in text for text in descriptions)

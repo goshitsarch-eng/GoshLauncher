@@ -5,8 +5,6 @@ from typing import Any
 
 from gi.repository import Gdk, GdkX11  # type: ignore[missing-module-attribute]
 
-from ulauncher.gi import Gio
-
 logger = logging.getLogger(__name__)
 
 
@@ -148,5 +146,16 @@ def monitor_work_geometry(monitor: Gdk.Monitor) -> Gdk.Rectangle:
     return rect
 
 
+_INTERFACE_SCHEMA = "org.gnome.desktop.interface"
+_text_scaling_factor: float | None = None
+
+
 def get_text_scaling_factor() -> float:
-    return Gio.Settings.new("org.gnome.desktop.interface").get_double("text-scaling-factor")
+    """Cached: ResultWidget asks per row, and constructing a GSettings per keystroke is not free."""
+    global _text_scaling_factor  # noqa: PLW0603
+    if _text_scaling_factor is None:
+        from ulauncher.utils.gsettings import settings_or_none
+
+        settings = settings_or_none(_INTERFACE_SCHEMA)
+        _text_scaling_factor = settings.get_double("text-scaling-factor") if settings is not None else 1.0
+    return _text_scaling_factor
