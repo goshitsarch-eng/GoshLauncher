@@ -92,11 +92,6 @@ class UlauncherApp(Adw.Application):
             self.core.set_query(self.query, self.show_results)
 
     @events.on
-    def restyle_launcher(self) -> None:
-        if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
-            main_window.restyle_from_settings()
-
-    @events.on
     def prefs_saved(self, keys: tuple[str, ...]) -> None:
         from ulauncher.modes.launcher.prefs_live import live_pref_actions
 

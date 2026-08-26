@@ -108,7 +108,9 @@ class TrayIcon(GObject.Object):
         gtk_icon_theme = Gtk.IconTheme.get_for_display(display) if display else None
         icon_name = "find"  # standard find icon, in case the app is not installed
         icon_dir = ""
-        icons = list({settings.tray_icon_name, default_icon_name, "ulauncher-indicator"})
+        # dict.fromkeys, not a set: the loop below takes the first name that resolves, so the
+        # preferred icon has to come first. A set gave a different order on every run.
+        icons = list(dict.fromkeys([settings.tray_icon_name, default_icon_name, "ulauncher-indicator"]))
 
         # check preferred, fallback on default v6 icon name, then the v5 icon name if v5 is installed
         for _icon in icons:

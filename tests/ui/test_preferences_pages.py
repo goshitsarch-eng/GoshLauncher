@@ -319,3 +319,29 @@ def test_removing_a_shortcut_drops_the_stale_save_button() -> None:
     view._show_placeholder()
     assert view.save_button is None
     assert view.save_changes() is False
+
+
+def test_preferences_follow_the_system_colour_scheme() -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher.ui.preferences.preferences_window import PreferencesWindow
+
+    manager = Adw.StyleManager.get_default()
+    previous = manager.get_color_scheme()
+    window = PreferencesWindow()
+    try:
+        # libadwaita ignores GtkSettings:gtk-application-prefer-dark-theme (and warns), so the
+        # window never actually followed the desktop's preference.
+        window._apply_system_theme(True)
+        assert manager.get_color_scheme() == Adw.ColorScheme.PREFER_DARK
+        assert manager.get_dark() is True
+        window._apply_system_theme(False)
+        assert manager.get_color_scheme() == Adw.ColorScheme.PREFER_LIGHT
+    finally:
+        manager.set_color_scheme(previous)
+        window.destroy()

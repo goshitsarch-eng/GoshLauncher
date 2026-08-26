@@ -93,3 +93,13 @@ def test_packaged_themes_are_gosh_looks_only() -> None:
     themes = Path(__file__).resolve().parents[2] / "data" / "themes"
     names = sorted(path.name for path in themes.iterdir() if path.suffix == ".css")
     assert names == ["gosh-looks.css"]
+
+
+def test_tray_icon_candidates_keep_the_preferred_name_first() -> None:
+    from pathlib import Path
+
+    # The loop takes the first name that resolves, so a set gave the user's tray_icon_name a
+    # different priority on every run.
+    source = (Path(__file__).resolve().parents[2] / "ulauncher" / "ui" / "helpers" / "tray_icon.py").read_text()
+    assert "icons = list(dict.fromkeys([settings.tray_icon_name," in source
+    assert "icons = list({settings.tray_icon_name" not in source
