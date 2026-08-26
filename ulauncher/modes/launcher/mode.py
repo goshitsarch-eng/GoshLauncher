@@ -37,15 +37,19 @@ def _reset_reconfigure_caches(_keys: tuple[str, ...] = ()) -> None:
     re-probes. This daemon has no disable/enable cycle, so a preferences save
     is the equivalent reconfigure point: drop the cached program locations (a
     terminal or gnome-control-center may have been installed since a lookup
-    cached a miss) and drop the cached parental-controls probe so a malcontent
-    lookup that previously failed is retried. The per-keystroke program-path
-    cache is otherwise kept across popup opens, matching goshos.
+    cached a miss), drop the cached parental-controls probe so a malcontent lookup
+    that previously failed is retried, and drop the desktop-entry snapshot, which
+    is built from the settings this save may have changed. The per-keystroke
+    program-path cache is otherwise kept across popup opens, matching goshos.
     """
+    from ulauncher.modes.apps.app_mode import invalidate_installed_apps
     from ulauncher.modes.launcher.gio_launch import reset_program_path_cache
     from ulauncher.modes.launcher.parental import reset_parental_controls
 
     reset_program_path_cache()
     reset_parental_controls()
+    # the desktop-entry snapshot is built from settings (application mode, desktop filters)
+    invalidate_installed_apps()
 
 
 # goshos wires resetProgramPathCache into the extension lifecycle; the daemon

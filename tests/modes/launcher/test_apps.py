@@ -382,7 +382,7 @@ def test_match_apps_keeps_more_used_variant(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, stable])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.app_usage.load_gnome_app_usage_scores", lambda *_a, **_k: {})
     matched = match_apps("fire", 6)
     assert [app.name for app in matched] == ["Firefox"]
 
@@ -443,7 +443,7 @@ def test_match_apps_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), good])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.app_usage.load_gnome_app_usage_scores", lambda *_a, **_k: {})
     assert [app.name for app in match_apps("notes")] == ["Notes"]
 
 
@@ -460,7 +460,7 @@ def test_home_apps_lists_unused_apps_and_collapses_variants(monkeypatch: pytest.
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [esr, notes, stable])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.app_usage.load_gnome_app_usage_scores", lambda *_a, **_k: {})
     assert [app.name for app in home_apps(6)] == ["Firefox", "Notes"]
     assert [app.name for app in home_apps(1)] == ["Firefox"]
     assert home_apps(0) == []
@@ -483,7 +483,7 @@ def test_home_apps_skips_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [_Bad(), notes])
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", lambda _app_id: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.app_usage.load_gnome_app_usage_scores", lambda *_a, **_k: {})
     assert [app.name for app in home_apps(6)] == ["Notes"]
 
 
@@ -520,7 +520,7 @@ def test_home_apps_prefers_gnome_app_usage(monkeypatch: pytest.MonkeyPatch) -> N
             return ["firefox.desktop"]
 
     monkeypatch.setattr(apps_mod.AppRankings, "load", classmethod(lambda _cls: _Rankings()))
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", scores.get)
+    monkeypatch.setattr("ulauncher.modes.launcher.app_usage.load_gnome_app_usage_scores", lambda *_a, **_k: scores)
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [firefox, notes])
     assert [app.name for app in home_apps(6)] == ["Notes", "Firefox"]
     alpha = SimpleNamespace(
@@ -539,7 +539,9 @@ def test_home_apps_prefers_gnome_app_usage(monkeypatch: pytest.MonkeyPatch) -> N
     )
     editor_scores = {"beta.desktop": 80.0, "alpha.desktop": 1.0}
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [alpha, beta])
-    monkeypatch.setattr(apps_mod, "gnome_app_usage_score", editor_scores.get)
+    monkeypatch.setattr(
+        "ulauncher.modes.launcher.app_usage.load_gnome_app_usage_scores", lambda *_a, **_k: editor_scores
+    )
     assert [app.name for app in match_apps("editor", 6)] == ["Beta Editor", "Alpha Editor"]
 
 
