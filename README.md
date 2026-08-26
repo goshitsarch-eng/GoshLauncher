@@ -38,6 +38,11 @@ Disable prefix modes in Features if you never want them. `!` stays off unless yo
 | `.` | Recent files (`. notes`, not `.bashrc`) |
 | `!` | Argv command (off by default; not a shell) |
 
+Keywords you define on the Shortcuts page, and the keywords extensions register, run when you type
+the keyword followed by a space and an argument. A bare keyword with no argument stays an ordinary
+search. The Google, StackOverflow and Wikipedia shortcuts Ulauncher used to seed are removed on
+load, so `g firefox` stays a search.
+
 ## Looks
 
 Seventeen looks. A look owns colors and chrome (position, density, headers, number hints, icons, descriptions, icon size, windows-first). Width is not part of a look. There is no blur.
