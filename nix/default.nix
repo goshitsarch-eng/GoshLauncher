@@ -220,8 +220,8 @@ let
     };
 
     meta = with lib; {
-      description = "A fast application launcher for Linux, written in Python, using GTK";
-      homepage = "https://ulauncher.io/";
+      description = "A GTK 4 + libadwaita application launcher for Linux, a fork of Ulauncher";
+      homepage = "https://github.com/goshitsarch-eng/GoshLauncher";
       license = licenses.gpl3;
       platforms = platforms.linux;
       mainProgram = "ulauncher";

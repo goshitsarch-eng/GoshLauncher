@@ -4,7 +4,7 @@ body = """
 {% if has_app_changes %}## App Changes
 {% for group, group_commits in changes | group_by(attribute="group") %}{% set group_ext = group_commits | filter(attribute="scope", value=ext_scope) %}{% if group_commits | length > group_ext | length %}
 ### {{ group | striptags | trim }}
-{% for scope, scope_commits in group_commits | group_by(attribute="scope") %}{% if scope != ext_scope %}{% set scope_name = scope | striptags | trim %}{% for commit in scope_commits %}- {% if scope_name %}**{{ scope_name | upper_first }}:** {% endif %}{{ commit.message | replace_regex(from="( +\\(#\\d+\\))+$", to="") | upper_first }}{% if commit.links | length > 0 %} ({% for link in commit.links %}[{{ link.text }}]({{ link.href }}){% if not loop.last %}, {% endif %}{% endfor %}){% else %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/Ulauncher/Ulauncher/commit/{{ commit.id }})){% endif %}{% if commit.breaking_description and commit.breaking_description != commit.message %}
+{% for scope, scope_commits in group_commits | group_by(attribute="scope") %}{% if scope != ext_scope %}{% set scope_name = scope | striptags | trim %}{% for commit in scope_commits %}- {% if scope_name %}**{{ scope_name | upper_first }}:** {% endif %}{{ commit.message | replace_regex(from="( +\\(#\\d+\\))+$", to="") | upper_first }}{% if commit.links | length > 0 %} ({% for link in commit.links %}[{{ link.text }}]({{ link.href }}){% if not loop.last %}, {% endif %}{% endfor %}){% else %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/goshitsarch-eng/GoshLauncher/commit/{{ commit.id }})){% endif %}{% if commit.breaking_description and commit.breaking_description != commit.message %}
   > {{ commit.breaking_description | upper_first }}{% endif %}
 {% endfor %}{% endif %}{% endfor %}{% endif %}{% endfor %}{% elif ext_changes | length == 0 %}## App Changes
 
@@ -15,7 +15,7 @@ body = """
 {% endif %}## Extension Changes
 {% for group, group_commits in ext_changes | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
-{% for commit in group_commits %}- {{ commit.message | replace_regex(from="( +\\(#\\d+\\))+$", to="") | upper_first }}{% if commit.links | length > 0 %} ({% for link in commit.links %}[{{ link.text }}]({{ link.href }}){% if not loop.last %}, {% endif %}{% endfor %}){% else %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/Ulauncher/Ulauncher/commit/{{ commit.id }})){% endif %}{% if commit.breaking_description and commit.breaking_description != commit.message %}
+{% for commit in group_commits %}- {{ commit.message | replace_regex(from="( +\\(#\\d+\\))+$", to="") | upper_first }}{% if commit.links | length > 0 %} ({% for link in commit.links %}[{{ link.text }}]({{ link.href }}){% if not loop.last %}, {% endif %}{% endfor %}){% else %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/goshitsarch-eng/GoshLauncher/commit/{{ commit.id }})){% endif %}{% if commit.breaking_description and commit.breaking_description != commit.message %}
   > {{ commit.breaking_description | upper_first }}{% endif %}
 {% endfor %}{% endfor %}{% endif %}
 """
@@ -28,7 +28,7 @@ filter_commits = true
 sort_commits = "oldest"
 tag_pattern = "v[0-9].*"
 link_parsers = [
-    { pattern = "#(\\d+)", href = "https://github.com/Ulauncher/Ulauncher/pull/$1" },
+    { pattern = "#(\\d+)", href = "https://github.com/goshitsarch-eng/GoshLauncher/pull/$1" },
 ]
 # Scopes have been written many ways over the years ("ext", "ext-mode", "extension",
 # "ext runner", ...). These rewrite the scope to the one name it should be listed under,

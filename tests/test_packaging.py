@@ -138,3 +138,37 @@ def test_fork_attribution_is_stated() -> None:
     copyright_file = (ROOT / "debian" / "copyright").read_text()
     assert "goshitsarch-eng/GoshLauncher" in copyright_file
     assert "Aleksandr Gornostal" in copyright_file
+
+
+def test_release_does_not_publish_into_upstreams_channels() -> None:
+    # A fork must never upload to Ulauncher's PPA or take over its AUR package.
+    workflow = (ROOT / ".github" / "workflows" / "publish-release.yml").read_text()
+    assert "agornostal/ulauncher" not in workflow
+    assert "package_name: ulauncher" not in workflow
+    assert 'commit_username: "Ulauncher"' not in workflow
+    # both publish steps are opt-in, so an unconfigured fork uploads nowhere
+    assert "vars.LAUNCHPAD_PPA" in workflow
+    assert "vars.AUR_PACKAGE_NAME" in workflow
+
+    cliff = (ROOT / "cliff.toml").read_text()
+    assert "Ulauncher/Ulauncher" not in cliff
+
+
+def test_vendored_pyewmh_keeps_its_own_licence() -> None:
+    ewmh = (ROOT / "ulauncher" / "utils" / "ewmh.py").read_text()
+    assert "pyewmh" in ewmh
+    assert "Lesser General Public License" in ewmh
+    copyright_file = (ROOT / "debian" / "copyright").read_text()
+    assert "Files: ulauncher/utils/ewmh.py" in copyright_file
+    assert "License: LGPL-3" in copyright_file
+    assert "pyewmh" in (ROOT / "AUTHORS").read_text()
+
+
+def test_manpage_version_matches_the_package() -> None:
+    from ulauncher import version
+
+    # `make manpage` used to stamp whatever ${VERSION} held when make parsed the file, so a
+    # release that had just bumped the version wrote the previous one into the manpage.
+    assert f"ulauncher {version}" in (ROOT / "ulauncher.1").read_text()
+    makefile = (ROOT / "makefile").read_text()
+    assert '--version-string="ulauncher $$(sed -n' in makefile

@@ -22,6 +22,13 @@ The GTK 4 + libadwaita popup, the Spotlight-goshos search order and looks, and
 the rebrand are the changes made here. Ulauncher does not endorse them.
 
 
+Vendored third-party code
+-------------------------
+ulauncher/utils/ewmh.py is a copy of pyewmh (https://github.com/parkouss/pyewmh),
+Copyright (C) 2011-2017 Julien Pages, under the GNU LGPL v3.0. It keeps that
+licence; the notice is in the file and in debian/copyright.
+
+
 Spotlight-goshos (design and behaviour reference)
 -------------------------------------------------
 https://github.com/goshitsarch-eng/spotlight-goshos

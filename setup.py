@@ -45,7 +45,7 @@ setuptools.setup(
         ("share/dbus-1/services", ["io.ulauncher.Ulauncher.service"]),
         ("share/man/man1", [gzip_file("ulauncher.1")]),
         ("lib/systemd/user", ["ulauncher.service"]),
-        ("share/licenses/ulauncher", ["LICENSE"]),
+        ("share/licenses/ulauncher", ["LICENSE", "AUTHORS"]),
         # Recursively add data as share/ulauncher, then icons
         *data_files_from_path("share/ulauncher", "data"),
         *data_files_from_path("share/icons/hicolor/scalable", "data/icons/system"),

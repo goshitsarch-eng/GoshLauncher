@@ -325,8 +325,11 @@ manpage:
 		echo -e "${BOLD}${RED}You need help2man to (re)generate the manpage${RESET}"
 		exit 1
 	fi
+	# read the version inside the recipe: make expands ${VERSION} once at parse time, so a
+	# `make release` that just rewrote the version file would stamp the previous one here.
 	help2man --section=1 --name="GTK 4 Adwaita launcher matching Spotlight-goshos" --no-info \
-		--version-string="ulauncher ${VERSION}" ./bin/ulauncher > ulauncher.1
+		--version-string="ulauncher $$(sed -n 's/^version = "\(.*\)"$$/\1/p' ${VERSION_FILE})" \
+		./bin/ulauncher > ulauncher.1
 	# help2man renders any heading with a trailing colon as .SS (indented subsection).
 	# Convert those to .SH with uppercased names, which is the man page section convention.
 	sed -i 's/^\.SS "\(.*\):"$$/.SH \U\1/' ulauncher.1
@@ -343,6 +346,9 @@ set-version:
 	echo -e "${GREEN}Version set to ${BOLD}${NEW_VERSION}${RESET}"
 
 # Make a release commit and tag. Usage: make release NEW_VERSION=1.2.3
+# set-version must land before manpage stamps the version string, and .NOTPARALLEL keeps
+# `make -j release` from running them at the same time.
+.NOTPARALLEL: release
 release: set-version manpage
 	@set -euo pipefail
 	git add ${VERSION_FILE} ulauncher.1

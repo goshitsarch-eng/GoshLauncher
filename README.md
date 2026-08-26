@@ -89,6 +89,10 @@ API (version 3.0), so extensions written for Ulauncher work here. Extension docs
 search order, the seventeen looks, the prefixes, the keyboard map, and the popup chrome are ported from it. Modules
 under `ulauncher/modes/launcher/` name the goshos source file they follow.
 
+**[pyewmh](https://github.com/parkouss/pyewmh)** — Copyright © 2011-2017 Julien Pagès, LGPL-3.0. Vendored as
+`ulauncher/utils/ewmh.py` for the X11 window list. It keeps its own licence; the notice is in the file and in
+`debian/copyright`.
+
 Icons and look palettes quote the projects each look is named after (Rofi, KRunner, Raycast, Albert, Wofi, Fuzzel,
 Anyrun, Tofi, PowerToys, Synapse, Onagre, Pop!_OS, GNOME). Those are visual homages; none of those projects are
 affiliated with or endorse GoshLauncher.

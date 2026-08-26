@@ -15,20 +15,25 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             debhelper dh-python python3-all python3-setuptools \
             devscripts dput gnupg help2man
+      # GoshLauncher is a fork. It must never upload to Ulauncher's PPA or AUR package: those
+      # belong to upstream, and a build of this fork appearing there would be a hijack. Set the
+      # repository variables below to this fork's own channels to enable publishing.
       - name: Publish to Launchpad
+        if: ${{ vars.LAUNCHPAD_PPA != '' }}
         env:
           LAUNCHPAD_SSH_TAR: ${{ secrets.LAUNCHPAD_SSH_TAR }}
           LAUNCHPAD_PUB_KEY: ${{ secrets.LAUNCHPAD_PUB_KEY }}
           LAUNCHPAD_SECRET_KEY: ${{ secrets.LAUNCHPAD_SECRET_KEY }}
           GPGKEY: ${{ secrets.DEB_GPGKEY }}
-          PPA: agornostal/ulauncher
+          PPA: ${{ vars.LAUNCHPAD_PPA }}
+          PPA_PRERELEASE: ${{ vars.LAUNCHPAD_PPA_PRERELEASE }}
         shell: bash
         run: |
           echo "Ref type: $GITHUB_REF_TYPE"
           VERSION=$(make version)
           echo "Version: $VERSION"
-          # If release name contains prerelease-separator "-", use ulauncher-dev PPA
-          if [[ "$VERSION" == *-* ]]; then PPA="agornostal/ulauncher-dev"; fi
+          # a prerelease goes to the separate dev PPA when one is configured
+          if [[ "$VERSION" == *-* && -n "$PPA_PRERELEASE" ]]; then PPA="$PPA_PRERELEASE"; fi
           echo "PPA: $PPA"
           echo -n "$LAUNCHPAD_SSH_TAR" | base64 -d > scripts/launchpad.ssh.tar
           echo -n "$LAUNCHPAD_PUB_KEY" | base64 -d > scripts/launchpad-public.key
@@ -49,11 +54,11 @@ jobs:
           done;
 
       - name: Publish to AUR
-        if: "${{ !contains(github.ref_name, '-') }}"
+        if: ${{ !contains(github.ref_name, '-') && vars.AUR_PACKAGE_NAME != '' }}
         uses: friday/aur-publish-action@master
         with:
           new_release: ${{ github.ref_name }}
-          package_name: ulauncher
-          commit_username: "Ulauncher"
+          package_name: ${{ vars.AUR_PACKAGE_NAME }}
+          commit_username: "GoshLauncher"
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_PRIVATE_KEY }}

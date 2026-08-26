@@ -5,7 +5,7 @@ Build-Depends: debhelper (>=9~),
  dh-python,
  python3-all,
  python3-setuptools
-Maintainer: Aleksandr Gornostal <ulauncher.app@gmail.com>
+Maintainer: GoshLauncher contributors <goshitsarch@gmail.com>
 Standards-Version: 4.1.4
 X-Python3-Version: >= 3.8
 Homepage: https://github.com/goshitsarch-eng/GoshLauncher
