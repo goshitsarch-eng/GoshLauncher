@@ -185,3 +185,15 @@ def test_format_number_is_stable() -> None:
     assert format_number(-0.0) == "0"
     assert format_number(256) == "256"
     assert format_number(1.2300000000001) == "1.23"
+
+
+def test_format_number_keeps_exact_integers() -> None:
+    # 20! evaluates to a Python int, which is exact at any size. Rounding it through a float
+    # printed 2432902008176640000 as "2.43290200818e+18".
+    assert format_number(2432902008176640000) == "2432902008176640000"
+    assert format_number(10**15) == "1000000000000000"
+    assert format_number(10**25) == "10000000000000000000000000"
+    # an integral float below 2**53 holds its value exactly, so drop the ".0"
+    assert format_number(1000000000000000.0) == "1000000000000000"
+    # past 2**53 a float no longer holds every integer, so stay honest about the precision
+    assert "e+" in format_number(1.2193263111263526e17)

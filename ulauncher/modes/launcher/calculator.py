@@ -310,12 +310,21 @@ def calculator_description(n: float) -> str:
     return "Press Enter to copy to clipboard"
 
 
+# Above 2**53 a float can no longer hold every integer, so past it the 12-significant-digit
+# form is honest about the precision that is actually left. Below it, int() is exact.
+EXACT_INT_LIMIT = 2**53
+
+
 def format_number(n: float) -> str:
+    # ``20!`` and the other integer paths stay Python ints, which are exact at any magnitude.
+    # Rounding those through a float printed 2432902008176640000 as "2.43290200818e+18".
+    if isinstance(n, int):
+        return str(n)
     if n == 0:
         return "0"
-    if n == int(n) and abs(n) < 1e15:
+    if n == int(n) and abs(n) <= EXACT_INT_LIMIT:
         return str(int(n))
     rounded = float(f"{n:.12g}")
-    if rounded == int(rounded) and abs(rounded) < 1e15:
+    if rounded == int(rounded) and abs(rounded) <= EXACT_INT_LIMIT:
         return str(int(rounded))
     return str(rounded)

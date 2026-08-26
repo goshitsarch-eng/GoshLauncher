@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from ulauncher import paths
 from ulauncher.modes.launcher.paths import (
     canonicalize_launch_uri,
     collapse_home,
@@ -15,11 +16,15 @@ from ulauncher.modes.launcher.paths import (
 )
 from ulauncher.modes.launcher.word_match import path_matches_query, text_matches_query
 
-XBEL = Path.home() / ".local" / "share" / "recently-used.xbel"
+XBEL = Path(paths.XDG_DATA_HOME) / "recently-used.xbel"
 REMOTE_SCHEMES = frozenset({"sftp", "smb", "ftp", "dav", "davs"})
 SKIP_SCHEMES = frozenset({"http", "https", "javascript", "data"})
 # goshos recentXbel.js: require authority slashes so file:javascript: never looks like a path
 HREF_RE = re.compile(r"""href\s*=\s*["']((?:file|sftp|ftp|smb|davs?)://[^"']+)["']""", re.IGNORECASE)
+BOOKMARK_RE = re.compile(r"<bookmark\b[^>]*>", re.IGNORECASE)
+# GLib writes these as RFC 3339 UTC, which sorts correctly as text. Older files use a plain
+# integer epoch, which sorts correctly too but never against a timestamp, so they are kept apart.
+STAMP_RE = re.compile(r"""\b(?:modified|visited|added)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 HOST_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^/@]+@)?([^/:?#]+)")
 RECENT_EXISTS_BUDGET_MS = 800
 EXT_ICONS = {
@@ -71,18 +76,34 @@ def unescape_xml(text: str) -> str:
     )
 
 
+def recent_stamp(bookmark_tag: str) -> str:
+    """The newest timestamp on one <bookmark> tag, or "" when it carries none."""
+    return max((match.group(1) for match in STAMP_RE.finditer(bookmark_tag)), default="")
+
+
 def parse_recent_xbel(text: str) -> list[str]:
+    """URIs newest first.
+
+    recently-used.xbel is stored in whatever order GLib last wrote it, not by recency, so a list
+    titled "Recent files" has to sort on the bookmark's own modified/visited/added stamps. Entries
+    with no stamp keep their file order behind the stamped ones (the sort is stable).
+    """
     if not text:
         return []
-    uris: list[str] = []
+    stamped: list[tuple[str, str]] = []
     seen: set[str] = set()
-    for match in HREF_RE.finditer(text):
-        uri = unescape_xml(match.group(1))
+    for tag_match in BOOKMARK_RE.finditer(text):
+        tag = tag_match.group(0)
+        href_match = HREF_RE.search(tag)
+        if not href_match:
+            continue
+        uri = unescape_xml(href_match.group(1))
         if uri in seen:
             continue
         seen.add(uri)
-        uris.append(uri)
-    return uris
+        stamped.append((recent_stamp(tag), uri))
+    stamped.sort(key=lambda item: item[0], reverse=True)
+    return [uri for _stamp, uri in stamped]
 
 
 def usable_recent_uri(href: str) -> str:

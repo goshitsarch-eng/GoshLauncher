@@ -138,37 +138,3 @@ def test_fork_attribution_is_stated() -> None:
     copyright_file = (ROOT / "debian" / "copyright").read_text()
     assert "goshitsarch-eng/GoshLauncher" in copyright_file
     assert "Aleksandr Gornostal" in copyright_file
-
-
-def test_desktop_page_credits_upstreams_with_the_version() -> None:
-    import gi
-
-    gi.require_version("Adw", "1")
-    from gi.repository import Adw
-
-    Adw.init()
-
-    from ulauncher import version
-    from ulauncher.ui.preferences.views.help import add_usage_groups
-
-    page = Adw.PreferencesPage(title="Desktop")
-    add_usage_groups(page)
-
-    rows: list[str] = []
-    descriptions: list[str] = []
-
-    def walk(widget: object) -> None:
-        from ulauncher.ui import gtk4
-
-        if isinstance(widget, Adw.ActionRow):
-            rows.append(str(widget.get_title()))
-        if isinstance(widget, Adw.PreferencesGroup):
-            descriptions.append(str(widget.get_description() or ""))
-        for child in gtk4.list_children(widget):
-            walk(child)
-
-    walk(page)
-    assert "Ulauncher" in rows
-    assert "Spotlight-goshos" in rows
-    assert "GoshLauncher" in rows
-    assert any(version in text and "GPL" in text for text in descriptions)

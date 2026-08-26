@@ -126,7 +126,6 @@ _PROVIDER_SWITCHES = (
 )
 
 
-
 class PreferencesView:
     """Spotlight-goshos preference pages (Shortcut / Appearance / Features / Web Search / About)."""
 

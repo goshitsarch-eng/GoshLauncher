@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from ulauncher import paths
 from ulauncher.modes.launcher.paths import (
     canonicalize_file_uri,
     canonicalize_launch_uri,
@@ -17,8 +18,8 @@ from ulauncher.modes.launcher.urls import is_unsafe_launch_uri
 from ulauncher.modes.launcher.word_match import path_matches_query, text_matches_query
 
 BOOKMARK_FILES = (
-    Path.home() / ".config" / "gtk-3.0" / "bookmarks",
-    Path.home() / ".config" / "gtk-4.0" / "bookmarks",
+    Path(paths.XDG_CONFIG_HOME) / "gtk-3.0" / "bookmarks",
+    Path(paths.XDG_CONFIG_HOME) / "gtk-4.0" / "bookmarks",
 )
 
 

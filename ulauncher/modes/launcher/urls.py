@@ -23,7 +23,7 @@ _URI_SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*$", re.IGNORECASE)
 
 UNSAFE_LAUNCH_SCHEMES = frozenset({"javascript", "data", "vbscript"})
 # last labels that are almost always files, not sites — even vs country codes such as md/py
-FILE_EXTS = frozenset(
+GOSHOS_FILE_EXTS = frozenset(
     {
         "md",
         "py",
@@ -115,6 +115,67 @@ FILE_EXTS = frozenset(
         "apk",
     }
 )
+
+# GoshLauncher additions. Every one of these is a file extension that is not a real TLD, so
+# denying it cannot shadow a reachable domain. Without them `main.cpp` ranks first as
+# "Open in browser", since URLs sit above app and file search.
+EXTRA_FILE_EXTS = frozenset(
+    {
+        # C/C++ sources. cc/hh stay out: .cc and .am are real TLDs, so util.cc is a plausible host.
+        "cpp",
+        "cxx",
+        "hpp",
+        "hxx",
+        # documents and notebooks
+        "ipynb",
+        "adoc",
+        "bib",
+        "odt",
+        "ods",
+        "odp",
+        "ppt",
+        "pptx",
+        # patches and build files
+        "patch",
+        "diff",
+        "cmake",
+        "mk",
+        "gradle",
+        # archives and disk images
+        "7z",
+        "xz",
+        "bz2",
+        "zst",
+        "img",
+        # media and fonts
+        "flac",
+        "ogg",
+        "opus",
+        "avi",
+        "ttf",
+        "otf",
+        "woff",
+        "woff2",
+        # packages and units
+        "jar",
+        "war",
+        "whl",
+        "msi",
+        "dmg",
+        "socket",
+        # editor and build leftovers
+        "bak",
+        "tmp",
+        "swp",
+        "pyc",
+        "pyi",
+        "el",
+        "vim",
+        "less",
+    }
+)
+
+FILE_EXTS = GOSHOS_FILE_EXTS | EXTRA_FILE_EXTS
 
 
 def is_dotted_ipv4(host: str) -> bool:

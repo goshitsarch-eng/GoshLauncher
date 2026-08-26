@@ -261,3 +261,37 @@ def test_sidebar_layout_constructs_on_gtk4() -> None:
     rows = gtk4.list_children(layout.listbox)
     assert len(rows) == 1
     assert layout.listbox.get_first_child() is not None
+
+
+def test_desktop_page_credits_upstreams_with_the_version() -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher import version
+    from ulauncher.ui import gtk4
+    from ulauncher.ui.preferences.views.help import add_usage_groups
+
+    page = Adw.PreferencesPage(title="Desktop")
+    add_usage_groups(page)
+
+    rows: list[str] = []
+    descriptions: list[str] = []
+
+    def walk(widget: object) -> None:
+        if isinstance(widget, Adw.ActionRow):
+            rows.append(str(widget.get_title()))
+        if isinstance(widget, Adw.PreferencesGroup):
+            descriptions.append(str(widget.get_description() or ""))
+        for child in gtk4.list_children(widget):
+            walk(child)
+
+    walk(page)
+    # GPL-3.0 5(a): a modified Ulauncher has to say so somewhere the user can see it
+    assert "Ulauncher" in rows
+    assert "Spotlight-goshos" in rows
+    assert "GoshLauncher" in rows
+    assert any(version in text and "GPL" in text for text in descriptions)

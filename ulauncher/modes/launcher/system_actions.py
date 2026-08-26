@@ -119,7 +119,10 @@ def action_matches(action: Mapping[str, Any], query: str) -> bool:
     q = normalize_action_query(query)
     if not q:
         return False
-    title = action["title"].lower()
+    # The query has its stop words stripped, so the title needs the same treatment or an action
+    # cannot be found by its own name: "take a screenshot" normalizes to "take screenshot",
+    # which matched neither "take a screenshot" nor any keyword.
+    title = normalize_action_query(action["title"])
     if title.startswith(q) or word_prefix_match(title, q):
         return True
     return any(keyword_matches_query(keyword, q) for keyword in action["keywords"])

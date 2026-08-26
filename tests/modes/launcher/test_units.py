@@ -140,3 +140,13 @@ def test_goshos_unit_as_how_many_and_articles() -> None:
     assert parse_unit_query("how many km are in a mile")["value"] == 1
     assert parse_unit_query("a mile to km")["value"] == 1
     assert parse_unit_query("180° into rad")["from"] == "deg"
+
+
+def test_format_unit_value_does_not_round_exact_integers() -> None:
+    from ulauncher.modes.launcher.units import format_unit_value
+
+    # the old 1e12 ceiling sent this through "%.8g" and printed 1234567900000.0
+    assert format_unit_value(1234567890123.0) == "1234567890123"
+    assert format_unit_value(10**12) == "1000000000000"
+    assert format_unit_value(0) == "0"
+    assert format_unit_value(2.5) == "2.5"

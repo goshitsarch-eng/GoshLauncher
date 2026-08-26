@@ -12,8 +12,11 @@ ASSETS = os.path.abspath(os.environ.get("ULAUNCHER_SYSTEM_DATA_DIR", f"{SYSTEM_P
 HOME = os.path.expanduser("~")
 CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", f"{HOME}/.cache"), "ulauncher")
 XDG_DATA_DIRS = os.environ.get("XDG_DATA_DIRS", f"/usr/local/share/{os.path.pathsep}/usr/share/").split(os.path.pathsep)
-CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", f"{HOME}/.config"), "ulauncher")
-DATA = os.path.join(os.environ.get("XDG_DATA_HOME", f"{HOME}/.local/share"), "ulauncher")
+# The XDG base dirs themselves, for the files other apps own (GTK bookmarks, recently-used.xbel)
+XDG_CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME") or f"{HOME}/.config"
+XDG_DATA_HOME = os.environ.get("XDG_DATA_HOME") or f"{HOME}/.local/share"
+CONFIG = os.path.join(XDG_CONFIG_HOME, "ulauncher")
+DATA = os.path.join(XDG_DATA_HOME, "ulauncher")
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME", f"{HOME}/.local/state"), "ulauncher")
 USER_EXTENSIONS = os.path.join(DATA, "extensions")
 # Sibling of the installed extensions so the post-install swap is a same-filesystem rename.
