@@ -23,18 +23,27 @@ def next_selected_index(current: int, delta: int, length: int) -> int:
 
 
 def is_selectable_result(result: Any) -> bool:
+    """Whether the arrow keys may land on this row.
+
+    Result is a dict subclass, so the dict branch has to apply the same three checks as the
+    attribute branch. Reading only `activatable` made section headers selectable, which put the
+    first highlight on a section title and, with more than one section, left every row after the
+    second header unreachable: the move landed on the header index and ResultsView snapped it
+    back to the first row.
+    """
     if result is None:
         return False
     if isinstance(result, dict):
-        return result.get("activatable", True) is not False
-    if getattr(result, "activatable", True) is False:
+        activatable = result.get("activatable", True)
+        highlightable = result.get("highlightable", True)
+        actions = result.get("actions")
+    else:
+        activatable = getattr(result, "activatable", True)
+        highlightable = getattr(result, "highlightable", True)
+        actions = getattr(result, "actions", None)
+    if activatable is False or highlightable is False:
         return False
-    if getattr(result, "highlightable", True) is False:
-        return False
-    actions = getattr(result, "actions", None)
-    if isinstance(actions, dict) and not actions:
-        return False
-    return True
+    return not (isinstance(actions, dict) and not actions)
 
 
 def next_activatable_index(current: int, delta: int, results: Sequence[Any]) -> int:

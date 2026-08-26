@@ -56,8 +56,14 @@ def _report_link(website_url: str, issues_url: str) -> str:
 
 
 def get_error_message(error: ExtensionErrorData, website_url: str, issues_url: str) -> str:
-    """Generate appropriate error message based on error type"""
-    error_message = error.message or ""
+    """Generate appropriate error message based on error type.
+
+    The result is rendered with use_markup, so the extension's own text has to be escaped: a
+    traceback almost always contains `<module>`, `File "<stdin>"` or `->`, and one stray `<`
+    makes Pango reject the whole string, leaving the error panel blank.
+    """
+    error_message = html.escape(error.message or "")
+    error_type = html.escape(str(error.type or ""))
 
     static_messages = {
         "Invalid": (
@@ -102,7 +108,7 @@ def get_error_message(error: ExtensionErrorData, website_url: str, issues_url: s
             message += f"\n\n<small>If that doesn't help, {report_link}</small>"
         return message
 
-    message = error_message or f"Unknown error type: {error.type}"
+    message = error_message or f"Unknown error type: {error_type}"
     if report_link := _report_link(website_url, issues_url):
         message += f"\n\n<small>You can {report_link}</small>"
     return message

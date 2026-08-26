@@ -68,6 +68,8 @@ class SidebarLayout(Gtk.Box):
 
         self._rows_by_id: dict[str, DataListBoxRow] = {}
         self._empty_placeholder_builder: Callable[[], Gtk.Widget] | None = None
+        self._active_id: str | None = None
+        self._replaying_selection = False
 
         gtk4.pack_start(self, self.sidebar, False, False, 0)
 
@@ -101,8 +103,17 @@ class SidebarLayout(Gtk.Box):
         gtk4.show_all(self.listbox)
 
         if active_item_id:
-            self.select_item(active_item_id)
+            # set_items throws every row away, so re-selecting the item that was already active
+            # emits row-selected again. Letting that reach on_activate re-ran the callback that
+            # rebuilds the content pane, discarding whatever the user was editing in it - and
+            # the extensions page rebuilds its list once a second.
+            self._replaying_selection = active_item_id == self._active_id
+            try:
+                self.select_item(active_item_id)
+            finally:
+                self._replaying_selection = False
         else:
+            self._active_id = None
             self.listbox.unselect_all()
 
     def select_item(self, item_id: str | None) -> None:
@@ -250,6 +261,9 @@ class SidebarLayout(Gtk.Box):
             return
 
         item: SidebarItem = row.sidebar_item  # type: ignore[attr-defined]
+        self._active_id = item.id
+        if self._replaying_selection:
+            return
         if item.on_activate and item.selectable:
             item.on_activate(item)
 

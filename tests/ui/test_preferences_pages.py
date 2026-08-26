@@ -295,3 +295,27 @@ def test_desktop_page_credits_upstreams_with_the_version() -> None:
     assert "Spotlight-goshos" in rows
     assert "GoshLauncher" in rows
     assert any(version in text and "GPL" in text for text in descriptions)
+
+
+def test_removing_a_shortcut_drops_the_stale_save_button() -> None:
+    import gi
+
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+
+    Adw.init()
+
+    from ulauncher.modes.shortcuts.shortcuts import Shortcut
+    from ulauncher.ui.preferences.views.shortcuts import ShortcutsView
+
+    view = ShortcutsView()
+    view.active_shortcut_id = "gh"
+    view._show_edit_form(Shortcut(id="gh", name="GitHub", keyword="gh", cmd="https://example.com/%s"))
+    assert view.save_button is not None
+
+    # After a delete the form is replaced by the placeholder. Keeping its Save button let Ctrl+S
+    # save the destroyed widgets under a fresh id, recreating the shortcut just deleted.
+    view.active_shortcut_id = None
+    view._show_placeholder()
+    assert view.save_button is None
+    assert view.save_changes() is False
