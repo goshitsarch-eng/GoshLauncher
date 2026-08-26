@@ -51,6 +51,20 @@ def get_modes() -> list[Mode]:
     ]
 
 
+def is_stock_web_trigger(trigger: Result) -> bool:
+    """Whether this is one of the google/stackoverflow/wikipedia shortcuts Ulauncher used to seed.
+
+    Those steal `g firefox` from goshos search, where the web is last unless you type `@`.
+    Shortcuts.load() deletes them, so in practice this only catches one left in a stale cache.
+    """
+    from ulauncher.modes.shortcuts.shortcuts import is_stock_web_shortcut
+
+    getter = getattr(trigger, "get", None)
+    if not callable(getter):
+        return False
+    return is_stock_web_shortcut(str(getter("id") or ""), str(getter("cmd") or ""))
+
+
 def is_legacy_trigger_mode(mode: Mode) -> bool:
     # LauncherMode is a catch-all, so keyword-less ShortcutMode/ExtensionMode
     # triggers never win set_query. Merge those two by class name so AppMode
@@ -146,17 +160,18 @@ class UlauncherCore:
         self._mode = None
         self.query = Query(None, query_str)
 
-        # keyword match — skip leftover ShortcutMode/ExtensionMode so `g firefox`
-        # stays Spotlight-goshos search instead of a stock Google shortcut.
+        # keyword match. Only a keyword with an argument wins, so a bare word is still
+        # Spotlight-goshos search; `g firefox` is protected by dropping the stock shortcuts,
+        # not by ignoring the modes that own them (that also disabled every extension).
         keyword, argument = query_str.split(" ", 1) if " " in query_str else (query_str, None)
 
         for mode, keywords in self._keyword_cache.items():
-            if is_legacy_trigger_mode(mode):
+            trigger = keywords.get(keyword) if argument is not None else None
+            if trigger is None or is_stock_web_trigger(trigger):
                 continue
-            if keyword in keywords and argument is not None:
-                self._mode = mode
-                self.query = Query(keyword, argument)
-                break
+            self._mode = mode
+            self.query = Query(keyword, argument)
+            break
 
         # non-keyword match
         if not self._mode:

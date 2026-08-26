@@ -34,6 +34,12 @@ def _paintable_for_result(result: Result, icon_size: int, scale: int) -> Any:
             return None
 
 
+def _is_section_header(result: Result) -> bool:
+    from ulauncher.modes.launcher.results import SectionHeader
+
+    return isinstance(result, SectionHeader)
+
+
 class ResultWidget(Gtk.Box):
     index: int = 0
     query: Query
@@ -103,7 +109,7 @@ class ResultWidget(Gtk.Box):
 
         from ulauncher.modes.launcher.result_icon import should_build_result_icon
 
-        if should_build_result_icon(show_icons):
+        if should_build_result_icon(show_icons, _is_section_header(result)):
             icon = Gtk.Image()
             icon.set_pixel_size(icon_size)
             paintable = _paintable_for_result(result, icon_size, self.get_scale_factor())
@@ -243,8 +249,11 @@ class ResultWidget(Gtk.Box):
         else:
             labels = [self._make_text_label(self.result.name)]
 
-        expand = self.result.wrap
+        # An END-ellipsizing label declares max_width_chars=1, so its minimum width is just the
+        # ellipsis. Packing it with expand=False pins it to that minimum and every title longer
+        # than ELLIPSIZE_MIN_LENGTH renders as "…", so the ellipsizing segments have to expand.
         for label in labels:
+            expand = self.result.wrap or label.get_ellipsize() != Pango.EllipsizeMode.NONE
             gtk4.pack_start(self.title_box, label, expand, expand, 0)
 
     def _pointer_from_touchscreen(self, gesture: Gtk.Gesture) -> bool:

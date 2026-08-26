@@ -119,3 +119,87 @@ def test_prerelease_banner_uses_goshlauncher() -> None:
     plasma = _boxed_warning(f"Plasma Desktop needs Layer Shell to render {app_display_name} correctly on Wayland.")
     assert "GoshLauncher" in plasma
     assert "Ulauncher" not in plasma
+
+
+def test_fork_attribution_is_stated() -> None:
+    # GPL-3.0 5(a): a modified Ulauncher has to carry prominent notices saying so.
+    authors = (ROOT / "AUTHORS").read_text()
+    assert "fork of Ulauncher" in authors
+    assert "Aleksandr Gornostal" in authors
+    assert "spotlight-goshos" in authors
+    assert "GoshLauncher" in authors
+
+    readme = (ROOT / "README.md").read_text()
+    assert "## Credits" in readme
+    assert "https://github.com/Ulauncher/Ulauncher" in readme
+    assert "https://github.com/goshitsarch-eng/spotlight-goshos" in readme
+    assert "GPL-3.0 section 5(a)" in readme
+
+    copyright_file = (ROOT / "debian" / "copyright").read_text()
+    assert "goshitsarch-eng/GoshLauncher" in copyright_file
+    assert "Aleksandr Gornostal" in copyright_file
+
+
+def test_release_does_not_publish_into_upstreams_channels() -> None:
+    # A fork must never upload to Ulauncher's PPA or take over its AUR package.
+    workflow = (ROOT / ".github" / "workflows" / "publish-release.yml").read_text()
+    assert "agornostal/ulauncher" not in workflow
+    assert "package_name: ulauncher" not in workflow
+    assert 'commit_username: "Ulauncher"' not in workflow
+    # both publish steps are opt-in, so an unconfigured fork uploads nowhere
+    assert "vars.LAUNCHPAD_PPA" in workflow
+    assert "vars.AUR_PACKAGE_NAME" in workflow
+
+    cliff = (ROOT / "cliff.toml").read_text()
+    assert "Ulauncher/Ulauncher" not in cliff
+
+
+def test_vendored_pyewmh_keeps_its_own_licence() -> None:
+    ewmh = (ROOT / "ulauncher" / "utils" / "ewmh.py").read_text()
+    assert "pyewmh" in ewmh
+    assert "Lesser General Public License" in ewmh
+    copyright_file = (ROOT / "debian" / "copyright").read_text()
+    assert "Files: ulauncher/utils/ewmh.py" in copyright_file
+    assert "License: LGPL-3" in copyright_file
+    assert "pyewmh" in (ROOT / "AUTHORS").read_text()
+
+
+def test_manpage_version_matches_the_package() -> None:
+    from ulauncher import version
+
+    # `make manpage` used to stamp whatever ${VERSION} held when make parsed the file, so a
+    # release that had just bumped the version wrote the previous one into the manpage.
+    assert f"ulauncher {version}" in (ROOT / "ulauncher.1").read_text()
+    makefile = (ROOT / "makefile").read_text()
+    assert '--version-string="ulauncher $$(sed -n' in makefile
+
+
+def test_contributor_docs_point_at_this_fork() -> None:
+    # Verbatim upstream docs sent GoshLauncher contributors to Ulauncher's tracker.
+    contributing = (ROOT / "CONTRIBUTING.md").read_text()
+    assert "GoshLauncher is a fork" in contributing
+    assert "goshitsarch-eng/GoshLauncher/issues" in contributing
+    assert "contributing to Ulauncher!" not in contributing
+
+    conduct = (ROOT / "CODE_OF_CONDUCT.md").read_text()
+    assert conduct.startswith("# GoshLauncher Code of Conduct")
+    assert "Inherited from Ulauncher" in conduct
+
+
+def test_scrollbar_slider_box_is_restated_after_the_reset() -> None:
+    # `.app *` strips the transparent border libadwaita uses to cancel the slider's negative
+    # margin, so the gizmo measured -4: two GTK warnings per overflowing popup and a 0px trough.
+    css = (ROOT / "data" / "themes" / "gosh-looks.css").read_text()
+    rule = css[css.index(".app scrollbar slider {") :].split("}", 1)[0]
+    assert "margin: 0;" in rule
+    assert "min-width: 8px;" in rule
+    assert "min-height: 40px;" in rule
+
+
+def test_global_shortcut_rebind_closes_the_previous_portal_session() -> None:
+    source = (ROOT / "ulauncher" / "modes" / "launcher" / "global_shortcuts.py").read_text()
+    # Without this the portal keeps the old accelerator grabbed, so both combinations open the
+    # launcher and each rebind leaks another session.
+    start = source[source.index("    def start(") :]
+    assert "self._close_session()" in start.split("def _on_create_session_response", 1)[0]
+    assert '"org.freedesktop.portal.Session"' in source

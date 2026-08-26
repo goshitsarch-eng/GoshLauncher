@@ -156,7 +156,7 @@ def test_set_query_does_not_treat_g_as_a_keyword_without_shortcuts(mocker: Mocke
     assert str(core.query) == "g firefox"
 
 
-def test_set_query_does_not_let_shortcut_keywords_steal_goshos_search(mocker: MockerFixture) -> None:
+def test_set_query_does_not_let_stock_web_shortcuts_steal_goshos_search(mocker: MockerFixture) -> None:
     class ShortcutMode:
         def matches_query_str(self, _query_str: str) -> bool:
             return False
@@ -166,11 +166,61 @@ def test_set_query_does_not_let_shortcut_keywords_steal_goshos_search(mocker: Mo
     shortcut_mode = ShortcutMode()
     mocker.patch("ulauncher.core.get_modes", return_value=[launcher, shortcut_mode])
     mocker.patch.object(launcher, "handle_query")
-    core._keyword_cache[shortcut_mode]["g"] = KeywordTrigger(name="Google", keyword="g")  # type: ignore[index]
+    # the seeded Google shortcut: goshos puts the web last unless you type `@`
+    core._keyword_cache[shortcut_mode]["g"] = KeywordTrigger(  # type: ignore[index]
+        name="Google Search", keyword="g", id="googlesearch", cmd="https://google.com/search?q=%s"
+    )
     core.set_query("g firefox", MagicMock())
     assert isinstance(core._mode, LauncherMode)
     assert core.query.keyword is None
     assert str(core.query) == "g firefox"
+
+
+def test_set_query_runs_a_user_shortcut_or_extension_keyword(mocker: MockerFixture) -> None:
+    """Skipping ShortcutMode/ExtensionMode wholesale disabled every extension and user shortcut.
+
+    Only the stock web shortcuts need to stay out of the way, and Shortcuts.load() already
+    deletes those, so the keyword a user or an extension actually registered has to win.
+    """
+
+    class ShortcutMode:
+        def matches_query_str(self, _query_str: str) -> bool:
+            return False
+
+        def handle_query(self, _query: Query, _callback: object) -> None:
+            return
+
+    class ExtensionMode(ShortcutMode):
+        pass
+
+    for mode_cls, keyword, trigger in (
+        (
+            ShortcutMode,
+            "gh",
+            KeywordTrigger(name="GitHub", keyword="gh", id="gh", cmd="https://github.com/search?q=%s"),
+        ),
+        (ExtensionMode, "tm", KeywordTrigger(name="Timer", keyword="tm")),
+    ):
+        core = UlauncherCore()
+        launcher = LauncherMode()
+        mode = mode_cls()
+        mocker.patch("ulauncher.core.get_modes", return_value=[launcher, mode])
+        mocker.patch.object(launcher, "handle_query")
+        core._keyword_cache[mode][keyword] = trigger  # type: ignore[index]
+        core.set_query(f"{keyword} something", MagicMock())
+        assert core._mode is mode
+        assert core.query.keyword == keyword
+        assert core.query.argument == "something"
+
+    # a bare keyword with no argument is still ordinary goshos search
+    core = UlauncherCore()
+    launcher = LauncherMode()
+    mode = ShortcutMode()
+    mocker.patch("ulauncher.core.get_modes", return_value=[launcher, mode])
+    mocker.patch.object(launcher, "handle_query")
+    core._keyword_cache[mode]["gh"] = KeywordTrigger(name="GitHub", keyword="gh")  # type: ignore[index]
+    core.set_query("gh", MagicMock())
+    assert isinstance(core._mode, LauncherMode)
 
 
 def test_launcher_paint_skips_legacy_merge_for_keyword_queries(mocker: MockerFixture) -> None:

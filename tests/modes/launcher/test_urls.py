@@ -108,8 +108,23 @@ def test_file_extensions_are_not_urls() -> None:
     assert match_url("data.csv") is None
     assert match_url("style.scss") is None
     assert match_url("readme.md.") is None
-    assert FILE_EXTS == GOSHOS_FILE_EXTS
-    assert len(FILE_EXTS) == 88
+    # the goshos table stays reproduced exactly; GoshLauncher only adds to it
+    from ulauncher.modes.launcher.urls import EXTRA_FILE_EXTS
+    from ulauncher.modes.launcher.urls import GOSHOS_FILE_EXTS as SHIPPED_GOSHOS_EXTS
+
+    assert SHIPPED_GOSHOS_EXTS == GOSHOS_FILE_EXTS
+    assert len(SHIPPED_GOSHOS_EXTS) == 88
+    assert FILE_EXTS == SHIPPED_GOSHOS_EXTS | EXTRA_FILE_EXTS
+    assert not (EXTRA_FILE_EXTS & SHIPPED_GOSHOS_EXTS)
+
+
+def test_source_extensions_that_are_not_tlds_are_not_urls() -> None:
+    # URLs rank above apps and files, so main.cpp used to offer "Open in browser" first.
+    for name in ("main.cpp", "main.hpp", "a.cxx", "notes.ipynb", "fix.patch", "pkg.whl", "font.ttf"):
+        assert match_url(name) is None, name
+    # .cc and .am are real TLDs, so those stay reachable as hosts
+    assert match_url("util.cc") is not None
+    assert match_url("example.am") is not None
 
 
 def test_real_domains_match() -> None:

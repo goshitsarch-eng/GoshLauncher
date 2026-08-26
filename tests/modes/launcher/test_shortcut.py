@@ -142,3 +142,18 @@ def test_shortcut_capture_tab_away_restores_label() -> None:
     assert shortcut_row_label(["<Control>space"], False) == "Ctrl+space"
     assert shortcut_row_label([], False) == "Not set (will default to Ctrl+Space)"
     assert DEFAULT_FALLBACK == "<Control>space"
+
+
+def test_global_shortcut_requires_a_modifier() -> None:
+    # Committing a bare key grabs it desktop-wide: bind "a" and the popup opens every time the
+    # user types an a, including in the field that would let them change it back.
+    none = {"super": False, "control": False, "shift": False, "alt": False, "meta": False}
+    for key in ("a", "space", "Return", "1", "Escape"):
+        assert build_accelerator(key, none) == "", key
+    # function keys are the conventional exception
+    assert build_accelerator("F1", none) == "F1"
+    assert build_accelerator("F35", none) == "F35"
+    assert build_accelerator("F36", none) == ""
+    # anything with a modifier still commits
+    assert build_accelerator("space", {**none, "control": True}) == "<Control>space"
+    assert build_accelerator("a", {**none, "super": True}) == "<Super>a"

@@ -1698,3 +1698,51 @@ def test_ensure_windows_schedules_refresh_when_stale(monkeypatch: pytest.MonkeyP
         assert windows_cache_is_fresh()
     finally:
         invalidate_windows()
+
+
+def test_window_manager_subprocesses_are_bounded() -> None:
+    """Every wm command runs on the GTK main thread, so none may wait forever.
+
+    LiveSearchWatcher re-lists windows every 250ms while the popup is open, and the wmctrl
+    listing was the one probe with no timeout: a wedged wmctrl froze the popup outright.
+    """
+    import re
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[3] / "ulauncher" / "modes" / "launcher" / "windows.py").read_text()
+    calls = re.findall(r"subprocess\.(?:run|check_output)\((?:[^()]|\([^()]*\))*\)", source)
+    assert calls
+    untimed = [call for call in calls if "timeout=" not in call]
+    assert untimed == [], untimed
+
+
+def test_close_only_counts_as_done_for_an_x11_window_id() -> None:
+    from pathlib import Path
+
+    from ulauncher.modes.launcher.windows import _is_x11_wid
+
+    # session_has_x11_window_control() only says the session is X11. Treating that as proof the
+    # close landed skipped the D-Bus and AT-SPI fallbacks for rows _close_window cannot act on.
+    assert _is_x11_wid("0x1a00003") is True
+    assert _is_x11_wid("12345") is True
+    for wid in ("atspi:/org/a11y/atspi/accessible/12", "ext:7", "lswt:3"):
+        assert _is_x11_wid(wid) is False, wid
+
+    source = (Path(__file__).resolve().parents[3] / "ulauncher" / "modes" / "launcher" / "windows.py").read_text()
+    assert "session_has_x11_window_control() and _is_x11_wid(str(wid))" in source
+
+
+def test_an_unknown_workspace_is_not_reported_as_sticky() -> None:
+    from ulauncher.modes.launcher.windows import WindowInfo, _pick_desktop
+
+    def win(**kwargs: object) -> WindowInfo:
+        return WindowInfo(wid="0x1", title="t", wm_class="c", **kwargs)
+
+    # -1 from a compositor that names workspaces instead of numbering them is "unknown", not
+    # "on all workspaces"; every source where -1 does mean sticky sets sticky itself.
+    assert _pick_desktop(win(desktop=-1), win(desktop=3)) == (3, False)
+    assert _pick_desktop(win(desktop=2), win(desktop=-1)) == (2, False)
+    assert _pick_desktop(win(desktop=2), win(desktop=3)) == (2, False)
+    # a genuinely sticky window still reports sticky
+    assert _pick_desktop(win(desktop=-1, sticky=True), win(desktop=3)) == (-1, True)
+    assert _pick_desktop(win(desktop=2), win(desktop=2, sticky=True)) == (-1, True)

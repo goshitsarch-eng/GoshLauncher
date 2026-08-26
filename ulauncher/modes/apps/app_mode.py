@@ -32,26 +32,65 @@ def _installed_app_result(app: GioUnix.DesktopAppInfo, settings: Settings) -> Ap
     return AppResult(app)
 
 
+class _EntryCache:
+    entries: list[AppResult] | None = None
+    monitor: object = None
+    handler: int = 0
+
+
+_cache = _EntryCache()
+
+
+def invalidate_installed_apps() -> None:
+    """Drop the desktop-entry snapshot. Needed after a settings save changes what qualifies."""
+    _cache.entries = None
+
+
+def _watch_installed_apps() -> None:
+    if _cache.monitor is not None:
+        return
+    try:
+        from ulauncher.gi import Gio
+
+        monitor = Gio.AppInfoMonitor.get()
+        _cache.handler = monitor.connect("changed", lambda *_args: invalidate_installed_apps())
+        _cache.monitor = monitor
+    except (AttributeError, TypeError, RuntimeError, OSError):
+        _cache.monitor = None
+
+
+def installed_apps() -> list[AppResult]:
+    """Every usable desktop entry, read once.
+
+    Rebuilding this costs the same whether or not anything changed, and both the launcher's app
+    search (per keystroke) and the core's trigger load (per popup open) ask for it. AppInfoMonitor
+    reports an install or removal, which with a settings save is all that can change the answer.
+    """
+    if _cache.entries is None:
+        _watch_installed_apps()
+        settings = Settings.load()
+        entries: list[AppResult] = []
+        if settings.enable_application_mode:
+            for app in GioUnix.DesktopAppInfo.get_all():
+                try:
+                    result = _installed_app_result(app, settings)
+                except Exception:  # noqa: BLE001, S112
+                    # goshos: skip a desktop file whose get_id() throws so one bad
+                    # encoding cannot hide the rest of the app list.
+                    continue
+                if result is not None:
+                    entries.append(result)
+        _cache.entries = entries
+    return _cache.entries
+
+
 class AppMode(Mode):
     def handle_query(self, _query: Query, callback: Callable[[effects.EffectMessage], None]) -> None:
         # App mode contributes search triggers but does not handle direct query-mode execution.
         callback(effects.render_results([]))
 
     def get_triggers(self) -> Iterator[AppResult]:
-        settings = Settings.load()
-
-        if not settings.enable_application_mode:
-            return
-
-        for app in GioUnix.DesktopAppInfo.get_all():
-            try:
-                result = _installed_app_result(app, settings)
-            except Exception:  # noqa: BLE001, S112
-                # goshos: skip a desktop file whose get_id() throws so one bad
-                # encoding cannot hide the rest of the app list.
-                continue
-            if result is not None:
-                yield result
+        yield from installed_apps()
 
     def get_home_results(self, limit: int) -> list[AppResult]:
         """Get the top {N} apps (by recency-weighted score) to show when the query is empty"""

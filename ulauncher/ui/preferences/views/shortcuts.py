@@ -301,6 +301,10 @@ class ShortcutsView(views.BaseView):
 
     def _show_placeholder(self) -> None:
         """Show placeholder when no shortcut is selected"""
+        # The edit form is about to be replaced. Holding on to its Save button let Ctrl+S run
+        # against the destroyed widgets, and since active_shortcut_id is gone the save minted a
+        # new id - recreating the shortcut the user had just deleted.
+        self.save_button = None
         has_shortcuts = any(self.shortcuts.values())
         heading = "Select a shortcut to edit" if has_shortcuts else "Create your first shortcut"
         hint = (

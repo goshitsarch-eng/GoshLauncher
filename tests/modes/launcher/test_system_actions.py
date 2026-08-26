@@ -112,3 +112,13 @@ def test_goshos_lock_o_is_not_a_match() -> None:
     assert action_matches(lock, "o") is False
     assert action_matches({"title": "Shut Down", "keywords": ["turn off"]}, "off") is True
     assert action_matches({"title": "Take a Screenshot", "keywords": ["record"]}, "record") is True
+
+
+def test_action_is_found_by_its_own_title() -> None:
+    from ulauncher.modes.launcher.system_actions import match_system_actions
+
+    # the query loses its stop words, so the title has to lose them too or "Take a Screenshot"
+    # cannot be found by typing its own name
+    assert [hit["title"] for hit in match_system_actions("take a screenshot")] == ["Take a Screenshot"]
+    assert [hit["title"] for hit in match_system_actions("take screenshot")] == ["Take a Screenshot"]
+    assert [hit["title"] for hit in match_system_actions("log out")] == ["Log Out"]

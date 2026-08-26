@@ -152,3 +152,28 @@ class TestResultWidget:
         name_label = cast("Gtk.Label", gtk4.list_children(widget.title_box)[0])
         assert name_label.get_text() == "Firefox"
         assert widget.item_icon is not None
+
+    def test_ellipsized_title_labels_expand_so_long_names_are_not_collapsed(self) -> None:
+        from gi.repository import Gtk, Pango
+
+        # max_width_chars=1 makes an END-ellipsizing label's minimum width the ellipsis alone,
+        # so a title packed without hexpand renders as "…" however wide the row is.
+        res = Result(name="Privacy & Security", highlightable=True, searchable=True)
+        widget = ResultWidget(res, 0, Query("privacy", None), noop, noop)
+
+        labels = [cast("Gtk.Label", c) for c in gtk4.list_children(widget.title_box)]
+        assert labels
+        for label in labels:
+            if label.get_ellipsize() != Pango.EllipsizeMode.NONE:
+                assert label.get_hexpand(), f"{label.get_text()!r} would collapse to the ellipsis"
+                assert label.get_halign() == Gtk.Align.FILL
+
+    def test_section_header_has_no_icon(self) -> None:
+        from ulauncher.modes.launcher.results import SectionHeader
+
+        widget = ResultWidget(SectionHeader(name="Applications"), 0, Query("", None), noop, noop)
+        assert widget.item_icon is None
+        assert widget.has_css_class("item-header")
+
+        # every other row keeps the icon column, including one whose own icon is missing
+        assert ResultWidget(Result(name="Firefox"), 0, Query("", None), noop, noop).item_icon is not None

@@ -82,3 +82,25 @@ def test_first_selectable_skips_pending() -> None:
     assert key["id"] == 42
     assert row_matches_previous(key, {"type": "window", "title": "Firefox", "id": 42})
     assert not row_matches_previous(key, {"type": "window", "title": "Firefox", "id": 7})
+
+
+def test_selection_key_reads_the_kind_and_payload_id() -> None:
+    from ulauncher.modes.launcher.results import LauncherResult
+
+    # Result is a dict subclass, so the dict branch used to return early: a LauncherResult has no
+    # "id"/"type" key and keeps them in payload/kind, leaving every real row id-less and kindless.
+    row = LauncherResult(name="Settings", kind="settings", description="GNOME Settings", payload={"id": "wifi-panel"})
+    key = result_selection_key(row, 0)
+    assert key is not None
+    assert key["type"] == "settings"
+    assert key["id"] == "wifi-panel"
+
+
+def test_repaint_keeps_the_selected_row_when_another_shares_its_title() -> None:
+    from ulauncher.modes.launcher.results import LauncherResult
+
+    app = LauncherResult(name="Terminal", kind="app", description="Application", payload={"id": "app:terminal"})
+    window = LauncherResult(name="Terminal", kind="window", description="Application", payload={"id": "win:1"})
+    key = result_selection_key(app, 1)
+    # the repaint reorders them; the highlight has to follow the app row, not the title
+    assert paint_selection_index(key, [window, app]) == 1

@@ -8,6 +8,10 @@ description = "GTK 4 + libadwaita launcher matching Spotlight-goshos"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [
+  {name = "GoshLauncher contributors"},
+]
+# GoshLauncher is a fork of Ulauncher; see AUTHORS for the full attribution.
+maintainers = [
   {name = "Aleksandr Gornostal"},
   {name = "Albin Larsson"},
   {name = "Troy Curtis"},

@@ -57,3 +57,22 @@ class TestAutofmtPangoCodeBlock:
         text = 'Run <code class="highlight">pip install</code> to install'
         result = autofmt_pango_code_block(text)
         assert result == 'Run <span face="monospace" bgcolor="#90600050">pip install</span> to install'
+
+
+def test_error_message_escapes_the_extension_text() -> None:
+    import gi
+
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    from ulauncher.ui.preferences.utils.ext_utils import get_error_message
+
+    Gtk.init()
+    # A Python traceback almost always contains `<module>` or `File "<stdin>"`, and the panel
+    # renders this with use_markup, so one stray `<` used to blank the whole error box.
+    traceback = 'File "<stdin>", line 1 in <module>: a < b & c > d'
+    for error_type in ("FailedToStart", "MissingModule", "Terminated", "SomethingNew"):
+        error = ExtensionErrorData(type=error_type, message=traceback)
+        label = Gtk.Label(use_markup=True)
+        label.set_markup(get_error_message(error, "", "https://example.com/issues"))
+        assert label.get_text(), error_type

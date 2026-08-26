@@ -1034,3 +1034,36 @@ def test_units_color_and_clock_copy_the_row_title(monkeypatch: pytest.MonkeyPatc
         LauncherMode().activate_result("activate", result, Query(None, query), captured.append)
         assert seen == [("app:copy_and_close", result.name)]
         assert captured[-1]["type"] == EffectType.CLOSE_WINDOW
+
+
+def test_remote_recent_file_opens_as_a_uri() -> None:
+    from ulauncher.modes.launcher.mode import _row_from_uri
+
+    # recently-used.xbel keeps sftp/smb entries, and _row_from_uri keeps the caller's kind, so a
+    # remote recent is a "file" row with a url and no path. Indexing payload["path"] raised KeyError.
+    row = _row_from_uri({"uri": "sftp://nas.local/srv/report.pdf", "title": "report.pdf"}, score=45, kind="file")
+    assert row is not None
+    assert "path" not in row
+    assert row["url"] == "sftp://nas.local/srv/report.pdf"
+
+    mode = LauncherMode()
+    effects_seen: list[dict] = []
+    result = LauncherResult(name=row["title"], kind=row["kind"], payload=row)
+    mode.activate_result("activate", result, Query("report", None), effects_seen.append)
+    assert effects_seen == [{"type": EffectType.OPEN, "path": "sftp://nas.local/srv/report.pdf"}]
+
+
+def test_local_recent_file_still_opens_by_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr("ulauncher.utils.launch_detached.open_detached", opened.append)
+
+    mode = LauncherMode()
+    effects_seen: list[dict] = []
+    result = LauncherResult(
+        name="notes.txt",
+        kind="file",
+        payload={"kind": "file", "path": "/home/user/notes.txt", "in_terminal": False, "exists": True},
+    )
+    mode.activate_result("activate", result, Query("notes", None), effects_seen.append)
+    assert opened == ["/home/user/notes.txt"]
+    assert effects_seen == [{"type": EffectType.CLOSE_WINDOW}]

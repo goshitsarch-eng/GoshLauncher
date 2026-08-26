@@ -66,7 +66,8 @@ LOOK_SELECTED_HEX = {
     "raycast": "#3a3a3e",
     "albert": "#1d99f3",
     "wofi": "#285577",
-    "fuzzel": "#eee8d5",
+    # base2 sat at 1.14:1 against base3, so the selected row could not be seen at all
+    "fuzzel": "#93a1a1",
     "tofi": "#ffffff",
     "light": "#3584e4",
     "powertoys": "#0078d4",

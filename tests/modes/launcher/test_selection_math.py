@@ -44,3 +44,26 @@ def test_python_result_pending_is_not_selectable() -> None:
     assert is_selectable_result(Row(True, {})) is False
     assert is_selectable_result(Row(False, {"activate": {"name": "Activate"}})) is False
     assert is_selectable_result(Row(True, {"activate": {"name": "Activate"}})) is True
+
+
+def test_section_headers_are_not_selectable() -> None:
+    from ulauncher.modes.launcher.results import LauncherResult, SectionHeader
+
+    # Result is a dict subclass, so the dict branch has to check highlightable too. Reading only
+    # `activatable` put the first highlight on a section title, and with two sections every row
+    # after the second header became unreachable by keyboard.
+    rows = [
+        SectionHeader(name="Applications"),
+        LauncherResult(name="Firefox", kind="app"),
+        LauncherResult(name="Files", kind="app"),
+        SectionHeader(name="Windows"),
+        LauncherResult(name="Terminal", kind="window"),
+    ]
+    assert [is_selectable_result(row) for row in rows] == [False, True, True, False, True]
+
+    index = next_activatable_index(0, 1, rows)
+    walk = []
+    for _ in range(4):
+        walk.append(index)
+        index = next_activatable_index(index, 1, rows)
+    assert walk == [1, 2, 4, 1]

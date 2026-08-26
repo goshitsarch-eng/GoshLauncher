@@ -6,10 +6,9 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
-from ulauncher.modes.apps.app_mode import AppMode
+from ulauncher.modes.apps.app_mode import installed_apps
 from ulauncher.modes.apps.app_rankings import AppRankings
 from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
-from ulauncher.modes.launcher.app_usage import gnome_app_usage_score
 from ulauncher.modes.launcher.word_match import (
     SUBSTRING_MIN,
     id_matches_query,
@@ -18,14 +17,15 @@ from ulauncher.modes.launcher.word_match import (
     word_prefix_match,
 )
 
-_app_mode = AppMode()
 _VARIANT_SUFFIX = re.compile(r"[\s-]+(esr|beta|nightly|dev|canary|stable|preview)$", re.IGNORECASE)
 
 
 def iter_apps() -> list[AppResult]:
+    # The parental filter stays outside the entry cache: its probe can still be pending when the
+    # first query runs, and it is a set lookup per app rather than a directory scan.
     from ulauncher.modes.launcher.parental import app_is_allowed
 
-    return [app for app in _app_mode.get_triggers() if app_is_allowed(app)]
+    return [app for app in installed_apps() if app_is_allowed(app)]
 
 
 def app_base_name(name: str) -> str:
@@ -110,6 +110,18 @@ def app_matches(app: AppResult, query: str) -> bool:
     return app_match_tier(app, query) >= 0
 
 
+def _usage_lookups() -> tuple[dict[str, float], dict[str, int]]:
+    """Both rank tables, read once per search.
+
+    Per app these were a stat() of application_state plus a linear scan of the ranking list,
+    so a query over a few hundred entries paid for them a few hundred times.
+    """
+    from ulauncher.modes.launcher.app_usage import load_gnome_app_usage_scores
+
+    ids = AppRankings.load().get_app_ids()
+    return load_gnome_app_usage_scores(), {app_id: index for index, app_id in enumerate(ids)}
+
+
 def _launcher_rank(app_id: str) -> int:
     ids = AppRankings.load().get_app_ids()
     try:
@@ -118,18 +130,37 @@ def _launcher_rank(app_id: str) -> int:
         return len(ids) + 1
 
 
-def _usage_sort_key(app_id: str) -> tuple[int, float, int]:
+def _usage_sort_key(
+    app_id: str, lookups: tuple[dict[str, float], dict[str, int]] | None = None
+) -> tuple[int, float, int]:
     # goshos searchApps: AppUsage.compare after match tier. Missing usage ranks
     # below any scored id; launcher rankings break ties and cover non-GNOME.
-    gnome = gnome_app_usage_score(app_id)
-    launcher = _launcher_rank(app_id)
+    if lookups is None:
+        lookups = _usage_lookups()
+    scores, ranks = lookups
+    gnome = scores.get(app_id)
+    launcher = ranks.get(app_id, len(ranks) + 1)
     if gnome is None:
         return (1, 0.0, launcher)
     return (0, -float(gnome), launcher)
 
 
+def _variant_sort_key(app: Any, query_lower: str) -> tuple[int, int, str]:
+    """Break ties between apps that collapse to one base name, like Firefox and Firefox ESR.
+
+    unique_by_base_name keeps whichever of them sorted first, so without this the winner came
+    down to desktop-entry enumeration order and typing an app's exact name could show only its
+    variant. An exact name wins outright; otherwise the shorter name is the canonical one.
+    """
+    name = str(getattr(app, "name", "") or "")
+    name_lower = name.lower()
+    return (0 if name_lower == query_lower else 1, len(name), name_lower)
+
+
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
-    scored: list[tuple[int, tuple[int, float, int], AppResult]] = []
+    scored: list[tuple[int, int, tuple[int, float, int], tuple[int, int, str], AppResult]] = []
+    query_lower = query.strip().lower()
+    lookups = _usage_lookups()
     for app in iter_apps():
         try:
             tier = app_match_tier(app, query)
@@ -137,9 +168,11 @@ def match_apps(query: str, limit: int = 6) -> list[AppResult]:
             continue
         if tier < 0:
             continue
-        scored.append((tier, _usage_sort_key(getattr(app, "app_id", "")), app))
-    scored.sort(key=lambda item: (item[0], item[1]))
-    return unique_by_base_name([app for _tier, _rank, app in scored], limit)
+        variant = _variant_sort_key(app, query_lower)
+        scored.append((tier, variant[0], _usage_sort_key(getattr(app, "app_id", ""), lookups), variant, app))
+    # tier, then an exact name, then how often it is launched, then the canonical (shorter) name
+    scored.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+    return unique_by_base_name([item[-1] for item in scored], limit)
 
 
 def app_row_description(window_count: int) -> str:
@@ -278,6 +311,7 @@ def home_apps(limit: int) -> list[AppResult]:
     # takeUniqueByBaseName. Rankings-only lists hid unused apps and kept
     # Firefox plus Firefox ESR as two empty-state rows.
     usable: list[tuple[tuple[int, float, int], int, AppResult]] = []
+    lookups = _usage_lookups()
     for index, app in enumerate(iter_apps()):
         try:
             app_id = str(getattr(app, "app_id", "") or "")
@@ -285,7 +319,7 @@ def home_apps(limit: int) -> list[AppResult]:
             continue
         if not app_id:
             continue
-        usable.append((_usage_sort_key(app_id), index, app))
+        usable.append((_usage_sort_key(app_id, lookups), index, app))
     usable.sort(key=lambda item: (item[0], item[1]))
     return unique_by_base_name([app for _rank, _index, app in usable], limit)
 

@@ -267,3 +267,83 @@ class TestResultsViewStreaming:
         mocker.patch("ulauncher.ui.result_widget.ResultWidget", ctor)
         view.render(self._update(["ok-a", "bad", "ok-b"]))
         assert [widget.result.name for widget in view._widgets] == ["ok-a", "ok-b"]
+
+
+def test_show_all_leaves_a_deliberately_hidden_child_hidden() -> None:
+    from gi.repository import Gtk
+
+    from ulauncher.ui import gtk4
+
+    # GTK4 widgets are visible by default, so a hidden one was hidden on purpose. Recursing
+    # blindly re-showed the empty Alt-number hint, which then held its 44px column on every row.
+    root = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+    shown = Gtk.Label(label="visible")
+    hidden = Gtk.Label(label="hint")
+    hidden.set_visible(False)
+    root.append(shown)
+    root.append(hidden)
+    root.set_visible(False)
+
+    gtk4.show_all(root)
+
+    assert root.get_visible() is True
+    assert shown.get_visible() is True
+    assert hidden.get_visible() is False
+
+
+def test_repaint_keeps_the_list_scrolled_to_the_selected_row() -> None:
+    from gi.repository import Adw, GLib, Gtk
+
+    from tests.ui.look_paint import ensure_look_css
+    from ulauncher.internals.query import Query
+    from ulauncher.internals.result import Result
+    from ulauncher.internals.results_update import results_update
+    from ulauncher.modes.launcher.looks import chrome_from_settings
+    from ulauncher.ui.results_view import ResultsView
+    from ulauncher.utils.settings import Settings
+
+    ensure_look_css()
+    Adw.init()
+
+    def spin(times: int = 120) -> None:
+        for _ in range(times):
+            GLib.MainContext.default().iteration(False)
+
+    settings = Settings()
+    view = ResultsView(settings, lambda _widget: None, lambda _alt: None)
+    view.set_chrome(chrome_from_settings(settings))
+    view.set_max_height(300)
+    window = Gtk.Window()
+    window.set_default_size(600, 400)
+    window.set_child(view)
+    window.present()
+    spin()
+    try:
+        rows = [
+            Result(
+                name=f"Row {index}",
+                description="desc",
+                highlightable=True,
+                searchable=True,
+                actions={"activate": {"name": "Go"}},
+            )
+            for index in range(30)
+        ]
+        query = Query(None, "row")
+        view.render(results_update(rows, query))
+        spin()
+        for _ in range(20):
+            view.go_down()
+        spin()
+        scrolled = view.get_vadjustment().get_value()
+        assert scrolled > 0
+        selected = view.selected_index
+
+        # an async lookup repaints the same query; the highlight stays put, so the list must too
+        view.render(results_update(rows, query))
+        spin()
+        assert view.selected_index == selected
+        assert view.get_vadjustment().get_value() == scrolled
+    finally:
+        window.destroy()
+        spin(10)

@@ -1,1 +1,37 @@
+GoshLauncher is a fork of Ulauncher v6 (https://github.com/Ulauncher/Ulauncher),
+with its launcher UI redesigned to follow Spotlight-goshos
+(https://github.com/goshitsarch-eng/spotlight-goshos).
+
+It is distributed under the GNU GPL v3.0, inherited from Ulauncher. See LICENSE.
+
+
+Ulauncher (upstream code base)
+------------------------------
 Copyright (C) 2015 Aleksandr Gornostal <ulauncher.app@gmail.com>
+and the Ulauncher contributors, including Albin Larsson and Troy Curtis.
+
+Most of ulauncher/ is Ulauncher's work: the mode system, the extension API and
+extension IPC, the preferences window, the CLI, and the packaging.
+
+
+GoshLauncher (this fork, from August 2026)
+------------------------------------------
+Copyright (C) 2026 the GoshLauncher contributors <https://github.com/goshitsarch-eng/GoshLauncher>
+
+The GTK 4 + libadwaita popup, the Spotlight-goshos search order and looks, and
+the rebrand are the changes made here. Ulauncher does not endorse them.
+
+
+Vendored third-party code
+-------------------------
+ulauncher/utils/ewmh.py is a copy of pyewmh (https://github.com/parkouss/pyewmh),
+Copyright (C) 2011-2017 Julien Pages, under the GNU LGPL v3.0. It keeps that
+licence; the notice is in the file and in debian/copyright.
+
+
+Spotlight-goshos (design and behaviour reference)
+-------------------------------------------------
+https://github.com/goshitsarch-eng/spotlight-goshos
+
+Not vendored. The modules under ulauncher/modes/launcher/ name the goshos source
+file each one follows.

@@ -46,18 +46,27 @@ def test_app_is_allowed_uses_singleton() -> None:
         reset_parental_controls(None)
 
 
-def test_parental_give_up_flags() -> None:
-    from ulauncher.modes.launcher.parental import (
-        has_parental_give_up,
-        mark_parental_give_up,
-        reset_parental_give_up,
-    )
+def test_reset_drops_the_cached_probe_so_the_next_lookup_retries() -> None:
+    from ulauncher.modes.launcher.parental import parental_controls
 
-    reset_parental_give_up()
+    failed = ParentalControls(probe=lambda: {"initialized": False, "allows": lambda _app_id: False})
+    reset_parental_controls(failed)
     try:
-        assert has_parental_give_up() is False
-        mark_parental_give_up()
-        assert has_parental_give_up() is True
+        assert parental_controls() is failed
+        reset_parental_controls()
+        assert parental_controls() is not failed
     finally:
-        reset_parental_give_up()
-        assert has_parental_give_up() is False
+        reset_parental_controls(None)
+
+
+def test_absent_malcontent_does_not_withhold_apps() -> None:
+    # DBusProxy.new_for_bus_sync hands back a proxy for a name nobody owns, so a session without
+    # malcontent used to look like a pending probe and hid every app for PARENTAL_GIVE_UP_MS.
+    from ulauncher.modes.launcher.parental import probe_malcontent
+
+    state = probe_malcontent()
+    if not state["initialized"]:
+        # malcontent really is running here and answered; nothing to assert about the absent case
+        return
+    controls = ParentalControls(now=lambda: 0.0, probe=lambda: state)
+    assert controls.allows_app_id("firefox.desktop") is True

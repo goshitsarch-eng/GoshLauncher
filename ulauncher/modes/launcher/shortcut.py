@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Iterable, Mapping
 
 DEFAULT_FALLBACK = "<Control>space"
@@ -50,9 +51,28 @@ def modifiers_from_mask(state: int, masks: Mapping[str, int]) -> dict[str, bool]
     }
 
 
+_FUNCTION_KEY = re.compile(r"^F([1-9]|[12]\d|3[0-5])$")
+
+
+def accelerator_needs_modifier(key_name: str) -> bool:
+    """Whether this key is unusable as a global shortcut on its own.
+
+    A bare letter, digit or Return grabs that key desktop-wide: bind `a` and the popup opens
+    every time the user types an a, including in the field that would let them undo it. Function
+    keys are the conventional exception.
+    """
+    key = normalize_accel_key(key_name)
+    return bool(key) and not _FUNCTION_KEY.match(key)
+
+
 def build_accelerator(key_name: str, mods: Mapping[str, bool]) -> str:
+    """The accelerator, or "" when the key press cannot be one so the caller keeps capturing."""
     key = normalize_accel_key(key_name)
     if not key:
+        return ""
+    if accelerator_needs_modifier(key) and not any(
+        mods.get(name) for name in ("super", "control", "shift", "alt", "meta")
+    ):
         return ""
     accelerator = ""
     if mods.get("super"):

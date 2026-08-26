@@ -2,14 +2,25 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ulauncher.gi import Gio, GLib
+from ulauncher.gi import Gio
+
+_INTERFACE_SCHEMA = "org.gnome.desktop.interface"
 
 
 def _get_interface_settings() -> Gio.Settings | None:
-    try:
-        return Gio.Settings.new("org.gnome.desktop.interface")
-    except GLib.Error:
-        return None
+    from ulauncher.utils.gsettings import settings_or_none
+
+    return settings_or_none(_INTERFACE_SCHEMA)
+
+
+def _has_color_scheme(settings: Gio.Settings) -> bool:
+    """Gio.Settings.list_keys is deprecated; ask the schema, which is where the keys live."""
+    from ulauncher.utils.gsettings import schema_for_id
+
+    schema = schema_for_id(_INTERFACE_SCHEMA)
+    if schema is not None:
+        return bool(schema.has_key("color-scheme"))
+    return "color-scheme" in set(settings.list_keys())
 
 
 def system_prefers_dark(interface_settings: Gio.Settings | None = None) -> bool:
@@ -18,8 +29,7 @@ def system_prefers_dark(interface_settings: Gio.Settings | None = None) -> bool:
     if interface_settings is None:
         return False
 
-    keys = set(interface_settings.list_keys())
-    if "color-scheme" in keys and interface_settings.is_writable("color-scheme"):
+    if _has_color_scheme(interface_settings) and interface_settings.is_writable("color-scheme"):
         value = interface_settings.get_string("color-scheme")
         if value == "prefer-dark":
             return True
@@ -40,7 +50,7 @@ class SystemThemeWatcher:
         if self.interface_settings is None:
             return
 
-        if "color-scheme" in self.interface_settings.list_keys():
+        if _has_color_scheme(self.interface_settings):
             handler_id = self.interface_settings.connect("changed::color-scheme", self._on_settings_changed)
             self._handler_ids.append(handler_id)
 

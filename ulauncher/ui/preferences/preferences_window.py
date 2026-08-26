@@ -101,8 +101,11 @@ class PreferencesWindow(Adw.PreferencesWindow):
         self._theme_watcher.start()
 
     def _apply_system_theme(self, prefers_dark: bool) -> None:
-        if gtk_settings := self.get_settings():
-            gtk_settings.props.gtk_application_prefer_dark_theme = prefers_dark
+        # libadwaita ignores GtkSettings:gtk-application-prefer-dark-theme and warns about it, so
+        # the window never followed the desktop's colour scheme. AdwStyleManager is the one that
+        # works; the popup is unaffected because the looks own its colours.
+        scheme = Adw.ColorScheme.PREFER_DARK if prefers_dark else Adw.ColorScheme.PREFER_LIGHT
+        Adw.StyleManager.get_default().set_color_scheme(scheme)
 
     def _on_close_request(self, *_args: Any) -> bool:
         if self._theme_watcher:

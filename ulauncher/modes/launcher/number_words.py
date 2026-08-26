@@ -96,6 +96,9 @@ def replace_number_words(text: str) -> str:
         return str(n)
 
     out = _TENS_ONES_RE.sub(tens_ones, out)
+    # "two hundred thousand" is "200 thousand" by now, and the bare rule below would leave
+    # "200 1000". Multiply first, like the billion/million rules further down.
+    out = re.sub(r"\b(\d+)\s+thousand\b", lambda m: str(int(m.group(1)) * 1000), out, flags=re.IGNORECASE)
     out = re.sub(r"\bthousand\b", "1000", out, flags=re.IGNORECASE)
     out = re.sub(r"\bhundred\b", "100", out, flags=re.IGNORECASE)
     out = _NUMBER_WORD_RE.sub(lambda m: NUMBER_WORDS[m.group(0).lower()], out)

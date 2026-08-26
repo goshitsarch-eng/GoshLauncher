@@ -384,12 +384,20 @@ def convert_units(value: float, from_name: str, to_name: str) -> dict[str, float
 
 
 def format_unit_value(n: float) -> str:
+    """8 significant digits, but never round an integer the float still holds exactly.
+
+    The old 1e12 ceiling sent 1234567890123.0 through "%.8g" and printed 1234567900000.0.
+    """
+    from ulauncher.modes.launcher.calculator import EXACT_INT_LIMIT
+
+    if isinstance(n, int):
+        return str(n)
     if n == 0:
         return "0"
-    if n == int(n) and abs(n) < 1e12:
+    if n == int(n) and abs(n) <= EXACT_INT_LIMIT:
         return str(int(n))
     rounded = float(f"{n:.8g}")
-    if rounded == int(rounded) and abs(rounded) < 1e12:
+    if rounded == int(rounded) and abs(rounded) <= EXACT_INT_LIMIT:
         return str(int(rounded))
     return str(rounded)
 

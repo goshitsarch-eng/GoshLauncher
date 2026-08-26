@@ -58,22 +58,9 @@ class ParentalControls:
 
 class _ParentalHolder:
     controls: ParentalControls | None = None
-    gave_up: bool = False
 
 
 _holder = _ParentalHolder()
-
-
-def has_parental_give_up() -> bool:
-    return _holder.gave_up
-
-
-def mark_parental_give_up() -> None:
-    _holder.gave_up = True
-
-
-def reset_parental_give_up() -> None:
-    _holder.gave_up = False
 
 
 def probe_malcontent() -> dict[str, Any]:
@@ -92,6 +79,7 @@ def parental_controls() -> ParentalControls:
 
 
 def reset_parental_controls(controls: ParentalControls | None = None) -> None:
+    """Drop the cached probe. The next allows_app_id() re-runs it, retrying a lookup that failed."""
     _holder.controls = controls
 
 
@@ -104,17 +92,21 @@ def _malcontent_available() -> bool:
     try:
         from ulauncher.gi import Gio
 
-        return bool(
-            Gio.DBusProxy.new_for_bus_sync(
-                Gio.BusType.SESSION,
-                Gio.DBusProxyFlags.DO_NOT_LOAD_PROPERTIES | Gio.DBusProxyFlags.DO_NOT_CONNECT_SIGNALS,
-                None,
-                "org.freedesktop.Malcontent1",
-                "/org/freedesktop/Malcontent1/Manager",
-                "org.freedesktop.Malcontent1.Manager",
-                None,
-            )
+        proxy = Gio.DBusProxy.new_for_bus_sync(
+            Gio.BusType.SESSION,
+            Gio.DBusProxyFlags.DO_NOT_LOAD_PROPERTIES
+            | Gio.DBusProxyFlags.DO_NOT_CONNECT_SIGNALS
+            | Gio.DBusProxyFlags.DO_NOT_AUTO_START,
+            None,
+            "org.freedesktop.Malcontent1",
+            "/org/freedesktop/Malcontent1/Manager",
+            "org.freedesktop.Malcontent1.Manager",
+            None,
         )
+        # A proxy is handed back for a name nobody owns, so the object alone proves nothing.
+        # Without this, a session with no malcontent looks like one whose probe is still pending
+        # and every app is withheld until PARENTAL_GIVE_UP_MS has passed.
+        return proxy is not None and bool(proxy.get_name_owner())
     except Exception:
         return False
 

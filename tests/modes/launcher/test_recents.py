@@ -140,3 +140,34 @@ def test_search_recents_empty_until_flush(tmp_path: Path, monkeypatch: pytest.Mo
     rows = search_recents("unique-goshos-recent-xyz")
     assert rows
     assert rows[0]["title"] == "unique-goshos-recent-xyz.txt"
+
+
+def test_parse_recent_xbel_orders_newest_first() -> None:
+    # recently-used.xbel is stored in GLib's write order, not by recency, so a list called
+    # "Recent files" has to sort on the bookmark's own stamps.
+    text = """<?xml version="1.0"?>
+<xbel>
+  <bookmark href="file:///h/oldest.txt" added="2020-01-01T00:00:00Z" modified="2020-01-01T00:00:00Z"/>
+  <bookmark href="file:///h/newest.txt" added="2026-08-01T00:00:00Z" modified="2026-08-01T00:00:00Z"/>
+  <bookmark href="file:///h/middle.txt" added="2023-05-05T00:00:00Z" modified="2023-05-05T00:00:00Z"/>
+  <bookmark href="https://example.com/skip"/>
+  <bookmark href="file:///h/unstamped.txt"/>
+</xbel>"""
+    assert parse_recent_xbel(text) == [
+        "file:///h/newest.txt",
+        "file:///h/middle.txt",
+        "file:///h/oldest.txt",
+        # no stamp to sort on, so it keeps its file position behind the stamped ones
+        "file:///h/unstamped.txt",
+    ]
+
+
+def test_recent_and_bookmark_files_follow_the_xdg_base_dirs() -> None:
+    import os
+
+    from ulauncher.modes.launcher.bookmarks import BOOKMARK_FILES
+    from ulauncher.modes.launcher.recents import XBEL
+
+    # conftest points the XDG vars at the test tree; hardcoding ~/.local/share read the real one
+    assert str(XBEL).startswith(os.environ["XDG_DATA_HOME"])
+    assert all(str(path).startswith(os.environ["XDG_CONFIG_HOME"]) for path in BOOKMARK_FILES)
