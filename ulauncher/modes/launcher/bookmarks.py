@@ -130,15 +130,28 @@ def load_bookmarks() -> list[dict]:
     return _described(merge_bookmark_files(_read_bookmark_texts_sync()))
 
 
-def bookmark_matches(title: str, description: str, query: str) -> bool:
+def bookmark_matches(title: str, description: str, query: str, uri: str = "") -> bool:
+    """Match a bookmark row by its title, its path, or - for a remote share - its host.
+
+    A remote bookmark's description is the whole URI, and path_matches_query only matches at a
+    word start over " -_./", so `sftp://alice@nas.local/srv` was reachable by "alice" but not by
+    "nas". The host is matched as its own needle.
+    """
     if len(query) == 0:
         return False
-    if text_matches_query(title, query) or path_matches_query(description, query):
+    host = host_from_uri(uri) if uri else ""
+
+    def matches(needle: str) -> bool:
+        if text_matches_query(title, needle) or path_matches_query(description, needle):
+            return True
+        return bool(host) and text_matches_query(host, needle)
+
+    if matches(query):
         return True
     words = [word for word in query.lower().split() if word]
     if len(words) < 2:
         return False
-    return all(text_matches_query(title, word) or path_matches_query(description, word) for word in words)
+    return all(matches(word) for word in words)
 
 
 def match_bookmarks(query: str, rows: list[dict] | None = None, limit: int = 6) -> list[dict]:
@@ -151,7 +164,7 @@ def match_bookmarks(query: str, rows: list[dict] | None = None, limit: int = 6) 
         rows = _described(cached)
     results: list[dict] = []
     for row in rows:
-        if bookmark_matches(row["title"], row.get("description") or "", query):
+        if bookmark_matches(row["title"], row.get("description") or "", query, row.get("uri") or ""):
             results.append(row)
         if len(results) >= limit:
             break

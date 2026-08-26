@@ -56,6 +56,7 @@ class ResultsView(Gtk.ScrolledWindow):
         self._widgets: list[ResultWidget] = []
         self._painting = False
         self._hover_suppressed_until_us = 0
+        self._scroll_idle: scheduling.Context | None = None
         self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         # `result-box` is the card: background, radius, padding, shadow. It belongs on this
         # ScrolledWindow (UlauncherWindow adds it) so it stays put while the rows scroll under
@@ -191,6 +192,7 @@ class ResultsView(Gtk.ScrolledWindow):
             self._apply_css(self._box)
             gtk4.show_all(self)
             self._fit_results_height()
+            self._queue_scroll_to_selection()
             logger.debug("Render %s results", len(self._widgets))
         finally:
             self._painting = False
@@ -208,6 +210,7 @@ class ResultsView(Gtk.ScrolledWindow):
         self._apply_css(self._box)
         gtk4.show_all(self)
         self._fit_results_height()
+        self._queue_scroll_to_selection()
 
     def _add_widgets(self, results: list[Result], query: Query, start_index: int) -> None:
         from ulauncher.ui.result_widget import ResultWidget
@@ -232,6 +235,24 @@ class ResultsView(Gtk.ScrolledWindow):
                 # a bad icon must not leave the list empty
                 continue
             self._widgets.append(widget)
+
+    def _queue_scroll_to_selection(self) -> None:
+        """Re-run the scroll once the new rows are allocated.
+
+        _select() scrolls through the widget it just built, which has no size or offset yet, so
+        the scroll it computes is 0. An async repaint of the same query therefore kept the
+        highlight but snapped the list back to the top, leaving the selected row off screen.
+        """
+        # Only the offscreen case needs it. A fresh query selects row 0 with the list already at
+        # the top, and scheduling an idle there perturbs the first paint for no benefit.
+        if self._index > 0 and self._scroll_idle is None:
+            self._scroll_idle = scheduling.run_when_idle(self._scroll_selection_into_view)
+
+    def _scroll_selection_into_view(self) -> None:
+        self._scroll_idle = None
+        # a newer paint may have replaced the row this was scheduled for, so resolve it now
+        if (selected := self._selected) is not None:
+            selected.scroll_to_focus()
 
     def _select_and_activate(self, index: int, alt: bool) -> None:
         self.select(index)

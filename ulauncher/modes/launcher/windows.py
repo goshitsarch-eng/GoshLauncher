@@ -712,12 +712,19 @@ def _pick_wid(primary: WindowInfo, extra: WindowInfo) -> str:
 
 
 def _pick_desktop(primary: WindowInfo, extra: WindowInfo) -> tuple[int, bool]:
-    sticky = primary.sticky or extra.sticky
-    if primary.desktop < 0 or extra.desktop < 0 or sticky:
+    """Merge two views of the same window's workspace.
+
+    A negative desktop means "the compositor named this workspace instead of numbering it", not
+    "on all workspaces": every source where -1 does mean sticky sets sticky itself. Treating the
+    two as one labelled a plain window on a named workspace as sticky.
+    """
+    if primary.sticky or extra.sticky:
         return -1, True
     if _desktop_unknown(primary) and not _desktop_unknown(extra):
         return extra.desktop, extra.sticky
-    return primary.desktop, sticky
+    if primary.desktop < 0 <= extra.desktop:
+        return extra.desktop, False
+    return primary.desktop, False
 
 
 def overlay_window_info(primary: WindowInfo, extra: WindowInfo) -> WindowInfo:
@@ -2339,7 +2346,10 @@ def activate_window(payload: dict, application_activate: Callable[[str], bool] |
         return
     if kind in {"close", "quit"}:
         _close_window(wid)
-        closed = compositor_can_close or session_has_x11_window_control()
+        # An X11 session only proves the close landed when the row IS an X11 window id.
+        # atspi:/ext:/lswt: rows reach none of _close_window's three routes, so treating the
+        # session type as success skipped the D-Bus and AT-SPI fallbacks and closed nothing.
+        closed = compositor_can_close or (session_has_x11_window_control() and _is_x11_wid(str(wid)))
         if not closed:
             closed = gtk_muxer_close(payload, kind)
         if not closed:
