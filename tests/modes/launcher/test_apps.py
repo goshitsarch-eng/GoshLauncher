@@ -541,3 +541,25 @@ def test_home_apps_prefers_gnome_app_usage(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(apps_mod, "iter_apps", lambda: [alpha, beta])
     monkeypatch.setattr(apps_mod, "gnome_app_usage_score", editor_scores.get)
     assert [app.name for app in match_apps("editor", 6)] == ["Beta Editor", "Alpha Editor"]
+
+
+def test_exact_name_wins_the_variant_collapse() -> None:
+    from unittest.mock import patch
+
+    from ulauncher.modes.launcher import apps as apps_module
+
+    # unique_by_base_name keeps whichever variant sorted first, so without a tiebreak the winner
+    # came down to desktop-entry enumeration order and "firefox" could show only "Firefox ESR".
+    pool = [
+        SimpleNamespace(name="Firefox ESR", app_id="firefox-esr.desktop", generic_name="", description="", keywords=[]),
+        SimpleNamespace(
+            name="Firefox Nightly", app_id="firefox-nightly.desktop", generic_name="", description="", keywords=[]
+        ),
+        SimpleNamespace(name="Firefox", app_id="firefox.desktop", generic_name="", description="", keywords=[]),
+    ]
+    with patch.object(apps_module, "iter_apps", lambda: pool):
+        assert [app.name for app in apps_module.match_apps("firefox", 6)] == ["Firefox"]
+        # the shorter name is the canonical one when nothing matches exactly
+        assert [app.name for app in apps_module.match_apps("fire", 6)] == ["Firefox"]
+        # naming a variant still picks it
+        assert [app.name for app in apps_module.match_apps("firefox esr", 6)] == ["Firefox ESR"]

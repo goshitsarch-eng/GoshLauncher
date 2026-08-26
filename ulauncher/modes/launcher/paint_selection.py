@@ -7,25 +7,35 @@ from typing import Any, Sequence
 from ulauncher.modes.launcher.selection_math import is_selectable_result
 
 
-def _row_id(result: Any) -> Any:
-    if isinstance(result, dict):
-        value = result.get("id")
-        return value if isinstance(value, (str, int)) and value != "" else None
-    payload = getattr(result, "payload", None)
-    if isinstance(payload, dict):
-        value = payload.get("id")
-        if isinstance(value, (str, int)) and value != "":
-            return value
-    value = getattr(result, "item_id", None)
+def _usable(value: Any) -> Any:
     return value if isinstance(value, (str, int)) and value != "" else None
 
 
-def _row_type(result: Any) -> str | None:
+def _row_id(result: Any) -> Any:
+    """The row's stable id, from wherever it is carried.
+
+    Result is a dict subclass, so the dict branch has to fall through rather than return: a
+    LauncherResult has no "id" key and keeps it in payload, and returning early there left every
+    real row id-less.
+    """
     if isinstance(result, dict):
-        value = result.get("type")
-        return value if isinstance(value, str) else None
-    value = getattr(result, "kind", None) or getattr(result, "type", None)
-    return value if isinstance(value, str) else None
+        if (value := _usable(result.get("id"))) is not None:
+            return value
+        payload = result.get("payload")
+    else:
+        payload = getattr(result, "payload", None)
+    if isinstance(payload, dict) and (value := _usable(payload.get("id"))) is not None:
+        return value
+    return _usable(getattr(result, "item_id", None))
+
+
+def _row_type(result: Any) -> str | None:
+    """The row's kind. Same fall-through as _row_id: LauncherResult spells it "kind"."""
+    if isinstance(result, dict):
+        value = result.get("type") or result.get("kind")
+    else:
+        value = getattr(result, "kind", None) or getattr(result, "type", None)
+    return value if isinstance(value, str) and value != "" else None
 
 
 def _row_title(result: Any) -> str | None:

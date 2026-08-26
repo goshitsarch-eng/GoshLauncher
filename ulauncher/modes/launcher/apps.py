@@ -128,8 +128,21 @@ def _usage_sort_key(app_id: str) -> tuple[int, float, int]:
     return (0, -float(gnome), launcher)
 
 
+def _variant_sort_key(app: Any, query_lower: str) -> tuple[int, int, str]:
+    """Break ties between apps that collapse to one base name, like Firefox and Firefox ESR.
+
+    unique_by_base_name keeps whichever of them sorted first, so without this the winner came
+    down to desktop-entry enumeration order and typing an app's exact name could show only its
+    variant. An exact name wins outright; otherwise the shorter name is the canonical one.
+    """
+    name = str(getattr(app, "name", "") or "")
+    name_lower = name.lower()
+    return (0 if name_lower == query_lower else 1, len(name), name_lower)
+
+
 def match_apps(query: str, limit: int = 6) -> list[AppResult]:
-    scored: list[tuple[int, tuple[int, float, int], AppResult]] = []
+    scored: list[tuple[int, int, tuple[int, float, int], tuple[int, int, str], AppResult]] = []
+    query_lower = query.strip().lower()
     for app in iter_apps():
         try:
             tier = app_match_tier(app, query)
@@ -137,9 +150,11 @@ def match_apps(query: str, limit: int = 6) -> list[AppResult]:
             continue
         if tier < 0:
             continue
-        scored.append((tier, _usage_sort_key(getattr(app, "app_id", "")), app))
-    scored.sort(key=lambda item: (item[0], item[1]))
-    return unique_by_base_name([app for _tier, _rank, app in scored], limit)
+        variant = _variant_sort_key(app, query_lower)
+        scored.append((tier, variant[0], _usage_sort_key(getattr(app, "app_id", "")), variant, app))
+    # tier, then an exact name, then how often it is launched, then the canonical (shorter) name
+    scored.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+    return unique_by_base_name([item[-1] for item in scored], limit)
 
 
 def app_row_description(window_count: int) -> str:

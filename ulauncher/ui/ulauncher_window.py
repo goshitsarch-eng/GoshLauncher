@@ -771,9 +771,22 @@ class UlauncherWindow(Gtk.ApplicationWindow):
         if display is None:
             return
         monitors = display.get_monitors()
-        monitors.connect("items-changed", lambda *_args: self._on_monitors_changed())
+        # The model belongs to the display and outlives this window, which is destroyed and
+        # rebuilt on every popup open. Left connected, each dead window keeps receiving monitor
+        # hotplugs and repositions itself, and the closure keeps it alive for the whole session.
+        self._monitors_handler = monitors.connect("items-changed", lambda *_args: self._on_monitors_changed())
         self._monitors_model = monitors
         self._monitors_watched = True
+
+    def _stop_monitor_watch(self) -> None:
+        monitors = getattr(self, "_monitors_model", None)
+        handler = getattr(self, "_monitors_handler", 0)
+        if monitors is not None and handler:
+            with contextlib.suppress(TypeError, RuntimeError):
+                monitors.disconnect(handler)
+        self._monitors_model = None
+        self._monitors_handler = 0
+        self._monitors_watched = False
 
     def _on_monitors_changed(self) -> None:
         self.position_window()
@@ -933,6 +946,7 @@ class UlauncherWindow(Gtk.ApplicationWindow):
                 self._stop_session_watch,
                 self._stop_osk_watch,
                 self._stop_limits_timer,
+                self._stop_monitor_watch,
                 self._reject_async_paints,
             )
         )
