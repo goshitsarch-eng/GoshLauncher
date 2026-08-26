@@ -1,14 +1,24 @@
 # Communication
 
+> This guide is Ulauncher's, adapted for GoshLauncher. GoshLauncher is a fork
+> ([Credits](README.md#credits)), so file issues and pull requests against
+> [goshitsarch-eng/GoshLauncher](https://github.com/goshitsarch-eng/GoshLauncher) — not against Ulauncher.
+> The links below that point at Ulauncher are upstream references kept on purpose.
+
 Please read our General [communication guidelines](CODE_OF_CONDUCT.md).
 
 ## Code contributions
 
-Thank you for your interest in contributing to Ulauncher! We very much appreciate it.
+Thank you for your interest in contributing to GoshLauncher! We very much appreciate it.
 
-Issues with the [contributor-friendly](https://github.com/Ulauncher/Ulauncher/labels/contributor-friendly) label are more straightforward to implement. Other issues may require in-depth knowledge of the Ulauncher architecture. Before you put the work in, you may want to ask about it in [Code Contributions](https://github.com/Ulauncher/Ulauncher/discussions/categories/code-contributions), to ensure that it's a feature or improvement we want.
+Before you put the work in on anything large, open a
+[discussion or issue](https://github.com/goshitsarch-eng/GoshLauncher/issues) so we can agree it is
+something the project wants.
 
-Although there are no releases for it yet as of writing this, all the active development is happening for Ulauncher [v6](https://github.com/Ulauncher/Ulauncher/milestone/7). So please check that your contributions haven't already been fixed there.
+Much of this code base is Ulauncher's, so a bug you hit may already be fixed or discussed upstream:
+check [Ulauncher's issues](https://github.com/Ulauncher/Ulauncher/issues) and
+[v6 milestone](https://github.com/Ulauncher/Ulauncher/milestone/7) before writing a fix, and consider
+sending fixes that are not GoshLauncher-specific to Ulauncher as well, so both projects get them.
 
 ### Set Up Development Environment
 

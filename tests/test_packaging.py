@@ -172,3 +172,34 @@ def test_manpage_version_matches_the_package() -> None:
     assert f"ulauncher {version}" in (ROOT / "ulauncher.1").read_text()
     makefile = (ROOT / "makefile").read_text()
     assert '--version-string="ulauncher $$(sed -n' in makefile
+
+
+def test_contributor_docs_point_at_this_fork() -> None:
+    # Verbatim upstream docs sent GoshLauncher contributors to Ulauncher's tracker.
+    contributing = (ROOT / "CONTRIBUTING.md").read_text()
+    assert "GoshLauncher is a fork" in contributing
+    assert "goshitsarch-eng/GoshLauncher/issues" in contributing
+    assert "contributing to Ulauncher!" not in contributing
+
+    conduct = (ROOT / "CODE_OF_CONDUCT.md").read_text()
+    assert conduct.startswith("# GoshLauncher Code of Conduct")
+    assert "Inherited from Ulauncher" in conduct
+
+
+def test_scrollbar_slider_box_is_restated_after_the_reset() -> None:
+    # `.app *` strips the transparent border libadwaita uses to cancel the slider's negative
+    # margin, so the gizmo measured -4: two GTK warnings per overflowing popup and a 0px trough.
+    css = (ROOT / "data" / "themes" / "gosh-looks.css").read_text()
+    rule = css[css.index(".app scrollbar slider {") :].split("}", 1)[0]
+    assert "margin: 0;" in rule
+    assert "min-width: 8px;" in rule
+    assert "min-height: 40px;" in rule
+
+
+def test_global_shortcut_rebind_closes_the_previous_portal_session() -> None:
+    source = (ROOT / "ulauncher" / "modes" / "launcher" / "global_shortcuts.py").read_text()
+    # Without this the portal keeps the old accelerator grabbed, so both combinations open the
+    # launcher and each rebind leaks another session.
+    start = source[source.index("    def start(") :]
+    assert "self._close_session()" in start.split("def _on_create_session_response", 1)[0]
+    assert '"org.freedesktop.portal.Session"' in source

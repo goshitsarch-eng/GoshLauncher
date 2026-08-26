@@ -173,11 +173,16 @@ def _without_gi_traceback(func: object, *args: object) -> object:
 
 
 def widget_panel_rgb(widget: object) -> tuple[int, int, int]:
-    """Interior fill. (24, 16) sits in Spotlight's 32px corner on GTK 4.6."""
+    """Interior fill, sampled in the prompt band at the top of the panel.
+
+    Horizontally centred, so no look's corner radius reaches it. Vertically near the top: the
+    selected result row sits in the middle of the panel and is filled with the look's accent,
+    so a centre sample reads the panel only while the results area happens to be short.
+    """
     width = max(int(widget.get_width()), 1)
     height = max(int(widget.get_height()), 1)
     sample_x = max(width // 2, 8)
-    sample_y = max(min(height // 2, max(height - 8, 1)), 8)
+    sample_y = max(min(16, height - 4), 4)
     return widget_rgb_retry(widget, sample_x, sample_y)
 
 

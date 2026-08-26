@@ -21,6 +21,7 @@ PORTAL_BUS = "org.freedesktop.portal.Desktop"
 PORTAL_PATH = "/org/freedesktop/portal/desktop"
 GLOBAL_SHORTCUTS_IFACE = "org.freedesktop.portal.GlobalShortcuts"
 REQUEST_IFACE = "org.freedesktop.portal.Request"
+SESSION_IFACE = "org.freedesktop.portal.Session"
 SHORTCUT_ID = "toggle-ulauncher"
 NATIVE_HOTKEY_DESKTOPS = frozenset({"GNOME", "XFCE", "PLASMA"})
 HOST_REGISTRY_IFACES = (
@@ -128,6 +129,10 @@ class GlobalShortcutsPortal:
         connection = bus if bus is not None else _session_connection()
         if connection is None:
             return False
+        # Close the previous session before minting a new one: the portal keeps the old
+        # accelerator grabbed otherwise, so a rebind leaves both combinations opening the
+        # launcher and leaks another session on every change.
+        self._close_session()
         self._unsubscribe()
         self._connection = connection
         self._accel = accel
@@ -183,6 +188,30 @@ class GlobalShortcutsPortal:
         sub_id = _signal_subscribe(connection, GLOBAL_SHORTCUTS_IFACE, "Activated", PORTAL_PATH, callback)
         if sub_id:
             self._subs.append(sub_id)
+
+    def _close_session(self) -> None:
+        handle = self._session_handle
+        connection = self._connection
+        if not handle or connection is None:
+            return
+        try:
+            from ulauncher.gi import Gio
+
+            connection.call(
+                PORTAL_BUS,
+                handle,
+                SESSION_IFACE,
+                "Close",
+                None,
+                None,
+                Gio.DBusCallFlags.NONE,
+                -1,
+                None,
+                None,
+            )
+        except Exception:
+            logger.debug("GlobalShortcuts Session.Close failed", exc_info=True)
+        self._session_handle = ""
 
     def _unsubscribe(self) -> None:
         connection = self._connection

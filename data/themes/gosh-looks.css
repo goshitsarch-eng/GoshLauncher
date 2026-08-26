@@ -26,6 +26,16 @@ window.gosh-popup.background {
   box-shadow: none;
 }
 
+/* libadwaita sizes the scrollbar slider as min-width 8px plus a negative margin that a 6px
+   transparent border cancels out. The `.app *` reset above drops the border but not the margin,
+   so the gizmo measures 8 - 12 = -4: GTK warns twice on every popup that overflows and the
+   trough collapses to zero width. Restate the box so it no longer leans on that border. */
+.app scrollbar slider {
+  margin: 0;
+  min-width: 8px;
+  min-height: 40px;
+}
+
 .search-icon {
   -gtk-icon-size: 20px;
   padding: 0 14px 0 20px;

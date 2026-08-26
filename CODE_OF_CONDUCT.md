@@ -1,10 +1,14 @@
-# Ulauncher Code of Conduct
+# GoshLauncher Code of Conduct
+
+> Inherited from Ulauncher, which GoshLauncher is a fork of ([Credits](README.md#credits)).
+> Support links that point at Ulauncher are upstream resources; GoshLauncher's own tracker is
+> [goshitsarch-eng/GoshLauncher](https://github.com/goshitsarch-eng/GoshLauncher/issues).
 
 ## General communication guidelines
 
-Ulauncher is a free, open source software project developed by a small team of volunteers and contributors.
+GoshLauncher is a free, open source software project developed by a small team of volunteers and contributors.
 
-We are here because we want Ulauncher to improve, and for that we have to:
+We are here because we want GoshLauncher to improve, and for that we have to:
 
 * Act respectful towards each other.
 * Give each other the benefit of the doubt.
