@@ -58,51 +58,51 @@ class LauncherBackend(QObject):
         return self._model
 
     @Property(int, notify=selectedIndexChanged)
-    def selectedIndex(self) -> int:  # noqa: N802
+    def selectedIndex(self) -> int:
         return self._selected
 
     @Property(int, notify=chromeChanged)
-    def windowWidth(self) -> int:  # noqa: N802
+    def windowWidth(self) -> int:
         return max(400, min(1200, int(self._settings.base_width or 600)))
 
     @Property(int, notify=chromeChanged)
-    def resultsMaxHeight(self) -> int:  # noqa: N802
+    def resultsMaxHeight(self) -> int:
         return max(160, min(800, int(self._settings.results_max_height or 400)))
 
     @Property(int, notify=chromeChanged)
-    def iconSize(self) -> int:  # noqa: N802
+    def iconSize(self) -> int:
         return icon_size_for_look(self._chrome, str(self._chrome.get("density", "comfortable")))
 
     @Property(bool, notify=chromeChanged)
-    def compactDensity(self) -> bool:  # noqa: N802
+    def compactDensity(self) -> bool:
         return self._chrome.get("density") == "compact"
 
     @Property(bool, notify=chromeChanged)
-    def showSearchIcon(self) -> bool:  # noqa: N802
+    def showSearchIcon(self) -> bool:
         return bool(self._chrome.get("show_search_icon", True))
 
     @Property(bool, notify=chromeChanged)
-    def showResultIcons(self) -> bool:  # noqa: N802
+    def showResultIcons(self) -> bool:
         return bool(self._chrome.get("show_result_icons", True))
 
     @Property(bool, notify=chromeChanged)
-    def showDescriptions(self) -> bool:  # noqa: N802
+    def showDescriptions(self) -> bool:
         return bool(self._chrome.get("show_descriptions", True))
 
     @Property(bool, notify=chromeChanged)
-    def showNumbers(self) -> bool:  # noqa: N802
+    def showNumbers(self) -> bool:
         return bool(self._chrome.get("show_numbers", False))
 
     @Property(bool, notify=chromeChanged)
-    def positionTop(self) -> bool:  # noqa: N802
+    def positionTop(self) -> bool:
         return self._chrome.get("position") == "top"
 
     @Property(bool, notify=chromeChanged)
-    def closeOnFocusOut(self) -> bool:  # noqa: N802
+    def closeOnFocusOut(self) -> bool:
         return bool(self._settings.close_on_focus_out)
 
     @Property(str, notify=chromeChanged)
-    def placeholderText(self) -> str:  # noqa: N802
+    def placeholderText(self) -> str:
         return str(get_look(self._settings.look_id).get("hint") or "Search...")
 
     # Results handling (called from Python)
@@ -137,7 +137,7 @@ class LauncherBackend(QObject):
     # Slots called from QML
 
     @Slot(str)
-    def textEdited(self, text: str) -> None:  # noqa: N802
+    def textEdited(self, text: str) -> None:
         self._app.query_changed(text)
 
     @Slot(int)
@@ -145,24 +145,24 @@ class LauncherBackend(QObject):
         results = self._model.results
         if not results:
             return
-        current = self._selected if self._selected >= 0 else 0
+        current = max(self._selected, 0)
         self._set_selected(next_activatable_index(current, delta, results))
 
     @Slot(int)
-    def setHoverSelection(self, index: int) -> None:  # noqa: N802
+    def setHoverSelection(self, index: int) -> None:
         result = self._model.result_at(index)
         if result is not None and is_selectable_result(result):
             self._set_selected(index)
 
     @Slot(bool)
-    def activateSelected(self, alt: bool) -> None:  # noqa: N802
+    def activateSelected(self, alt: bool) -> None:
         result = self._model.result_at(self._selected)
         if result is None:
             return
         self._activate(result, alt)
 
     @Slot(int, bool)
-    def activateIndex(self, index: int, alt: bool) -> None:  # noqa: N802
+    def activateIndex(self, index: int, alt: bool) -> None:
         result = self._model.result_at(index)
         if result is None or not is_selectable_result(result):
             return
@@ -170,7 +170,7 @@ class LauncherBackend(QObject):
         self._activate(result, alt)
 
     @Slot(int)
-    def activateNumber(self, digit: int) -> None:  # noqa: N802
+    def activateNumber(self, digit: int) -> None:
         """Alt+1..9: activate the digit'th highlightable row (headers excluded)."""
         if not self.showNumbers:
             return
@@ -185,16 +185,16 @@ class LauncherBackend(QObject):
         self._app.activate_result(result, alt)
 
     @Slot(str, result=bool)
-    def handleBackspace(self, text: str) -> bool:  # noqa: N802
+    def handleBackspace(self, text: str) -> bool:
         """Smart backspace: whether a mode consumed it by rewriting the query."""
         return self._app.handle_backspace(text)
 
     @Slot()
-    def requestClose(self) -> None:  # noqa: N802
+    def requestClose(self) -> None:
         self._app.request_close()
 
     @Slot()
-    def showPreferences(self) -> None:  # noqa: N802
+    def showPreferences(self) -> None:
         self._app.show_preferences()
 
 

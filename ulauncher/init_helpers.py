@@ -63,7 +63,7 @@ def configure_logging(*, verbose: bool, use_app_logging: bool) -> None:
 
 
 def init_x11_threads() -> None:
-    """Initialize Xlib thread support before importing GTK on X11-compatible sessions."""
+    """Initialize Xlib thread support before importing Qt on X11-compatible sessions."""
     from ctypes import cdll
 
     from ulauncher.utils.environment import IS_X11_COMPATIBLE

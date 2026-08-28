@@ -34,7 +34,7 @@ class Handle:
 
 
 class _TimerEntry:
-    __slots__ = ("due", "handle", "callback", "interval", "order")
+    __slots__ = ("callback", "due", "handle", "interval", "order")
 
     def __init__(self, due: float, callback: Callable[[], Any], interval: float | None) -> None:
         self.due = due
@@ -43,7 +43,7 @@ class _TimerEntry:
         self.handle = Handle()
         self.order = next(_counter)
 
-    def __lt__(self, other: "_TimerEntry") -> bool:
+    def __lt__(self, other: _TimerEntry) -> bool:
         return (self.due, self.order) < (other.due, other.order)
 
 

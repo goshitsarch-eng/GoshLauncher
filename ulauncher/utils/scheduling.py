@@ -140,19 +140,19 @@ def _schedule_qt_timer(context: Context, delay_sec: float) -> None:
     qt_core = _qt_core()
 
     def _setup() -> None:
-        if context._cancelled:  # noqa: SLF001
+        if context._cancelled:
             return
         timer = qt_core.QTimer()
         timer.setTimerType(qt_core.Qt.TimerType.PreciseTimer)
         timer.setInterval(int(delay_sec * 1000))
 
         def _fire() -> None:
-            if not context._run_once():  # noqa: SLF001
+            if not context._run_once():
                 timer.stop()
-                context._cleanup = None  # noqa: SLF001
+                context._cleanup = None
 
         timer.timeout.connect(_fire)
-        context._cleanup = timer.stop  # noqa: SLF001 - keeps the QTimer referenced too
+        context._cleanup = timer.stop
         timer.start()
 
     if _on_qt_main_thread():
@@ -165,17 +165,17 @@ def _schedule_qt_fd_watch(context: Context, fd: int) -> None:
     qt_core = _qt_core()
 
     def _setup() -> None:
-        if context._cancelled:  # noqa: SLF001
+        if context._cancelled:
             return
         notifier = qt_core.QSocketNotifier(fd, qt_core.QSocketNotifier.Type.Read)
 
         def _fire() -> None:
-            if not context._run_once():  # noqa: SLF001
+            if not context._run_once():
                 notifier.setEnabled(False)
-                context._cleanup = None  # noqa: SLF001
+                context._cleanup = None
 
         notifier.activated.connect(_fire)
-        context._cleanup = lambda: notifier.setEnabled(False)  # noqa: SLF001
+        context._cleanup = lambda: notifier.setEnabled(False)
 
     if _on_qt_main_thread():
         _setup()

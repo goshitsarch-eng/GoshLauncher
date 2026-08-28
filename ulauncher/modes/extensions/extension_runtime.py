@@ -82,7 +82,7 @@ class ExtensionRuntime:
             child_fd = child_socket.detach()
             extension_env["SOCKETPAIR_FD"] = str(child_fd)
 
-            self._subprocess = subprocess.Popen(  # noqa: S603
+            self._subprocess = subprocess.Popen(
                 cmd,
                 env=extension_env,
                 stdout=subprocess.PIPE,
@@ -105,7 +105,9 @@ class ExtensionRuntime:
                     os.close(child_fd)
 
         logger.debug("Launched %s using subprocess", self._ext_id)
-        assert self._subprocess.stdout is not None and self._subprocess.stderr is not None
+        if self._subprocess.stdout is None or self._subprocess.stderr is None:
+            err_msg = "Subprocess must be created with stdout/stderr pipes"
+            raise AssertionError(err_msg)
         self._pipes = {"stdout": self._subprocess.stdout, "stderr": self._subprocess.stderr}
         for name, pipe in self._pipes.items():
             os.set_blocking(pipe.fileno(), False)

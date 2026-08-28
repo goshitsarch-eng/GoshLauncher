@@ -32,31 +32,31 @@ class DBusService(QObject):
         self._app = app
 
     @Slot()
-    def ShowWindow(self) -> None:  # noqa: N802 - D-Bus method naming
+    def ShowWindow(self) -> None:
         self._app.show_launcher()
 
     @Slot()
-    def HideWindow(self) -> None:  # noqa: N802
+    def HideWindow(self) -> None:
         self._app.close_launcher()
 
     @Slot()
-    def ToggleWindow(self) -> None:  # noqa: N802
+    def ToggleWindow(self) -> None:
         self._app.toggle_window()
 
     @Slot()
-    def ShowPreferences(self) -> None:  # noqa: N802
+    def ShowPreferences(self) -> None:
         self._app.show_preferences()
 
     @Slot(str)
-    def SetQuery(self, query: str) -> None:  # noqa: N802
+    def SetQuery(self, query: str) -> None:
         self._app.activate_query(query)
 
     @Slot(bool)
-    def ToggleTrayIcon(self, enable: bool) -> None:  # noqa: N802
+    def ToggleTrayIcon(self, enable: bool) -> None:
         self._app.toggle_tray_icon(enable)
 
     @Slot(str)
-    def TriggerEvent(self, json_message: str) -> None:  # noqa: N802
+    def TriggerEvent(self, json_message: str) -> None:
         """Parses and delegates custom JSON messages to the EventBus listener (if any)"""
         try:
             if (data := json.loads(json_message)) and isinstance(data, dict):

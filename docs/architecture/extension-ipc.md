@@ -46,7 +46,7 @@ Extensions run in **separate processes** as the same user as Ulauncher (not sand
 
 **Async handling:**
 
-- `SocketMsgController` uses GLib's async I/O streams (non-blocking)
+- `SocketMsgController` uses non-blocking reads driven by the event loop
 - Messages dispatched to registered handlers by message type
 
 ## Message Flow Example
@@ -56,7 +56,7 @@ Extensions run in **separate processes** as the same user as Ulauncher (not sand
 3. User selects result → Ulauncher sends action event via socket
 4. Extension handles action → may send new results back
 
-All communication is asynchronous using GLib's event loop.
+All communication is asynchronous: the Qt event loop drives the app side, and a small selectors-based loop drives the extension process.
 
 ## Streaming Results
 

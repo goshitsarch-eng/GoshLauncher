@@ -190,7 +190,7 @@ def get_orientation_locked() -> bool:
     if not exe:
         return False
     try:
-        raw = subprocess.check_output(  # noqa: S603
+        raw = subprocess.check_output(
             [exe, "get", ORIENTATION_SCHEMA, ORIENTATION_KEY], text=True, stderr=subprocess.DEVNULL, timeout=2
         )
     except (OSError, subprocess.SubprocessError):

@@ -58,7 +58,7 @@ class AppIconProvider(QQuickImageProvider):
     def __init__(self) -> None:
         super().__init__(QQuickImageProvider.ImageType.Pixmap)
 
-    def requestPixmap(self, icon_id: str, size: QSize, requested_size: QSize) -> QPixmap:  # noqa: N802
+    def requestPixmap(self, icon_id: str, size: QSize, requested_size: QSize) -> QPixmap:
         from urllib.parse import unquote
 
         icon_name = unquote(icon_id)

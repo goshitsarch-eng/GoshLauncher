@@ -34,7 +34,7 @@ _GNOME_SPEC_PATH = f"/{_GNOME_SPEC_SCHEMA.replace('.', '/')}s/ulauncher/"
 
 
 def _gsettings(*args: str) -> str:
-    return subprocess.check_output(["gsettings", *args], text=True, timeout=5).strip()  # noqa: S603, S607
+    return subprocess.check_output(["gsettings", *args], text=True, timeout=5).strip()
 
 
 def _set_hotkey(hotkey: str) -> None:
@@ -60,12 +60,12 @@ def _set_hotkey(hotkey: str) -> None:
         _gsettings("set", _GNOME_BASE_SCHEMA, "custom-keybindings", repr(enabled_keybindings))
     elif DESKTOP_ID == "XFCE":
         cmd_prefix = ["xfconf-query", "--channel", "xfce4-keyboard-shortcuts"]
-        all_shortcuts = subprocess.check_output([*cmd_prefix, "--list", "--verbose"]).decode().strip().split("\n")  # noqa: S603
+        all_shortcuts = subprocess.check_output([*cmd_prefix, "--list", "--verbose"]).decode().strip().split("\n")
         # Unset existing bindings
         for shortcut in all_shortcuts:
             if shortcut.endswith(launch_command):
                 prop = shortcut.split()[0]
-                subprocess.run([*cmd_prefix, "--reset", "--property", prop], check=True)  # noqa: S603
+                subprocess.run([*cmd_prefix, "--reset", "--property", prop], check=True)
 
         cmd = [
             *cmd_prefix,
@@ -78,7 +78,7 @@ def _set_hotkey(hotkey: str) -> None:
             launch_command,
         ]
         logger.debug("Executing command to add XFCE global shortcut: %s", " ".join(cmd))
-        subprocess.run(cmd, check=True)  # noqa: S603
+        subprocess.run(cmd, check=True)
     else:
         logger.warning("%s doesn't support setting hotkey for Desktop environment '%s'", app_display_name, DESKTOP_NAME)
 
@@ -113,7 +113,7 @@ class HotkeyController:
             config_path = ["--file", "kglobalshortcutsrc", "--group", f"{app_id}.desktop", "--key"]
             kread = which("kreadconfig6") or "kreadconfig5"
             kwrite = which("kwriteconfig6") or "kwriteconfig5"
-            config = subprocess.check_output([kread, *config_path, '"_launch"'])  # noqa: S603
+            config = subprocess.check_output([kread, *config_path, '"_launch"'])
             # only proceed if it's not already set up (don't override user prefs)
             if config.decode().strip():
                 logger.debug("%s Plasma global shortcut already created", app_display_name)
@@ -122,8 +122,8 @@ class HotkeyController:
                 # We don't want to convert the hotkey, so instead we just hard code it
                 logger.warning("Ignoring hotkey argument %s and using default '%s'", default_hotkey, hotkey)
             logger.debug("Executing kwriteconfig commands to add Plasma global shortcut for '%s'", hotkey)
-            subprocess.run([kwrite, *config_path, "_k_friendly_name", app_display_name], check=True)  # noqa: S603
-            subprocess.run([kwrite, *config_path, "_launch", f"{hotkey},none,{app_display_name}"], check=True)  # noqa: S603
+            subprocess.run([kwrite, *config_path, "_k_friendly_name", app_display_name], check=True)
+            subprocess.run([kwrite, *config_path, "_launch", f"{hotkey},none,{app_display_name}"], check=True)
             from ulauncher.utils.systemd_controller import SystemdController
 
             plasma_service_controller = SystemdController("plasma-kglobalaccel")

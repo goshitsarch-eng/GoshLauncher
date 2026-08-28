@@ -34,7 +34,7 @@ def launch_detached(
     # /dev/null instead of a file).
     stdio = subprocess.DEVNULL if sys.stdout.isatty() else None
     try:
-        subprocess.Popen(  # noqa: S603
+        subprocess.Popen(
             cmd,
             cwd=working_dir or None,
             env=env,

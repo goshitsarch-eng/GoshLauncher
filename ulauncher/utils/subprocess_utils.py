@@ -18,9 +18,7 @@ def run_command(cmd: list[str], on_success: OnSuccess, on_error: OnError, *, cwd
     def _worker() -> None:
         try:
             # A killed process is reported as a negative returncode by subprocess already.
-            proc = subprocess.run(  # noqa: S603
-                cmd, cwd=cwd, capture_output=True, text=True, check=True
-            )
+            proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
         except (OSError, subprocess.CalledProcessError) as error:
             scheduling.run_when_idle(on_error, error)
             return

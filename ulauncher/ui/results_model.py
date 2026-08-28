@@ -79,10 +79,10 @@ class ResultsModel(QAbstractListModel):
 
     # QAbstractListModel interface
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008, N802
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008
         return 0 if parent.isValid() else len(self._results)
 
-    def roleNames(self) -> dict[int, Any]:  # noqa: N802
+    def roleNames(self) -> dict[int, Any]:
         return {
             ROLE_NAME: b"name",
             ROLE_DESCRIPTION: b"description",

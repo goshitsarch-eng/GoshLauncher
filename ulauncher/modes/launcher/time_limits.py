@@ -174,7 +174,7 @@ def probe_wellbeing_settings() -> tuple[bool, float] | None:
     import subprocess
 
     def _gsettings_get(key: str) -> str:
-        return subprocess.check_output(  # noqa: S603, S607
+        return subprocess.check_output(
             ["gsettings", "get", WELLBEING_SCHEMA, key], text=True, stderr=subprocess.DEVNULL, timeout=2
         ).strip()
 

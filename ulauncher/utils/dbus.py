@@ -18,13 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 def _session_bus() -> Any:
-    """The QtDBus session bus. Creates a QCoreApplication first when none exists,
-    since QtDBus wants one even for synchronous calls (CLI processes)."""
-    from PySide6.QtCore import QCoreApplication
+    """The QtDBus session bus.
+
+    Deliberately does NOT create a QCoreApplication: synchronous calls work without
+    one, and creating a QCoreApplication here would block the real QApplication from
+    being constructed later in the app process (v5_killer runs before it exists).
+    """
     from PySide6.QtDBus import QDBusConnection
 
-    if QCoreApplication.instance() is None:
-        QCoreApplication([])
     return QDBusConnection.sessionBus()
 
 

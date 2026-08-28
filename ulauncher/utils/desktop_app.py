@@ -10,7 +10,6 @@ activation for DBusActivatable entries.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import shlex
 import shutil
@@ -46,13 +45,10 @@ def find_terminal() -> tuple[str, str] | None:
 
 def dbus_activate_application(desktop_id: str, action: str | None = None, uris: list[str] | None = None) -> bool:
     """Launch a DBusActivatable app via the org.freedesktop.Application interface."""
-    from PySide6.QtCore import QCoreApplication
     from PySide6.QtDBus import QDBusConnection, QDBusMessage
 
     service = desktop_id[: -len(".desktop")] if desktop_id.endswith(".desktop") else desktop_id
     object_path = "/" + service.replace(".", "/").replace("-", "_")
-    if QCoreApplication.instance() is None:
-        QCoreApplication([])
     bus = QDBusConnection.sessionBus()
     if not bus.isConnected():
         return False

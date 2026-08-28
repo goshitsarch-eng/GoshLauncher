@@ -1,6 +1,6 @@
 # GoshLauncher
 
-A GTK 4 + libadwaita application launcher for Linux. Open with **Ctrl+Space**. Search, looks, prefixes, and keyboard navigation follow [Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos).
+A Qt 6 + [Kirigami](https://develop.kde.org/frameworks/kirigami/) application launcher for Linux, styled like a modern KDE app and following the system light/dark colour scheme. Open with **Ctrl+Space**. Search, prefixes, and keyboard navigation follow [Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos).
 
 GoshLauncher is a fork of [Ulauncher](https://github.com/Ulauncher/Ulauncher) v6, whose core, extension API, and packaging it still builds on. The installed command is still `ulauncher`. See [Credits](#credits).
 
@@ -11,7 +11,7 @@ Results appear under their own section header (unless you hide headers). Web sea
 1. **URLs** — `https://…`, `www.…`, bare domains, `host:port`, `localhost`, IPv4/IPv6, `*.local`, plus `sftp://`, `smb://`, `mailto:`, and `magnet:`. Names that look like files (`node.js`, `readme.md`) stay app and file searches. A trailing file-extension denylist keeps those out of URL matching.
 2. **Paths** — `~/…`, `./…`, and absolute paths. Missing paths show “Path not found”. Directories also offer Open in Terminal.
 3. **Folders** — XDG user folders (Home, Desktop, Documents, Downloads, Music, Pictures, Videos, Public, Templates).
-4. **Bookmarks** — GTK 3 and GTK 4 bookmark files, including remote URIs.
+4. **Bookmarks** — file-manager bookmark files (`~/.config/gtk-3.0/bookmarks`, `gtk-4.0/bookmarks`), including remote URIs. Network shares (`smb://`, `sftp://`, ...) open in your default file manager, which mounts them itself.
 5. **Applications** — Desktop entries by name, GenericName, Keywords, Comment, and id. Usage ranking, variant collapse, parental controls, and optional New window / desktop actions.
 6. **Calculator** — Recursive-descent parser, not `eval`. Bare `42` is not math unless you type `=42`.
 7. **Units** — Length, mass, temperature, volume, data sizes, duration, area, speed, pressure, energy, power, angle.
@@ -43,11 +43,13 @@ the keyword followed by a space and an argument. A bare keyword with no argument
 search. The Google, StackOverflow and Wikipedia shortcuts Ulauncher used to seed are removed on
 load, so `g firefox` stays a search.
 
-## Looks
+## Appearance
 
-Seventeen looks. A look owns colors and chrome (position, density, headers, number hints, icons, descriptions, icon size, windows-first). Width is not part of a look. There is no blur.
-
-Spotlight, Omarchy, Pop!_OS, Ulauncher, KRunner, GNOME, Rofi, Raycast, Albert, Wofi, Fuzzel, Anyrun, Tofi, Light, PowerToys, Synapse, Onagre.
+The popup and the preferences window are QML built with KDE's Kirigami framework and the
+`org.kde.desktop` controls style, so they render with your Qt/KDE colour scheme and follow
+light/dark automatically (or force either in Preferences → General). Chrome options — position,
+density, section headers, number hints, icons, descriptions, icon size, result order — live in
+Preferences → General.
 
 ## Keyboard
 
@@ -74,11 +76,26 @@ If the package ships `ulauncher.service`:
 systemctl --user enable --now ulauncher
 ```
 
-Preferences: Shortcut, Appearance, Features, Web Search, About (Spotlight-goshos order), then Desktop, Shortcuts, and Extensions for this GTK host. Default size matches Spotlight-goshos (`680×720`).
+Preferences: General, Features, Web Search, Shortcuts, Extensions, Desktop, About — a Kirigami settings window.
+
+### Dependencies
+
+- Python 3.9+ with [PySide6](https://pypi.org/project/PySide6/) (Qt 6)
+- Kirigami QML modules and the qqc2-desktop-style controls style
+  (Debian/Ubuntu: `qml6-module-org-kde-kirigami qml6-module-org-kde-qqc2-desktop-style qml6-module-qtquick-effects`;
+  Arch: `kirigami qqc2-desktop-style`; Fedora: `kf6-kirigami qqc2-desktop-style`)
+- `python-xlib` for X11 window switching (optional but recommended)
+
+Prefer installing PySide6 from your distribution when your Kirigami build targets the same Qt;
+mixing a pip PySide6 with a distro Kirigami built against a different Qt minor version can fail
+to load the QML modules.
+
+On compositors without the GlobalShortcuts portal or a DE keybinding store, bind
+`ulauncher toggle` to a key in your compositor config.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). `make check` runs lint and tests. Target Python 3.8+ with GTK 4.6 and libadwaita 1.1+.
+See [CONTRIBUTING.md](CONTRIBUTING.md). `make check` runs lint and tests. Target Python 3.9+ with Qt 6 (PySide6) and Kirigami.
 
 ## Credits
 
@@ -106,6 +123,6 @@ affiliated with or endorse GoshLauncher.
 
 GNU GPL v3.0, inherited from Ulauncher. See [LICENSE](LICENSE) and [AUTHORS](AUTHORS).
 
-This is a modified version of Ulauncher, not the original. Per GPL-3.0 section 5(a): the GTK 4 + libadwaita launcher
-UI, the Spotlight-goshos search order and looks, and the rebrand to GoshLauncher were added in August 2026 by the
+This is a modified version of Ulauncher, not the original. Per GPL-3.0 section 5(a): the Qt 6 + Kirigami launcher
+UI, the Spotlight-goshos search order, and the rebrand to GoshLauncher were added in August 2026 by the
 GoshLauncher contributors. Ulauncher is not responsible for, and does not endorse, these changes.

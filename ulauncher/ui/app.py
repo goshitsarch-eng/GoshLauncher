@@ -245,7 +245,12 @@ class UlauncherApp:
         # Clipboard managers need time to snapshot our clipboard ownership after a
         # copy action; there is no "snapshot done" event, so delay the quit by 1s.
         self._cancel_quit_timer()
-        self._quit_timer = scheduling.timer(1, lambda: None if self._windows_open() or self._persistent else self.quit())
+
+        def _quit_if_still_idle() -> None:
+            if not self._windows_open() and not self._persistent:
+                self.quit()
+
+        self._quit_timer = scheduling.timer(1, _quit_if_still_idle)
 
     def _cancel_quit_timer(self) -> None:
         if self._quit_timer is not None:

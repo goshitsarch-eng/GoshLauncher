@@ -65,7 +65,7 @@ def run(_: CLIArguments) -> int:
     # Migrate user data to v6 compatible
     v5_to_v6()
 
-    from ulauncher.ui.app import UlauncherApp  # noqa: TID251
+    from ulauncher.ui.app import UlauncherApp
 
     app = UlauncherApp()
 

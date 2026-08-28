@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from ulauncher import paths
 from ulauncher.modes.launcher.paths import (

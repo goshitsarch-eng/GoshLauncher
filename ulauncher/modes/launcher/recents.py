@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -256,9 +255,6 @@ def _apply_uris(uris: list[str], load_id: int) -> None:
     _recent_lookup.loading = False
     _recent_lookup.pending_finish = None
     _flush_ready()
-
-
-
 
 
 def _uri_exists_sync(uri: str) -> bool:

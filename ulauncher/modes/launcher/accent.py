@@ -72,12 +72,16 @@ def session_accent_nick() -> str:
     import subprocess
 
     try:
-        raw = subprocess.check_output(  # noqa: S603, S607
-            ["gsettings", "get", "org.gnome.desktop.interface", "accent-color"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-            timeout=2,
-        ).strip().strip("'\"")
+        raw = (
+            subprocess.check_output(
+                ["gsettings", "get", "org.gnome.desktop.interface", "accent-color"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+            )
+            .strip()
+            .strip("'\"")
+        )
     except (OSError, subprocess.SubprocessError):
         return "blue"
     return raw if raw in ACCENT_NICKS else "blue"

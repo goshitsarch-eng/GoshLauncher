@@ -6,7 +6,7 @@ import os
 import shlex
 from pathlib import Path
 from shutil import which
-from typing import Any, Callable
+from typing import Callable
 
 # goshos userPath.js: user dirs first, then the system Flatpak export dir
 EXTRA_PATH_DIRS = (

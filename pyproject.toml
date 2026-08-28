@@ -190,8 +190,6 @@ banned-module-level-imports = ["typing_extensions"]
   "T201",       # Allow print statements
 ]
 "ulauncher/utils/lru_cache.py" = ["TID251"]  # This IS the lru_cache wrapper
-"ulauncher/utils/eventloop.py" = ["TID251"]      # The loop itself needs threading primitives
-"ulauncher/utils/scheduling.py" = ["TID251"]     # Cross-thread dispatch needs threading primitives
 "ulauncher/utils/subprocess_utils.py" = ["TID251"]  # Worker thread delivers callbacks to the loop
 "tests/utils/loop_helpers.py" = ["TID251"]
 "tests/api/**/*.py" = ["TID251"]         # API tests need to import from ulauncher.api
@@ -201,7 +199,14 @@ banned-module-level-imports = ["typing_extensions"]
   "PLW2901", "RET504", "RUF001", "RUF002", "RUF003", "RUF046",
   "S314", "SIM102", "SIM103", "SIM108", "TRY300", "UP045",
 ]
-"ulauncher/ui/**" = ["TID251", "N802"]   # Qt slot/property naming; the UI package may import itself
+"ulauncher/ui/**" = ["TID251", "N802", "N815", "ARG002", "PLR0911"]  # Qt slot/signal naming and fixed override signatures
+"ulauncher/cli/commands/**" = ["TID251"]         # The CLI entry points are allowed to pull in the UI
+"ulauncher/utils/scheduling.py" = ["TID251", "SLF001"]  # Backend closures drive Context internals
+"ulauncher/utils/eventloop.py" = ["TID251", "SIM105"]
+"ulauncher/utils/qdbus.py" = ["PLR0911"]
+"ulauncher/modes/apps/launch_app.py" = ["PLR0911", "PLR0912"]  # The launch decision tree
+"ulauncher/ui/results_model.py" = ["PLR0911"]
+"tests/utils/test_scheduling.py" = ["TID251"]
 
 [tool.pytest.ini_options]
 log_cli = true
