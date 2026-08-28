@@ -70,6 +70,7 @@ Kirigami.ApplicationWindow {
             spacing: 0
 
             QQC2.ScrollView {
+                id: scrollArea1
                 Layout.fillHeight: true
                 Layout.preferredWidth: 200
 
@@ -108,10 +109,11 @@ Kirigami.ApplicationWindow {
 
                 // ---------- General ----------
                 QQC2.ScrollView {
+                    id: scrollArea2
                     contentWidth: availableWidth
 
                     ColumnLayout {
-                        width: parent.parent ? parent.parent.availableWidth : 600
+                        width: scrollArea2.availableWidth
                         spacing: Kirigami.Units.largeSpacing
 
                         Kirigami.FormLayout {
@@ -264,10 +266,11 @@ Kirigami.ApplicationWindow {
 
                 // ---------- Features ----------
                 QQC2.ScrollView {
+                    id: scrollArea3
                     contentWidth: availableWidth
 
                     Kirigami.FormLayout {
-                        width: parent.parent ? parent.parent.availableWidth : 600
+                        width: scrollArea3.availableWidth
 
                         Kirigami.Separator {
                             Kirigami.FormData.label: "Search Providers"
@@ -302,10 +305,11 @@ Kirigami.ApplicationWindow {
 
                 // ---------- Web Search ----------
                 QQC2.ScrollView {
+                    id: scrollArea4
                     contentWidth: availableWidth
 
                     Kirigami.FormLayout {
-                        width: parent.parent ? parent.parent.availableWidth : 600
+                        width: scrollArea4.availableWidth
 
                         SettingSwitch { Kirigami.FormData.label: "Show web search:"; settingKey: "show_web_search" }
 
@@ -338,6 +342,7 @@ Kirigami.ApplicationWindow {
                         spacing: 0
 
                         QQC2.ScrollView {
+                            id: scrollArea5
                             Layout.fillWidth: true
                             Layout.fillHeight: true
 
@@ -381,13 +386,14 @@ Kirigami.ApplicationWindow {
                     Kirigami.Separator { Layout.fillHeight: true }
 
                     QQC2.ScrollView {
+                        id: scrollArea6
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         contentWidth: availableWidth
 
                         ColumnLayout {
                             id: shortcutEditor
-                            width: parent.parent ? parent.parent.availableWidth : 500
+                            width: scrollArea6.availableWidth
 
                             property string editingId: ""
                             property bool active: false
@@ -503,6 +509,7 @@ Kirigami.ApplicationWindow {
                         spacing: 0
 
                         QQC2.ScrollView {
+                            id: scrollArea7
                             Layout.fillWidth: true
                             Layout.fillHeight: true
 
@@ -582,13 +589,14 @@ Kirigami.ApplicationWindow {
                     Kirigami.Separator { Layout.fillHeight: true }
 
                     QQC2.ScrollView {
+                        id: scrollArea8
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         contentWidth: availableWidth
 
                         ColumnLayout {
                             id: extDetail
-                            width: parent.parent ? parent.parent.availableWidth : 500
+                            width: scrollArea8.availableWidth
 
                             property var ext: null
                             property var pendingTriggers: ({})
@@ -823,10 +831,11 @@ Kirigami.ApplicationWindow {
 
                 // ---------- Desktop ----------
                 QQC2.ScrollView {
+                    id: scrollArea9
                     contentWidth: availableWidth
 
                     Kirigami.FormLayout {
-                        width: parent.parent ? parent.parent.availableWidth : 600
+                        width: scrollArea9.availableWidth
 
                         Kirigami.Separator {
                             Kirigami.FormData.label: "Session"
@@ -887,10 +896,11 @@ Kirigami.ApplicationWindow {
 
                 // ---------- About ----------
                 QQC2.ScrollView {
+                    id: scrollArea10
                     contentWidth: availableWidth
 
                     ColumnLayout {
-                        width: parent.parent ? parent.parent.availableWidth : 600
+                        width: scrollArea10.availableWidth
                         spacing: Kirigami.Units.largeSpacing
 
                         Item { Layout.preferredHeight: Kirigami.Units.largeSpacing }
