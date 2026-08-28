@@ -45,7 +45,7 @@ You need the following to set up the local build environment:
   ```sh
   sudo add-apt-repository universe
   sudo apt install python3-{all,gi,gi-cairo,xlib} gobject-introspection \
-    gir1.2-{glib-2.0,gtk-4.0,adw-1}
+    libegl1 libxkbcommon0 qml6-module-org-kde-kirigami qml6-module-org-kde-qqc2-desktop-style
   ```
 
 </details>
@@ -69,7 +69,7 @@ You need the following to set up the local build environment:
   If you don't have Ulauncher installed already, install the runtime dependencies as well:
 
   ```sh
-  sudo pacman -Syu --needed gtk4 libadwaita python-{cairo,gobject,xlib}
+  sudo pacman -Syu --needed pyside6 kirigami qqc2-desktop-style python-xlib
   ```
 
 </details>
@@ -85,7 +85,7 @@ You need the following to set up the local build environment:
 
 Alternatively you can run the current code directly `make nix-run ARGS="<arg1> <arg2...>"`, without any IDE completion.
 
-Jetbrains IDEs will have trouble discovering GTK objects (`from gi.repository import ...` are underlined red).
+PySide6 ships type stubs, so IDE completion works out of the box.
 You will need to instruct it to build stub files from binaries by:
 
 1. placing your cursor over red-underlined import,
@@ -110,7 +110,7 @@ Use the Ulauncher main branch, and verify that the issue or feature hasn't alrea
 1. Commit and push your changes. When possible, try to make your changes so that each commit changes just one thing, and please use [Conventional Commits](https://www.conventionalcommits.org/) for your commit messages.
 1. Create a pull request (provide the relevant information suggested by the template). Use the main branch as the base branch and target.
 
-Check out our [Developer resources](https://github.com/Ulauncher/Ulauncher/discussions/879) for links for GTK/GObject documentation and similar.
+See the [Qt for Python docs](https://doc.qt.io/qtforpython-6/) and the [Kirigami docs](https://develop.kde.org/frameworks/kirigami/).
 
 There are some more helpful developer and maintainer commands provided by using our `make` targets. Run `make` to list them all.
 
@@ -124,18 +124,17 @@ ulauncher/
 │   ├── client/   # Extension-side IPC client
 │   └── shared/   # Shared types between Ulauncher and extensions
 ├── modes/        # Query handlers (apps, files, extensions, etc.)
-├── ui/           # GTK components and windows
+├── ui/           # Qt/QML Kirigami components and windows
 └── utils/        # Shared utilities (event bus, timers, IPC, etc.)
 ```
 
 ## Async
 
-Ulauncher uses **GLib callback patterns**, not Python's `async/await`:
+Ulauncher uses **callback patterns**, not Python's `async/await`:
 
-- GTK/GLib operations use GLib async patterns (e.g., `Gio.Subprocess.wait_async()`)
-- Avoid `threading.Thread` - use GLib's event loop
-- For delayed execution: `GLib.timeout_add()` or the `timer` utility
-- For main thread execution: `GLib.idle_add()`
+- Avoid `threading.Thread` - use the event loop
+- For delayed execution: `scheduling.timer`
+- For main thread execution: `scheduling.run_when_idle`
 
 ## Architecture
 

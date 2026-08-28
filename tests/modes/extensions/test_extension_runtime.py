@@ -13,21 +13,22 @@ from ulauncher.modes.extensions.extension_runtime import ExtensionRuntime, abort
 
 class TestExtensionRuntime:
     @pytest.fixture(autouse=True)
-    def subprocess_launcher(self, mocker: MockerFixture) -> MagicMock:
-        return mocker.patch("ulauncher.modes.extensions.extension_runtime.Gio.SubprocessLauncher")
-
-    @pytest.fixture(autouse=True)
-    def data_input_stream(self, mocker: MockerFixture) -> MagicMock:
-        stream_class = mocker.patch("ulauncher.modes.extensions.extension_runtime.Gio.DataInputStream")
-        stream_class.new.side_effect = lambda _pipe: Mock()
-        return stream_class
+    def popen(self, mocker: MockerFixture) -> MagicMock:
+        popen_class = mocker.patch("ulauncher.modes.extensions.extension_runtime.subprocess.Popen")
+        proc = popen_class.return_value
+        proc.poll.return_value = None
+        proc.stdout = Mock()
+        proc.stdout.fileno.return_value = 11
+        proc.stderr = Mock()
+        proc.stderr.fileno.return_value = 12
+        return popen_class
 
     @pytest.fixture(autouse=True)
     def message_socket(self, mocker: MockerFixture) -> MagicMock:
         mock_parent_sock = Mock()
         mock_child_sock = Mock()
-        mock_child_sock.fileno.return_value = 1
-        mock_parent_sock.fileno.return_value = 2
+        mock_child_sock.detach.return_value = 13
+        mock_parent_sock.fileno.return_value = 14
         return mocker.patch(
             "ulauncher.modes.extensions.extension_runtime.socket.socketpair",
             return_value=(mock_parent_sock, mock_child_sock),
@@ -36,6 +37,16 @@ class TestExtensionRuntime:
     @pytest.fixture(autouse=True)
     def message_socket_class(self, mocker: MockerFixture) -> MagicMock:
         return mocker.patch("ulauncher.modes.extensions.extension_runtime.SocketMsgController")
+
+    @pytest.fixture(autouse=True)
+    def os_module(self, mocker: MockerFixture) -> MagicMock:
+        os_mock = mocker.patch("ulauncher.modes.extensions.extension_runtime.os")
+        os_mock.environ = {}
+        return os_mock
+
+    @pytest.fixture(autouse=True)
+    def watch_fd(self, mocker: MockerFixture) -> MagicMock:
+        return mocker.patch("ulauncher.modes.extensions.extension_runtime.scheduling.watch_fd")
 
     @pytest.fixture
     def time(self, mocker: MockerFixture) -> MagicMock:
@@ -46,49 +57,35 @@ class TestExtensionRuntime:
         """Mock the timer utility function used for scheduling delayed kills."""
         return mocker.patch("ulauncher.modes.extensions.extension_runtime.scheduling.timer")
 
-    def test_run__basic_execution__is_called(self, subprocess_launcher: MagicMock) -> None:
+    def test_run__basic_execution__is_called(self, popen: MagicMock, watch_fd: MagicMock) -> None:
         extid = "mock.test_run__basic_execution__is_called"
 
-        runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"])
+        ExtensionRuntime(extid, ["mock/path/to/ext"])
 
-        subprocess_launcher.new.assert_called_once()
-        runtime._subprocess.wait_async.assert_called_once()
-        assert set(runtime._output_streams) == {"stdout", "stderr"}
-        for stream in runtime._output_streams.values():
-            stream.read_line_async.assert_called_once()
+        popen.assert_called_once()
+        # both stdout and stderr get an fd watch
+        assert watch_fd.call_count == 2
 
-    def test_handle_output__stderr__records_recent_errors(self) -> None:
-        test_output1 = "Test Output 1"
-        test_output2 = "Test Output 2"
-        extid = "mock.test_handle_output__stderr__records_recent_errors"
-        mock_read_line_finish_utf8 = Mock()
+    def test_read_output__stderr__records_recent_errors(self, os_module: MagicMock) -> None:
+        extid = "mock.test_read_output__stderr__records_recent_errors"
 
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"])
-        stream = runtime._output_streams["stderr"]
-        stream.read_line_finish_utf8 = mock_read_line_finish_utf8
-        reads_after_launch = stream.read_line_async.call_count
 
-        mock_read_line_finish_utf8.return_value = (test_output1, len(test_output1))
-        runtime.handle_output(stream, Mock(), "stderr")
-        # Confirm the output is stored in recent_errors and read_line_async is called for the next
-        # line.
-        assert runtime._recent_errors[0] == test_output1
-        assert stream.read_line_async.call_count == reads_after_launch + 1
+        os_module.read.return_value = b"Test Output 1\n"
+        runtime._read_output("stderr")
+        assert runtime._recent_errors[0] == "Test Output 1"
 
-        mock_read_line_finish_utf8.return_value = (test_output2, len(test_output2))
-        runtime.handle_output(stream, Mock(), "stderr")
+        os_module.read.return_value = b"Test Output 2\n"
+        runtime._read_output("stderr")
         # The latest line should replace the previous line
-        assert runtime._recent_errors[0] == test_output2
-        assert stream.read_line_async.call_count == reads_after_launch + 2
+        assert runtime._recent_errors[0] == "Test Output 2"
 
-    def test_read_stdout_line__is_not_treated_as_an_error(self) -> None:
+    def test_read_stdout_line__is_not_treated_as_an_error(self, os_module: MagicMock) -> None:
         extid = "mock.test_read_stdout_line__is_not_treated_as_an_error"
 
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"])
-        stream = runtime._output_streams["stdout"]
-        stream.read_line_finish_utf8 = Mock(return_value=("printed to stdout", 17))
-
-        runtime.handle_output(stream, Mock(), "stdout")
+        os_module.read.return_value = b"printed to stdout\n"
+        runtime._read_output("stdout")
 
         assert not runtime._recent_errors
 
@@ -137,7 +134,7 @@ class TestExtensionRuntime:
         runtime = ExtensionRuntime(extid, ["mock/path/to/ext"], None, exit_handler)
         aborted_subprocesses.add(runtime._subprocess)
 
-        runtime.handle_exit(runtime._subprocess, Mock())
+        runtime.handle_exit()
         exit_handler.assert_called_once_with("Stopped", "Extension was stopped by the user")
 
     def test_handle_exit__rapid_exit(self, time: MagicMock) -> None:
@@ -148,12 +145,11 @@ class TestExtensionRuntime:
         exit_handler = Mock()
 
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"], None, exit_handler)
-        runtime._subprocess.get_if_signaled.return_value = False
-        runtime._subprocess.get_exit_status.return_value = 9
+        runtime._subprocess.returncode = 9
         time.return_value = curtime
 
-        runtime.handle_exit(runtime._subprocess, Mock())
-        exit_handler.assert_called()
+        runtime.handle_exit()
+        exit_handler.assert_called_once_with("Terminated", "")
 
     def test_handle_exit(self, time: MagicMock) -> None:
         extid = "mock.test_handle_exit"
@@ -163,10 +159,9 @@ class TestExtensionRuntime:
         time.return_value = starttime
 
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"], None, exit_handler)
-        runtime._subprocess.get_if_signaled.return_value = False
-        runtime._subprocess.get_exit_status.return_value = 9
+        runtime._subprocess.returncode = 9
         time.return_value = curtime
-        runtime.handle_exit(runtime._subprocess, Mock())
+        runtime.handle_exit()
         exit_handler.assert_called_once_with(
             "Exited", 'Extension "mock.test_handle_exit" exited with code 9 after 5.0 seconds.'
         )
@@ -177,7 +172,7 @@ class TestExtensionRuntime:
         exit_handler = Mock()
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"], None, exit_handler)
 
-        runtime._subprocess.get_identifier.return_value = "12345"
+        runtime._subprocess.poll.return_value = None  # still running
         runtime._msg_controller = Mock()
         runtime.stop()
 
@@ -190,17 +185,17 @@ class TestExtensionRuntime:
         extid = "mock.test_kill__sends_sigkill"
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"])
 
-        runtime._subprocess.get_identifier.return_value = "12345"  # still running
+        runtime._subprocess.poll.return_value = None  # still running
         runtime._kill()
 
         runtime._subprocess.send_signal.assert_called_once_with(signal.SIGKILL)
 
     def test_kill__noop_when_already_reaped(self) -> None:
-        """_kill() must not signal once the process has been reaped (get_identifier() is None)."""
+        """_kill() must not signal once the process has been reaped (poll() is set)."""
         extid = "mock.test_kill__noop_when_already_reaped"
         runtime: Any = ExtensionRuntime(extid, ["mock/path/to/ext"])
 
-        runtime._subprocess.get_identifier.return_value = None
+        runtime._subprocess.poll.return_value = 0
         runtime._kill()
 
         runtime._subprocess.send_signal.assert_not_called()

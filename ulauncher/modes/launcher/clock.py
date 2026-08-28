@@ -130,19 +130,14 @@ def match_clock(query: str) -> Optional[dict]:
 
 
 def _payload(kind: str) -> dict | None:
-    from ulauncher.gi import GLib
+    from datetime import datetime, timedelta
 
-    now = GLib.DateTime.new_now_local()
-    if now is None:
-        return None
-    when = now.add_days(date_offset_days(kind))
-    if when is None:
-        when = now
-    weekday = weekday_name(when.get_day_of_week())
-    iso_date = format_iso_date(when.get_year(), when.get_month(), when.get_day_of_month())
-    clock = format_clock(when.get_hour(), when.get_minute(), when.get_second())
-    date_title = format_date_title(weekday, when.get_day_of_month(), month_name(when.get_month()), when.get_year())
-    iso = when.format("%Y-%m-%dT%H:%M:%S") or iso_date
+    when = datetime.now() + timedelta(days=date_offset_days(kind))
+    weekday = weekday_name(when.isoweekday())
+    iso_date = format_iso_date(when.year, when.month, when.day)
+    clock = format_clock(when.hour, when.minute, when.second)
+    date_title = format_date_title(weekday, when.day, month_name(when.month), when.year)
+    iso = when.strftime("%Y-%m-%dT%H:%M:%S") or iso_date
     if kind == "time":
         title = clock
         description = weekday

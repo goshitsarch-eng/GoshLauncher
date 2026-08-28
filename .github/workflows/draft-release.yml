@@ -12,9 +12,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Install GTK 4, libadwaita, and deb build tools
+      - name: Install Qt 6 runtime and deb build tools
         run: |
-          sudo bash scripts/ci-install-gtk4.sh
+          sudo bash scripts/ci-install-qt6.sh
           sudo apt-get install -y --no-install-recommends debhelper dh-python python3-all help2man
       - name: Set up virtual environment
         run: make venv

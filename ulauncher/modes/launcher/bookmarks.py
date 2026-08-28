@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from ulauncher import paths
 from ulauncher.modes.launcher.paths import (
@@ -207,35 +207,6 @@ def _apply_texts(texts: list[str], load_id: int) -> None:
     _flush_ready()
 
 
-def _decode_contents(source: Any, result: Any) -> str:
-    try:
-        finished = source.load_contents_finish(result)
-    except Exception:
-        return ""
-    contents: Any = finished
-    if isinstance(finished, tuple):
-        contents = finished[1] if isinstance(finished[0], bool) else finished[0]
-    if isinstance(contents, memoryview):
-        contents = contents.tobytes()
-    if isinstance(contents, bytes):
-        return contents.decode("utf-8", errors="replace")
-    return str(contents or "")
-
-
-def _exists_finished(source: Any, result: Any) -> bool:
-    try:
-        return bool(source.query_exists_finish(result))
-    except Exception:
-        return False
-
-
-def _query_exists_async(file: Any, glib: Any, callback: Callable[[Any, Any], None]) -> None:
-    try:
-        file.query_exists_async(glib.PRIORITY_DEFAULT, None, callback)
-    except TypeError:
-        file.query_exists_async(None, callback)
-
-
 def _start_load() -> None:
     load_id = _bookmark_lookup.load_id
     _bookmark_lookup.loading = True
@@ -244,61 +215,16 @@ def _start_load() -> None:
         _apply_texts(_read_bookmark_texts_sync(), load_id)
 
     _bookmark_lookup.pending_finish = finish_sync
-    try:
-        from ulauncher.gi import Gio, GLib
-    except Exception:
-        finish_sync()
-        return
+    # The bookmark files are tiny; read them on the next main-loop turn so the
+    # first paint stays synchronous and the ready callback stays async.
+    from ulauncher.utils import scheduling
 
-    paths = list(BOOKMARK_FILES)
-    texts = [""] * len(paths)
-    pending = len(paths)
-
-    def finish_one() -> None:
-        nonlocal pending
-        pending -= 1
-        if pending > 0:
-            return
+    def _load_deferred() -> None:
         if load_id != _bookmark_lookup.load_id:
             return
-        _apply_texts(texts, load_id)
+        finish_sync()
 
-    def load_one(index: int) -> None:
-        path = paths[index]
-        file = Gio.File.new_for_path(str(path))
-
-        def on_exists(src: Any, exists_res: Any) -> None:
-            exists = _exists_finished(src, exists_res)
-            if load_id != _bookmark_lookup.load_id:
-                return
-            if not exists:
-                texts[index] = ""
-                finish_one()
-                return
-
-            def on_loaded(loaded: Any, load_res: Any) -> None:
-                texts[index] = _decode_contents(loaded, load_res)
-                if load_id != _bookmark_lookup.load_id:
-                    return
-                finish_one()
-
-            try:
-                src.load_contents_async(None, on_loaded)
-            except Exception:
-                texts[index] = ""
-                finish_one()
-
-        try:
-            _query_exists_async(file, GLib, on_exists)
-        except Exception:
-            texts[index] = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
-            finish_one()
-
-    if not paths:
-        _apply_texts([], load_id)
-        return
-    for index in range(len(paths)):
-        load_one(index)
+    scheduling.run_when_idle(_load_deferred)
 
 
 def ensure_bookmarks(on_ready: Callable[[], None]) -> None:

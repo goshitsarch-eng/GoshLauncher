@@ -23,17 +23,18 @@ def run(_: CLIArguments) -> int:
     init_helpers.init_x11_threads()
 
     from ulauncher import api_version, app_display_name, version
-    from ulauncher.ui.app import UlauncherApp  # noqa: TID251
-    from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME, DISTRO, IS_X11_COMPATIBLE, XDG_SESSION_TYPE
+    from ulauncher.utils.environment import DESKTOP_NAME, DISTRO, IS_X11_COMPATIBLE, XDG_SESSION_TYPE
     from ulauncher.utils.migrate import v5_to_v6
     from ulauncher.utils.v5_killer import kill_ulauncher_v5
 
-    gtk_version = UlauncherApp.get_gtk_version()
-    if gtk_version < (4, 6, 0):
-        print("GoshLauncher requires GTK 4.6 and libadwaita 1.1 or newer.")  # noqa: T201
-        return 1
-
     logger = logging.getLogger(__name__)
+
+    try:
+        import PySide6
+        from PySide6.QtCore import qVersion
+    except ImportError:
+        print(f"{app_display_name} requires PySide6 (Qt 6). Install it with your package manager or pip.")  # noqa: T201
+        return 1
 
     def except_hook(exctype: type[BaseException], exception: BaseException, traceback: TracebackType | None) -> None:
         logger.error("Uncaught exception", exc_info=(exctype, exception, traceback))
@@ -52,21 +53,8 @@ def run(_: CLIArguments) -> int:
 
     logger.info("%s version %s", app_display_name, version)
     logger.info("Extension API version %s", api_version)
-    logger.info("GTK %s.%s.%s", *gtk_version)
-    logger.info("PyGObject+ %i.%i.%i", *UlauncherApp.get_pygobject_version())
-
+    logger.info("Qt %s (PySide6 %s)", qVersion(), PySide6.__version__)
     if XDG_SESSION_TYPE != "X11":
-        from ulauncher.ui.helpers import layer_shell  # noqa: TID251
-
-        layer_shell_supported = layer_shell.is_supported()
-        logger.info("Layer shell: %s", ("Yes" if layer_shell_supported else "No"))
-        if not layer_shell_supported and DESKTOP_ID == "PLASMA":
-            logger.warning(
-                _boxed_warning(
-                    f"Plasma Desktop needs Layer Shell to render {app_display_name} correctly on Wayland.",
-                    "See https://github.com/Ulauncher/Ulauncher/discussions/1501 for details.",
-                )
-            )
         logger.info("X11 backend: %s", ("Yes" if IS_X11_COMPATIBLE else "No"))
 
     # Ensure that Ulauncher v5 is not running
@@ -77,18 +65,20 @@ def run(_: CLIArguments) -> int:
     # Migrate user data to v6 compatible
     v5_to_v6()
 
+    from ulauncher.ui.app import UlauncherApp
+
     app = UlauncherApp()
 
-    # Perf-test probe (see UlauncherWindow.on_initial_draw): when ULAUNCHER_PERF_START_BOOTTIME
-    # is set, schedule the launcher to open as soon as the main loop is idle so the probe can
-    # measure cold-start to first input. Without this, `ulauncher start` would register as a
-    # daemon and idle until an external D-Bus activation arrived.
+    # Perf-test probe: when ULAUNCHER_PERF_START_BOOTTIME is set, schedule the launcher
+    # to open as soon as the main loop is idle so the probe can measure cold-start to
+    # first input. Without this, `ulauncher start` would register as a daemon and idle
+    # until an external D-Bus call arrived.
     if os.environ.get("ULAUNCHER_PERF_START_BOOTTIME"):
         from ulauncher.utils import scheduling
 
         scheduling.run_when_idle(app.show_launcher)
 
     with contextlib.suppress(KeyboardInterrupt):
-        app.start(activate=False)
+        return app.start(activate=False)
 
     return 0

@@ -77,8 +77,8 @@ def test_date_title_format() -> None:
     assert hit["description"] == hit["date"]
     source = Path(__file__).resolve().parents[3] / "ulauncher" / "modes" / "launcher" / "clock.py"
     text = source.read_text()
-    assert "DateTime.new_now_local" in text
-    assert "datetime.now" not in text
+    assert "datetime.now()" in text
+    assert "GLib" not in text
 
 
 def test_goshos_clock_false_positives() -> None:

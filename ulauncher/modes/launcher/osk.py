@@ -109,23 +109,12 @@ def osk_keyboard_for_work_area(
 
 def probe_osk_visible() -> bool:
     try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return False
-    try:
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        result = bus.call_sync(
-            PHOSH_OSK_DEST,
-            PHOSH_OSK_PATH,
-            PROPERTIES_IFACE,
-            "Get",
-            GLib.Variant("(ss)", (PHOSH_OSK_IFACE, "Visible")),
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
+        from ulauncher.utils import qdbus
+
+        value = qdbus.get_property(
+            qdbus.session_bus(), PHOSH_OSK_DEST, PHOSH_OSK_PATH, PHOSH_OSK_IFACE, "Visible", timeout_ms=200
         )
-        return _as_bool(result)
+        return _as_bool(value)
     except Exception:
         return False
 
@@ -183,36 +172,17 @@ class OskWatcher:
 
     def _subscribe_dbus(self) -> None:
         try:
-            from ulauncher.gi import Gio
-        except (ImportError, AttributeError, RuntimeError, OSError):
+            from ulauncher.utils import qdbus
+        except ImportError:
             return
-        try:
-            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        except Exception:
-            return
-
-        def _callback(
-            _connection: Any,
-            _sender: str,
-            _path: str,
-            iface: str,
-            member: str,
-            params: Any,
-            *_user: object,
-        ) -> None:
-            unpacked = params.unpack() if hasattr(params, "unpack") else params
-            self._on_signal(iface, member, unpacked)
 
         for dest, path, iface, member in OSK_WATCHES:
+
+            def _callback(args: Any, iface: str = iface, member: str = member) -> None:
+                self._on_signal(iface, member, tuple(args))
+
             with contextlib.suppress(Exception):
-                sub_id = bus.signal_subscribe(
-                    dest,
-                    iface,
-                    member,
-                    path,
-                    None,
-                    Gio.DBusSignalFlags.NONE,
-                    _callback,
-                )
-                if sub_id:
-                    self._ids.append((bus, int(sub_id)))
+                subscription = qdbus.subscribe(qdbus.session_bus(), dest, path, iface, member, _callback)
+                if subscription is not None:
+                    # stop() calls signal_unsubscribe(id) on the first tuple element
+                    self._ids.append((subscription, 1))

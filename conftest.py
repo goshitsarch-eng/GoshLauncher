@@ -3,8 +3,8 @@
 import os
 import sys
 
-# CPU renderer so GSK texture readback works after other GTK windows in the same process.
-os.environ.setdefault("GSK_RENDERER", "cairo")
+# Headless-safe Qt platform for anything that touches QtGui in tests.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # These paths shouldn't be written to, but if something goes wrong at least we won't overwrite user confs
 TEST_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "./.tmp/ulauncher_tests"))

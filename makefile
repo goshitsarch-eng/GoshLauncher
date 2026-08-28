@@ -65,10 +65,9 @@ venv:
 	echo -e "$(BOLD)[+] Setting up virtual environment...$(RESET)"
 	$(BASE_PYTHON) -m venv --clear --system-site-packages .venv
 	# Ubuntu 22.04 CI uses python3-pip 22.0.2 + setuptools 59.6 via --system-site-packages.
-	# pygobject-stubs is sdist-only with a PEP 517 backend-path that that pip reports as
-	# project name "unknown", so the ==2.12.0 pin never matches. Bootstrap a venv pip first.
+	# Bootstrap a venv pip first.
 	.venv/bin/python -m pip install --ignore-installed --upgrade $(if $(QUIET),-q) pip "setuptools>=65" wheel
-	PYGOBJECT_STUB_CONFIG=Gtk4,Gdk4,Soup2 .venv/bin/python -m pip install --ignore-installed --no-warn-conflicts --upgrade $(if $(QUIET),-q) -r requirements.txt
+	.venv/bin/python -m pip install --ignore-installed --no-warn-conflicts --upgrade $(if $(QUIET),-q) -r requirements.txt
 	# Keep a copy of the requirements used for this environment so make targets can
 	# tell when the local venv needs to be refreshed.
 	cp requirements.txt "$(VENV_REQUIREMENTS_SNAPSHOT)"
@@ -181,10 +180,10 @@ rumdl:
 pytest: venv
 	@set -euo pipefail
 	if [ -z $(shell eval "command -v xvfb-run") ]; then
-		GSK_RENDERER=cairo GTK_A11Y=none GDK_BACKEND=x11 pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
+		QT_QPA_PLATFORM=offscreen pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
 	else
 		echo -e "xvfb-run detected. Running pytest in a virtual X server environment."
-		GSK_RENDERER=cairo GTK_A11Y=none GDK_BACKEND=x11 xvfb-run --auto-servernum -- pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
+		QT_QPA_PLATFORM=offscreen xvfb-run --auto-servernum -- pytest -p no:cacheprovider --tb=native $(PYTEST_ARGS) tests
 	fi
 
 # Print the median first-draw time (in ms) across $$ITERATIONS runs of `bin/ulauncher start`.
@@ -327,7 +326,7 @@ manpage:
 	fi
 	# read the version inside the recipe: make expands ${VERSION} once at parse time, so a
 	# `make release` that just rewrote the version file would stamp the previous one here.
-	help2man --section=1 --name="GTK 4 Adwaita launcher matching Spotlight-goshos" --no-info \
+	help2man --section=1 --name="Qt 6 Kirigami launcher matching Spotlight-goshos" --no-info \
 		--version-string="ulauncher $$(sed -n 's/^version = "\(.*\)"$$/\1/p' ${VERSION_FILE})" \
 		./bin/ulauncher > ulauncher.1
 	# help2man renders any heading with a trailing colon as .SS (indented subsection).

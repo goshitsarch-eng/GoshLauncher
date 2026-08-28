@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 from ulauncher import cli, paths
-from ulauncher.gi import GLib
 from ulauncher.internals import log_wire
 from ulauncher.modes.extensions import ext_exceptions
 from ulauncher.modes.extensions.extension_dependencies import ExtensionDependencies
@@ -68,7 +67,7 @@ class ExtensionServiceListener(Protocol):
 
 class _ExtensionProcessState:
     """Per-extension bookkeeping for the process and the serialized jobs.
-    Only ExtensionService touches it, always on the GLib main loop."""
+    Only ExtensionService touches it, always on the main loop."""
 
     runtime: ExtensionRuntime | None
     record: ExtensionRecord | None  # the record the live runtime was spawned from
@@ -350,7 +349,7 @@ class ExtensionService(ExtensionRegistry):
         # consistently and queued stop callbacks still drain.
         try:
             state.runtime = ExtensionRuntime(record.id, cmd, env, exit_handler, message_handler)
-        except (OSError, GLib.Error) as err:
+        except (OSError, TypeError) as err:
             exit_handler("FailedToStart", str(err))
             return
         state.record = record

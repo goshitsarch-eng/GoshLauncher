@@ -96,33 +96,28 @@ def _xdg_dirs() -> dict[str, str]:
     return mapping
 
 
-_PLACE_GLIB_DIR = {
-    "desktop": "DIRECTORY_DESKTOP",
-    "documents": "DIRECTORY_DOCUMENTS",
-    "download": "DIRECTORY_DOWNLOAD",
-    "music": "DIRECTORY_MUSIC",
-    "pictures": "DIRECTORY_PICTURES",
-    "videos": "DIRECTORY_VIDEOS",
-    "public": "DIRECTORY_PUBLIC_SHARE",
-    "templates": "DIRECTORY_TEMPLATES",
+_PLACE_USER_DIR = {
+    "desktop": "DESKTOP",
+    "documents": "DOCUMENTS",
+    "download": "DOWNLOAD",
+    "music": "MUSIC",
+    "pictures": "PICTURES",
+    "videos": "VIDEOS",
+    "public": "PUBLICSHARE",
+    "templates": "TEMPLATES",
 }
 
 
 def _glib_place_path(place_id: str) -> str | None:
-    try:
-        from ulauncher.gi import GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return None
+    """XDG user-dir lookup (the name predates the GLib-free port)."""
     if place_id == "home":
-        return GLib.get_home_dir() or None
-    name = _PLACE_GLIB_DIR.get(place_id)
+        return str(Path.home())
+    name = _PLACE_USER_DIR.get(place_id)
     if not name:
         return None
-    directory = getattr(GLib.UserDirectory, name, None)
-    if directory is None:
-        return None
-    path = GLib.get_user_special_dir(directory)
-    return path or None
+    from ulauncher.utils.user_dirs import get_user_dir
+
+    return get_user_dir(name)
 
 
 def place_path(place: PlaceEntry, dirs: dict[str, str] | None = None) -> str:

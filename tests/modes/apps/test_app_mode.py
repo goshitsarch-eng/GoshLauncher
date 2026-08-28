@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from ulauncher.gi import GioUnix
 from ulauncher.modes.apps.app_mode import AppMode
 from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
+from ulauncher.utils.desktop_app import DesktopApp
 from ulauncher.utils.settings import Settings
 
 ENTRIES_DIR = Path(__file__).parent.joinpath("mock_desktop_entries").resolve()
@@ -61,15 +61,14 @@ def test_app_result_keeps_row_when_list_actions_throws() -> None:
 
 
 def test_get_triggers_skips_one_bad_desktop_encoding(monkeypatch: pytest.MonkeyPatch) -> None:
-    good = GioUnix.DesktopAppInfo.new_from_filename(str(ENTRIES_DIR / "trueapp.desktop"))
+    good = DesktopApp.new_from_filename(str(ENTRIES_DIR / "trueapp.desktop"))
     assert good is not None
     settings = Settings()
     settings.enable_application_mode = True
     settings.disable_desktop_filters = True
     monkeypatch.setattr(Settings, "load", classmethod(lambda _cls, **_kwargs: settings))
     monkeypatch.setattr(
-        GioUnix.DesktopAppInfo,
-        "get_all",
+        "ulauncher.modes.apps.app_mode.DesktopApp.get_all",
         staticmethod(lambda: [_BadEncodingApp(), good]),
     )
     names = [app.name for app in AppMode().get_triggers()]
@@ -103,7 +102,7 @@ def test_installed_apps_is_read_once_and_invalidated_on_change(monkeypatch: pyte
         calls.append(1)
         return [_Entry()]
 
-    monkeypatch.setattr(app_mode_mod.GioUnix.DesktopAppInfo, "get_all", staticmethod(get_all))
+    monkeypatch.setattr(app_mode_mod.DesktopApp, "get_all", staticmethod(get_all))
     monkeypatch.setattr(app_mode_mod, "_installed_app_result", lambda app, _settings: app)
     app_mode_mod.invalidate_installed_apps()
     try:

@@ -2,40 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 
-from ulauncher.gi import GLib
 from ulauncher.utils.systemd_controller import SystemdController
 
 logger = logging.getLogger(__name__)
-
-
-def detach_child() -> None:
-    """
-    A utility function which runs in the child process launched by spawn_async
-    and before execing the supplied command.
-    """
-    # Use setsid to take "session leader" status so that the child pid is
-    # definitely detached from the parent ulauncher process
-    os.setsid()
-
-    # Don't redirect the standard file descriptors unless connected to a terminal.
-    if not sys.stdout.isatty():
-        return
-
-    # Reopen the stdin, stdout, and stderr file descriptors to /dev/null. This
-    # ensures the stdout/stderr are no longer connected to the terminal. This
-    # serves a similar purpose as the standard "nohup" command. Any processes
-    # connected to the terminal will get the interrupt signal when "Ctrl-C" is
-    # called, so this redirection prevents the child process from exiting when
-    # ulauncher is interrupted. Unlike "nohup", stdout and stderr are not sent
-    # to a file but sent to /dev/null instead.
-    with open("/dev/null", "w+b") as null_fp:
-        null_fd = null_fp.fileno()
-        for fp in [sys.stdin, sys.stdout, sys.stderr]:
-            orig_fd = fp.fileno()
-            fp.close()
-            os.dup2(null_fd, orig_fd)
 
 
 def launch_detached(
@@ -50,24 +22,45 @@ def launch_detached(
     env = dict(os.environ.items())
     if extra_env:
         env.update(extra_env)
-    # Make sure GDK apps aren't forced to use x11 on wayland due to ulauncher's need to run
-    # under X11 for proper centering.
-    if env.get("GDK_BACKEND") != "wayland":
-        env.pop("GDK_BACKEND", None)
+    # Don't leak a platform override we may run under into launched apps -
+    # they should pick their own backend on the user's session.
+    for var in ("QT_QPA_PLATFORM", "GDK_BACKEND"):
+        if env.get(var) not in (None, "wayland"):
+            env.pop(var, None)
 
+    # start_new_session=True runs setsid in the child, so the launched app is definitely
+    # detached from the launcher process and survives it exiting or being Ctrl-C'd.
+    # Detach stdio from a controlling terminal for the same reason (like nohup, but to
+    # /dev/null instead of a file).
+    stdio = subprocess.DEVNULL if sys.stdout.isatty() else None
     try:
-        envp = [f"{k}={v}" for k, v in env.items()]
-        GLib.spawn_async(
-            argv=cmd,
-            envp=envp,
-            flags=GLib.SpawnFlags.SEARCH_PATH_FROM_ENVP | GLib.SpawnFlags.SEARCH_PATH,
-            child_setup=None if use_systemd_run else detach_child,
-            # the python gi wrapper has a bug, not actually allowing to pass working_directory as None
-            **({"working_directory": working_dir} if working_dir else {}),
+        subprocess.Popen(
+            cmd,
+            cwd=working_dir or None,
+            env=env,
+            start_new_session=not use_systemd_run,
+            stdin=stdio,
+            stdout=stdio,
+            stderr=stdio,
+            close_fds=True,
         )
-    except (TypeError, GLib.Error):
+    except OSError:
         logger.exception('Could not launch "%s"', cmd)
 
 
 def open_detached(path_or_url: str) -> None:
+    """Open a path or URI with its registered handler.
+
+    Non-file URIs are resolved through the mime-apps database ourselves instead of
+    trusting xdg-open: network shares (smb://, sftp://, ...) fall back to the default
+    file manager, which mounts the share itself, where xdg-open would fail or demand
+    "another app" when no x-scheme-handler is registered.
+    """
+    scheme = path_or_url.split(":", 1)[0].lower() if ":" in path_or_url else ""
+    if scheme and not path_or_url.startswith("/") and scheme != "file":
+        from ulauncher.utils.mime_apps import handler_for_uri
+
+        handler = handler_for_uri(path_or_url)
+        if handler is not None and handler.launch_uris([path_or_url]):
+            return
     launch_detached(["xdg-open", path_or_url])

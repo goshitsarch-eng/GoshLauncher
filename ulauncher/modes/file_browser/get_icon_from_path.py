@@ -2,17 +2,17 @@ import mimetypes
 import os
 from pathlib import Path
 
-from ulauncher.gi import GLib
+from ulauncher.utils.user_dirs import get_user_dir
 
 SPECIAL_DIRS = {
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD): "folder-download",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOCUMENTS): "folder-documents",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_MUSIC): "folder-music",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES): "folder-pictures",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PUBLIC_SHARE): "folder-publicshare",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_TEMPLATES): "folder-templates",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_VIDEOS): "folder-videos",
-    GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP): "user-desktop",
+    get_user_dir("DOWNLOAD"): "folder-download",
+    get_user_dir("DOCUMENTS"): "folder-documents",
+    get_user_dir("MUSIC"): "folder-music",
+    get_user_dir("PICTURES"): "folder-pictures",
+    get_user_dir("PUBLICSHARE"): "folder-publicshare",
+    get_user_dir("TEMPLATES"): "folder-templates",
+    get_user_dir("VIDEOS"): "folder-videos",
+    get_user_dir("DESKTOP"): "user-desktop",
     Path("~").expanduser().as_posix(): "folder-home",
 }
 

@@ -1,23 +1,10 @@
 # based off https://github.com/NixOS/nixpkgs/blob/e44462d6021bfe23dfb24b775cc7c390844f773d/pkgs/applications/misc/ulauncher/default.nix#L4-L4
 { lib
-, bash
 , buildEnv
-, fetchFromGitHub
-, gdk-pixbuf
 , git
-, glib
-, adwaita-icon-theme
 , gnumake
-, gnused
-, gobject-introspection
-, gtk-layer-shell
-, gtk4
-, gtk4-layer-shell
-, libadwaita
-, intltool
+, kdePackages
 , libX11
-, libappindicator
-, librsvg
 , nix-update-script
 , procps
 , python3Packages
@@ -28,7 +15,6 @@
 , stdenv
 , systemd
 , typos
-, wrapGAppsHook4
 , xdg-utils
 , xvfb-run
 , withXorg ? true
@@ -51,7 +37,6 @@ let
 
   packages.tests.python = pp: (with pp; [
     mock
-    (pygobject-stubs.overridePythonAttrs (old: { PYGOBJECT_STUB_CONFIG = "Gtk4,Gdk4,Soup2"; }))
     pytest
     pytest-mock
   ]);
@@ -59,10 +44,17 @@ let
     pyrefly
     ruff
     typos
-    xvfb-run # xvfb-run tests fail
+    xvfb-run
   ];
 
   packages.tests.all = pp: packages.tests.python pp ++ packages.tests.system;
+
+  # QML modules the UI imports at runtime
+  qmlDeps = [
+    kdePackages.kirigami
+    kdePackages.qqc2-desktop-style
+    kdePackages.qtdeclarative
+  ];
 
   self = python3Packages.buildPythonPackage {
     inherit version pname;
@@ -73,36 +65,20 @@ let
 
     nativeBuildInputs = [
       setuptools-scm
-      gdk-pixbuf
-      gobject-introspection
-      intltool
-      wrapGAppsHook4
+      kdePackages.wrapQtAppsHook
     ];
 
-    buildInputs = [
-      glib
-      adwaita-icon-theme
-      gtk-layer-shell
-      gtk4
-      gtk4-layer-shell
-      libadwaita
-      libappindicator
-      librsvg
-    ];
+    buildInputs = qmlDeps;
 
     # runtime dependencies / binaries prepended to PATH
     propagatedBuildInputs = with python3Packages; [
       levenshtein
       mock
-      pycairo
-      pygobject3
+      pyside6
     ] ++ lib.optionals withXorg [
       xlib
     ] ++ [
       git
-      glib
-      gtk4
-      libadwaita
       xdg-utils
     ];
 
@@ -110,12 +86,6 @@ let
 
     postPatch = ''
       patchShebangs bin/ulauncher bin/ulauncher-toggle
-
-      substituteInPlace \
-          bin/ulauncher \
-          bin/ulauncher-toggle \
-          io.ulauncher.Ulauncher.desktop \
-        --replace-fail gapplication ${glib}/bin/gapplication
 
       substituteInPlace \
           ulauncher/modes/extensions/extension_service.py \
@@ -131,19 +101,19 @@ let
         --replace-fail '#!/bin/bash' '#!${stdenv.shell}'
     '';
 
-    # do not double wrap
-    dontWrapGApps = true;
+    dontWrapQtApps = true;
     preFixup = ''
       makeWrapperArgs+=(
-        "''${gappsWrapperArgs[@]}"
+        "''${qtWrapperArgs[@]}"
         ${lib.optionalString withXorg ''--prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ libX11 ]}"''}
+        --prefix QML2_IMPORT_PATH : "${lib.makeSearchPath "lib/qt-6/qml" qmlDeps}"
         --set-default ULAUNCHER_SYSTEM_PREFIX "$out"
       )
     '';
 
-    # bin/ulauncher is now a shell script, so wrapPythonPrograms skips it.
-    # Wrap it manually to inject PYTHONPATH (so `python3 -m ulauncher` finds gi)
-    # plus the same gapps/X11/prefix args python scripts would get.
+    # bin/ulauncher is a shell script, so wrapPythonPrograms skips it.
+    # Wrap it manually to inject PYTHONPATH (so `python3 -m ulauncher` finds PySide6)
+    # plus the same Qt/X11/prefix args python scripts would get.
     postFixup = ''
       wrapProgram $out/bin/ulauncher \
         --prefix PYTHONPATH : "$program_PYTHONPATH" \
@@ -152,28 +122,15 @@ let
     '';
 
     doCheck = true;
-    # Python packages don't have a checkPhase, only an installCheckPhase:
-    # - https://github.com/NixOS/nixpkgs/blob/add2bf7e523b0b1d6e192b6060cf2f0aac26bcc0/pkgs/development/interpreters/python/mk-python-derivation.nix#L274-L276
     installCheckPhase = ''
       test_dir="$PWD/.test-tmp"
-      (
-        mkdir -p "$test_dir/bin"
-        export HOME="$test_dir"
-
-        makeWrapper "$(command -v make)" "$test_dir/bin/make" "''${makeWrapperArgs[@]}"
-        export PATH="$test_dir/bin:$PATH"
-        #make check
-        rm -r "$test_dir"
-      )
-
       (
         export PATH="${lib.makeBinPath [ procps ]}:$PATH"
         trap "echo killing $BASHPID && pkill -P $BASHPID" EXIT
 
         mkdir -p "$test_dir"
         logfile="$test_dir/log.txt"
-        env -i HOME="$test_dir" \
-          "$(command -v xvfb-run)" --auto-servernum -- \
+        env -i HOME="$test_dir" QT_QPA_PLATFORM=offscreen \
           $out/bin/ulauncher start --verbose &>"$logfile" &
         ulauncher_pid=$!
 
@@ -186,7 +143,6 @@ let
             ;;
             *info*)
               # exits successfully as soon as it sees the first info message
-              # TODO: add some other successful startup indicator?
               echo "OK: ulauncher started properly"
               exit 0
             ;;
@@ -215,12 +171,13 @@ let
             )
           ))
         ]
-        ++ packages.tests.system;
+        ++ packages.tests.system
+        ++ qmlDeps;
       };
     };
 
     meta = with lib; {
-      description = "A GTK 4 + libadwaita application launcher for Linux, a fork of Ulauncher";
+      description = "A Qt 6 + Kirigami application launcher for Linux, a fork of Ulauncher";
       homepage = "https://github.com/goshitsarch-eng/GoshLauncher";
       license = licenses.gpl3;
       platforms = platforms.linux;

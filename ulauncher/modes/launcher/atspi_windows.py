@@ -214,7 +214,7 @@ class AtspiLiveWatch:
 
     def __init__(self) -> None:
         self._conn: Any = None
-        self._ids: list[int] = []
+        self._ids: list[Any] = []
         self._on_change: Callable[[], None] | None = None
 
     def start(self, on_change: Callable[[], None], connection: Any | None = None) -> bool:
@@ -229,7 +229,7 @@ class AtspiLiveWatch:
         for member in ("Activate", "Create", "Destroy"):
             watch_id = _subscribe_window_event(conn, member, self._on_event)
             if watch_id:
-                self._ids.append(int(watch_id))
+                self._ids.append(watch_id)
         if self._ids:
             return True
         self.stop()
@@ -240,7 +240,7 @@ class AtspiLiveWatch:
         if conn is not None:
             for watch_id in self._ids:
                 with contextlib.suppress(AttributeError, RuntimeError, TypeError, OSError):
-                    conn.signal_unsubscribe(watch_id)
+                    watch_id.unsubscribe()
         self._conn = None
         self._ids = []
         self._on_change = None
@@ -294,29 +294,31 @@ def _dbus_call(
     path: str,
     iface: str,
     method: str,
-    signature: str,
+    _signature: str,
     params: Any = None,
 ) -> Any:
-    from ulauncher.gi import Gio, GLib
+    """Synchronous call on a QDBusConnection; returns the first reply argument, unwrapped.
 
-    reply = conn.call_sync(
-        dest,
-        path,
-        iface,
-        method,
-        params,
-        GLib.VariantType.new(signature),
-        Gio.DBusCallFlags.NONE,
-        50,
-        None,
-    )
-    return reply.unpack()[0]
+    _signature is the historical GVariant reply type; QtDBus does its own typing,
+    so it is only kept for call-site readability.
+    """
+    from PySide6.QtDBus import QDBusMessage
+
+    from ulauncher.utils import qdbus
+
+    message = QDBusMessage.createMethodCall(dest, path, iface, method)
+    if params:
+        message.setArguments(list(params))
+    reply = conn.call(message, timeout=50)
+    if reply.type() != QDBusMessage.MessageType.ReplyMessage:
+        msg = f"D-Bus call {method} failed: {reply.errorMessage()}"
+        raise OSError(msg)
+    arguments = reply.arguments()
+    return qdbus.unwrap(arguments[0]) if arguments else None
 
 
 def _a11y_enabled(session: Any) -> bool:
     try:
-        from ulauncher.gi import GLib
-
         value = _dbus_call(
             session,
             "org.a11y.Bus",
@@ -324,7 +326,7 @@ def _a11y_enabled(session: Any) -> bool:
             "org.freedesktop.DBus.Properties",
             "Get",
             "(v)",
-            GLib.Variant("(ss)", ("org.a11y.Status", "IsEnabled")),
+            ["org.a11y.Status", "IsEnabled"],
         )
     except Exception:
         return False
@@ -333,45 +335,51 @@ def _a11y_enabled(session: Any) -> bool:
 
 def _a11y_connection() -> Any | None:
     try:
-        from ulauncher.gi import Gio
+        from PySide6.QtDBus import QDBusConnection
+
+        from ulauncher.utils import qdbus
     except (ImportError, AttributeError, RuntimeError, OSError):
         return None
     try:
-        session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        if not _a11y_enabled(session):
+        session = qdbus.session_bus()
+        if not session.isConnected() or not _a11y_enabled(session):
             return None
         address = str(_dbus_call(session, "org.a11y.Bus", "/org/a11y/bus", "org.a11y.Bus", "GetAddress", "(s)") or "")
         if not address:
             return None
-        flags = Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION
-        return Gio.DBusConnection.new_for_address_sync(address, flags, None, None)
+        conn = QDBusConnection.connectToBus(address, "goshlauncher-a11y")
+        return conn if conn.isConnected() else None
     except Exception:
         logger.debug("AT-SPI bus connection failed", exc_info=True)
         return None
 
 
-def _subscribe_window_event(conn: Any, member: str, callback: Callable[..., None]) -> int:
+def _subscribe_window_event(conn: Any, member: str, callback: Callable[..., None]) -> Any:
+    """Subscribe to an AT-SPI window event; invokes callback(sender, None, path, member)."""
+    # Duck-typed (Gio-style) connections from tests expose signal_subscribe directly
+    gio_style = getattr(conn, "signal_subscribe", None)
+    if callable(gio_style):
+        try:
+            sub_id = gio_style(None, ATSPI_WINDOW_EVENT, member, None, None, 0, callback)
+        except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
+            return 0
+        return int(sub_id or 0)
     try:
-        from ulauncher.gi import Gio
+        from ulauncher.utils import qdbus
 
-        watch_id = conn.signal_subscribe(
-            None,
-            ATSPI_WINDOW_EVENT,
-            member,
-            None,
-            None,
-            Gio.DBusSignalFlags.NONE,
-            callback,
+        def _on_message(message: Any) -> None:
+            callback(message.service(), None, message.path(), member)
+
+        subscription = qdbus.SignalSubscription(
+            conn, "", "", ATSPI_WINDOW_EVENT, member, lambda _args: None, message_callback=_on_message
         )
     except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
         return 0
-    return int(watch_id or 0)
+    return subscription if subscription.connected else 0
 
 
 def _accessible_name(conn: Any, dest: str, path: str) -> str:
     try:
-        from ulauncher.gi import GLib
-
         value = _dbus_call(
             conn,
             dest,
@@ -379,7 +387,7 @@ def _accessible_name(conn: Any, dest: str, path: str) -> str:
             "org.freedesktop.DBus.Properties",
             "Get",
             "(v)",
-            GLib.Variant("(ss)", (ATSPI_ACCESSIBLE, "Name")),
+            [ATSPI_ACCESSIBLE, "Name"],
         )
     except Exception:
         return ""
@@ -391,7 +399,7 @@ def _accessible_title_and_app(conn: Any, dest: str, path: str) -> tuple[str, str
     app_id = dest
     try:
         app = _dbus_call(conn, dest, path, ATSPI_ACCESSIBLE, "GetApplication", "(so)")
-        if isinstance(app, tuple) and app:
+        if isinstance(app, (list, tuple)) and app:
             app_id = str(app[0] or dest)
     except Exception:
         logger.debug("AT-SPI GetApplication failed", exc_info=True)
@@ -438,8 +446,6 @@ def _accessible_role(conn: Any, dest: str, path: str) -> str:
 
 
 def _action_names(conn: Any, dest: str, path: str) -> list[str]:
-    from ulauncher.gi import GLib
-
     try:
         rows = _dbus_call(conn, dest, path, ATSPI_ACTION, "GetActions", "(a(sss))")
         if isinstance(rows, (list, tuple)):
@@ -455,7 +461,7 @@ def _action_names(conn: Any, dest: str, path: str) -> list[str]:
                 "org.freedesktop.DBus.Properties",
                 "Get",
                 "(v)",
-                GLib.Variant("(ss)", (ATSPI_ACTION, "NActions")),
+                [ATSPI_ACTION, "NActions"],
             )
             or 0
         )
@@ -473,7 +479,7 @@ def _action_names(conn: Any, dest: str, path: str) -> list[str]:
                         ATSPI_ACTION,
                         "GetName",
                         "(s)",
-                        GLib.Variant("(i)", (index,)),
+                        [index],
                     )
                     or ""
                 )
@@ -485,8 +491,6 @@ def _action_names(conn: Any, dest: str, path: str) -> list[str]:
 
 def _do_action(conn: Any, dest: str, path: str, index: int) -> bool:
     try:
-        from ulauncher.gi import GLib
-
         result = _dbus_call(
             conn,
             dest,
@@ -494,7 +498,7 @@ def _do_action(conn: Any, dest: str, path: str, index: int) -> bool:
             ATSPI_ACTION,
             "DoAction",
             "(b)",
-            GLib.Variant("(i)", (index,)),
+            [index],
         )
     except Exception:
         logger.debug("AT-SPI DoAction failed", exc_info=True)
@@ -529,7 +533,7 @@ def _close_accessible(
     if not isinstance(children, (list, tuple)):
         return False
     for item in children[:12]:
-        if not isinstance(item, tuple) or len(item) < 2:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
             continue
         if _close_accessible(conn, str(item[0] or dest), str(item[1]), depth + 1, seen, budget):
             return True
@@ -561,7 +565,7 @@ def _list_atspi_windows() -> list[WindowInfo]:
         return []
     nodes: list[dict[str, Any]] = []
     for item in children:
-        if not isinstance(item, tuple) or len(item) < 2:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
             continue
         nodes.extend(_windows_for_application(conn, str(item[0]), str(item[1])))
         if len(nodes) >= 64:
@@ -579,7 +583,7 @@ def _windows_for_application(conn: Any, dest: str, path: str) -> list[dict[str, 
     pid = _unix_pid_for_name(conn, dest)
     nodes: list[dict[str, Any]] = []
     for item in children:
-        if not isinstance(item, tuple) or len(item) < 2:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
             continue
         node = _read_window_node(conn, str(item[0] or dest), str(item[1]))
         if node is not None:
@@ -595,8 +599,6 @@ def _unix_pid_for_name(conn: Any, dest: str) -> int:
     if not dest:
         return 0
     try:
-        from ulauncher.gi import GLib
-
         pid = _dbus_call(
             conn,
             "org.freedesktop.DBus",
@@ -604,7 +606,7 @@ def _unix_pid_for_name(conn: Any, dest: str) -> int:
             "org.freedesktop.DBus",
             "GetConnectionUnixProcessID",
             "(u)",
-            GLib.Variant("(s)", (dest,)),
+            [dest],
         )
     except Exception:
         logger.debug("AT-SPI unix pid lookup failed", exc_info=True)

@@ -3,13 +3,15 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 from typing import Any, Callable
 
-from ulauncher.gi import Gio, GioUnix, GLib
+from ulauncher.utils import scheduling
 
 logger = logging.getLogger(__name__)
 
 _MAX_SCALAR_REPR = 120
+_READ_CHUNK = 65536
 
 
 def _summarize_dict(a: dict[str, Any]) -> str:
@@ -32,7 +34,10 @@ def summarize_ipc_args(args: Any) -> str:
 
 class SocketMsgController:
     """
-    Takes a file descriptor from a socket pair and provides read and write methods for JSON messages.
+    Takes a file descriptor from a socket pair and provides read and write methods for
+    newline-delimited JSON messages. Reading is asynchronous via the process's main loop
+    (Qt in the app, MiniLoop in extension processes); writing is a plain blocking write,
+    matching the old Gio.DataOutputStream behavior.
     """
 
     file_descriptor: int
@@ -41,10 +46,9 @@ class SocketMsgController:
     def __init__(self, file_descriptor: int, on_close: Callable[[], None] | None = None) -> None:
         self.file_descriptor = file_descriptor
         self._on_close = on_close
-        unix_in_stream = GioUnix.InputStream.new(file_descriptor, True)
-        unix_out_stream = GioUnix.OutputStream.new(file_descriptor, False)
-        self._input_stream = Gio.DataInputStream.new(unix_in_stream)
-        self._output_stream = Gio.DataOutputStream.new(unix_out_stream)
+        self._read_buffer = b""
+        self._watch: scheduling.Context | None = None
+        self._closed = False
 
     def _trigger_close(self) -> None:
         """
@@ -59,11 +63,13 @@ class SocketMsgController:
         """
         Close the socket and cleanup resources.
         """
-        # separate suppress statements so that both will try to close even if one errors
-        with contextlib.suppress(GLib.Error):
-            self._input_stream.close(None)
-        with contextlib.suppress(GLib.Error):
-            self._output_stream.close(None)
+        if self._watch:
+            self._watch.cancel()
+            self._watch = None
+        if not self._closed:
+            self._closed = True
+            with contextlib.suppress(OSError):
+                os.close(self.file_descriptor)
         self._trigger_close()
 
     def send(self, data: Any) -> None:
@@ -76,10 +82,12 @@ class SocketMsgController:
             logger.warning("Data not JSON serializable %s", e)
             return
 
+        payload = (json_str + "\n").encode()
         try:
-            self._output_stream.put_string(json_str + "\n")
-            self._output_stream.flush()
-        except GLib.Error as e:
+            while payload:
+                written = os.write(self.file_descriptor, payload)
+                payload = payload[written:]
+        except OSError as e:
             logger.warning("Failed to send message, connection likely closed: %s", e)
             self._trigger_close()
 
@@ -93,26 +101,31 @@ class SocketMsgController:
         Invalid JSON messages are logged and skipped (should not happen if both sides use this class).
         Automatically continues reading until the connection is closed.
         """
+        self._watch = scheduling.watch_fd(self.file_descriptor, self._read_available, on_message)
 
-        def handle_read(input_stream: Gio.DataInputStream, result: Gio.AsyncResult) -> None:
+    def _read_available(self, on_message: Callable[[Any], None]) -> None:
+        try:
+            chunk = os.read(self.file_descriptor, _READ_CHUNK)
+        except BlockingIOError:
+            return
+        except OSError:
+            # I/O error - connection is broken
+            self._trigger_close()
+            return
+
+        if not chunk:
+            # Connection closed normally
+            self._trigger_close()
+            return
+
+        self._read_buffer += chunk
+        while b"\n" in self._read_buffer:
+            line, self._read_buffer = self._read_buffer.split(b"\n", 1)
+            if not line:
+                continue
             try:
-                message_str, _ = input_stream.read_line_finish_utf8(result)
-            except GLib.Error:
-                # I/O error - connection is broken
-                self._trigger_close()
-                return
-
-            if message_str is None:
-                # Connection closed normally
-                self._trigger_close()
-                return
-
-            try:
-                on_message(json.loads(message_str))
+                message = json.loads(line)
             except json.JSONDecodeError:
-                logger.warning("Invalid JSON received: %s", message_str)
-
-            # Continue reading next message
-            self.listen(on_message)
-
-        self._input_stream.read_line_async(GLib.PRIORITY_DEFAULT, None, handle_read)
+                logger.warning("Invalid JSON received: %s", line.decode(errors="replace"))
+                continue
+            on_message(message)

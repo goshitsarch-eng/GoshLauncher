@@ -169,7 +169,7 @@ class TestCLIHelp:
         assert "custom themes" not in man
         assert "Ctrl+Space" in man
         assert "Spotlight-goshos" in man
-        assert "Seventeen looks" in man
+        assert "Kirigami" in man
 
     def test_readme_describes_goshos_launcher(self) -> None:
         from pathlib import Path
@@ -179,8 +179,8 @@ class TestCLIHelp:
         assert "custom color themes" not in readme.lower()
         assert "Ctrl+Space" in readme
         assert "Spotlight-goshos" in readme
-        assert "Seventeen looks" in readme
-        assert "GTK 4" in readme
+        assert "Kirigami" in readme
+        assert "Qt 6" in readme
 
     def test_subcommand_help_does_not_repeat_top_level_command_groups(self, capsys: pytest.CaptureFixture[str]) -> None:
         with pytest.raises(SystemExit) as exc_info:

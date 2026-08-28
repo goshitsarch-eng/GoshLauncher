@@ -22,6 +22,7 @@ class Settings(JsonConf):
     # Leftover Ulauncher JSON. Goshos activates rows 1-9 with Alt when number hints are on.
     jump_keys: str = "1234567890abcdefghijklmnopqrstuvwxyz"
     keep_alive: bool = True
+    # Leftover from the GTK build; the Qt UI does not use layer-shell.
     layer_shell: bool = True
     # Leftover Ulauncher JSON. Empty-state length uses max_per_category like goshos.
     max_recent_apps: int = 6
@@ -30,7 +31,7 @@ class Settings(JsonConf):
     render_on_screen: str = "default-monitor"
     show_tray_icon: bool = True
     terminal_command: str = ""
-    # Leftover Ulauncher JSON. Popup colors come from look_id / gosh-looks.css, not this.
+    # Leftover Ulauncher JSON. Colors come from the Qt/Kirigami color scheme, not this.
     theme_name: str = "light"
     tray_icon_name: str = "ulauncher-indicator-symbolic"
     # Leftover Ulauncher JSON. Look CSS owns the popup shadow; this is not applied.
@@ -67,6 +68,8 @@ class Settings(JsonConf):
     show_web_search: bool = True
     enable_empty_suggestions: bool = True
     enable_app_actions: bool = True
+    # Qt UI color scheme: "system" follows the desktop, or force "light"/"dark"
+    color_scheme: str = "system"
 
     # Convert dash to underscore
     def __setitem__(self, key: str, value: Any) -> None:  # type: ignore[override]

@@ -42,11 +42,11 @@ class CLICommand(BaseDataClass):
 
 
 CLI_DESCRIPTION = (
-    "GoshLauncher is a GTK 4 + libadwaita launcher. Open with Ctrl+Space. "
+    "GoshLauncher is a Qt 6 + Kirigami launcher. Open with Ctrl+Space. "
     "Search follows Spotlight-goshos (URLs, paths, folders, bookmarks, apps, calculator, "
-    "units, color, clock, windows, system actions, GNOME Settings, recent files, then web). "
-    "Seventeen looks with chrome. Prefixes: = calc, @ web, # settings, $ windows, . recents, "
-    "! command (off by default)."
+    "units, color, clock, windows, system actions, Settings, recent files, then web). "
+    "Follows the system light/dark color scheme. Prefixes: = calc, @ web, # settings, "
+    "$ windows, . recents, ! command (off by default)."
 )
 
 

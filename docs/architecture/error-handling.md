@@ -7,8 +7,8 @@ annotations.
 
 ## Barriers
 
-A barrier is a place where control enters our code from the outside (the GLib main loop, a
-Gio async callback, a subprocess result, an IPC message). An exception that escapes through
+A barrier is a place where control enters our code from the outside (the event loop, an
+async callback, a subprocess result, an IPC message). An exception that escapes through
 a barrier is dumped to stderr by PyGObject, bypassing our logging, and can kill the source
 that dispatched it.
 
@@ -22,7 +22,7 @@ not in the callbacks:
 Code running under these dispatchers must not add its own catch-all. Raising to the barrier
 is the designed error path. Add a local try/except only to act on a specific expected error.
 
-GTK signal handlers are not centrally dispatched. PyGObject already contains their
+Qt signal handlers are not centrally dispatched. PySide6 already contains their
 exceptions (printed to stderr, the loop survives), so they are an accepted gap.
 
 ## Boundary error types

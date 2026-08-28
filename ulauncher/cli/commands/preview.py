@@ -10,7 +10,6 @@ from typing import IO, Callable
 from ulauncher import app_id, paths
 from ulauncher.cli import CLIArguments
 from ulauncher.data import Err
-from ulauncher.gi import Gio, GLib
 from ulauncher.init_helpers import use_color
 from ulauncher.internals import log_wire
 from ulauncher.modes.extensions import ext_exceptions, extension_finder
@@ -99,6 +98,9 @@ class PreviewLogTail:
     """
 
     POLL_INTERVAL_SEC = 0.1
+    # The app removing the log file is the normal end signal; this backstop notices a
+    # crashed or killed app that could not remove it.
+    APP_ALIVE_CHECK_EVERY = 10  # in poll intervals, i.e. once a second
 
     def __init__(self, on_end: Callable[[], None]) -> None:
         self._on_end = on_end
@@ -107,7 +109,7 @@ class PreviewLogTail:
         self._handler = logging.StreamHandler()
         self._handler.setFormatter(ColoredFormatter(color=use_color(self._handler.stream)))
         self._poller: scheduling.Context | None = None
-        self._app_watch: int | None = None
+        self._poll_count = 0
 
     @property
     def is_tailing(self) -> bool:
@@ -116,11 +118,12 @@ class PreviewLogTail:
     def start(self) -> None:
         Path(paths.PREVIEW_LOG_FILE).unlink(missing_ok=True)
         self._poller = scheduling.interval(self.POLL_INTERVAL_SEC, self._read)
-        self._app_watch = Gio.bus_watch_name(
-            Gio.BusType.SESSION, app_id, Gio.BusNameWatcherFlags.NONE, None, self._on_app_vanished
-        )
 
     def _read(self) -> None:
+        self._poll_count += 1
+        if self._poll_count % self.APP_ALIVE_CHECK_EVERY == 0 and not check_app_running(app_id):
+            self._on_app_vanished()
+            return
         if not self._file:
             try:
                 self._file = Path(paths.PREVIEW_LOG_FILE).open(encoding="utf-8")  # noqa: SIM115
@@ -141,20 +144,25 @@ class PreviewLogTail:
         if ended:
             self._end()
 
-    def _on_app_vanished(self, _connection: Gio.DBusConnection, _name: str) -> None:
+    def _on_app_vanished(self) -> None:
         # Removing the file is how the app signals the end, but a crashed or killed app can't.
         # Neither can one that died before creating it, leaving nothing to observe at all.
-        self._read()
+        self._drain()
         self._end()
+
+    def _drain(self) -> None:
+        if self._file:
+            self._partial += self._file.read()
+            for line in self._partial.splitlines():
+                if record := log_wire.parse(line):
+                    self._handler.handle(record)
+            self._partial = ""
 
     def _end(self) -> None:
         if not self._poller:
             return
         self._poller.cancel()
         self._poller = None
-        if self._app_watch is not None:
-            Gio.bus_unwatch_name(self._app_watch)
-            self._app_watch = None
         if self._file:
             self._file.close()
             self._file = None
@@ -187,7 +195,9 @@ def run(args: CLIArguments) -> int:
     ext_id: str = resolved_id
     logger.info("Extension ID: %s", ext_id)
 
-    loop = GLib.MainLoop()
+    from ulauncher.utils.eventloop import get_loop
+
+    loop = get_loop()
     log_tail = PreviewLogTail(on_end=loop.quit)
     exit_code = 0
 
@@ -237,10 +247,10 @@ def run(args: CLIArguments) -> int:
         loop.quit()
         return False
 
-    # The dependency install is callback-based and must finish before the app launches the extension,
-    # so the CLI drives it (and Ctrl+C) on its own GLib loop.
+    # The dependency install is callback-based and must finish before the app launches the
+    # extension, so the CLI drives it (and Ctrl+C) on its own event loop.
     for sig in (signal.SIGINT, signal.SIGTERM):
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, on_interrupt)
+        signal.signal(sig, lambda *_args: on_interrupt())
     scheduling.run_when_idle(begin)
     loop.run()
     return exit_code

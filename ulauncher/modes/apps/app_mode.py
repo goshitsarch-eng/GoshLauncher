@@ -4,7 +4,6 @@ import logging
 from typing import Callable, Iterator
 
 from ulauncher import app_id
-from ulauncher.gi import GioUnix
 from ulauncher.internals import effects
 from ulauncher.internals.query import Query
 from ulauncher.internals.result import Result
@@ -12,12 +11,13 @@ from ulauncher.modes.apps.app_rankings import AppRankings
 from ulauncher.modes.apps.app_result import ACTION_PREFIX, AppResult
 from ulauncher.modes.apps.launch_app import launch_app
 from ulauncher.modes.mode import Mode
+from ulauncher.utils.desktop_app import DesktopApp
 from ulauncher.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
-def _installed_app_result(app: GioUnix.DesktopAppInfo, settings: Settings) -> AppResult | None:
+def _installed_app_result(app: DesktopApp, settings: Settings) -> AppResult | None:
     executable = app.get_executable()
     if not executable or not app.get_display_name():
         return None
@@ -47,14 +47,27 @@ def invalidate_installed_apps() -> None:
 
 
 def _watch_installed_apps() -> None:
+    """Invalidate the snapshot when a desktop entry is installed or removed.
+
+    Uses QFileSystemWatcher on the applications dirs; skipped silently in
+    processes without a Qt event loop (the CLI), where the snapshot lives for
+    one command anyway.
+    """
     if _cache.monitor is not None:
         return
     try:
-        from ulauncher.gi import Gio
+        import sys
 
-        monitor = Gio.AppInfoMonitor.get()
-        _cache.handler = monitor.connect("changed", lambda *_args: invalidate_installed_apps())
-        _cache.monitor = monitor
+        qt_core = sys.modules.get("PySide6.QtCore")
+        if qt_core is None or qt_core.QCoreApplication.instance() is None:
+            return
+        import os
+
+        from ulauncher.utils.desktop_entry import _application_dirs
+
+        watcher = qt_core.QFileSystemWatcher([d for d in _application_dirs() if os.path.isdir(d)])
+        watcher.directoryChanged.connect(lambda *_args: invalidate_installed_apps())
+        _cache.monitor = watcher
     except (AttributeError, TypeError, RuntimeError, OSError):
         _cache.monitor = None
 
@@ -71,7 +84,7 @@ def installed_apps() -> list[AppResult]:
         settings = Settings.load()
         entries: list[AppResult] = []
         if settings.enable_application_mode:
-            for app in GioUnix.DesktopAppInfo.get_all():
+            for app in DesktopApp.get_all():
                 try:
                     result = _installed_app_result(app, settings)
                 except Exception:  # noqa: BLE001, S112

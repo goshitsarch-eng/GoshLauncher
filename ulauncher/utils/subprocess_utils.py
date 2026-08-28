@@ -2,44 +2,32 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import threading
 from typing import Callable
 
-from ulauncher.gi import Gio, GLib
+from ulauncher.utils import scheduling
 
 OnSuccess = Callable[[str], None]
-OnError = Callable[[Exception], None]  # receives a GLib.Error or subprocess.CalledProcessError for non-zero exits
+OnError = Callable[[Exception], None]  # receives an OSError or subprocess.CalledProcessError for non-zero exits
 
 
 def run_command(cmd: list[str], on_success: OnSuccess, on_error: OnError, *, cwd: str | None = None) -> None:
-    """Run a one-shot command via Gio.Subprocess, delivering its stdout to on_success or an error
-    to on_error."""
-    launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
-    if cwd:
-        launcher.set_cwd(cwd)
+    """Run a one-shot command without blocking the main loop, delivering its stdout to
+    on_success or an error to on_error (both called on the main loop thread)."""
 
-    try:
-        proc = launcher.spawnv(cmd)
-    except GLib.Error as error:
-        on_error(error)
-        return
-
-    def on_done(subprocess_: Gio.Subprocess, result: Gio.AsyncResult) -> None:
+    def _worker() -> None:
         try:
-            _, stdout, stderr = subprocess_.communicate_utf8_finish(result)
-        except GLib.Error as error:
-            on_error(error)
+            # A killed process is reported as a negative returncode by subprocess already.
+            proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            scheduling.run_when_idle(on_error, error)
             return
-        if not subprocess_.get_successful():
-            # if killed by a signal: report it as a negative status (subprocess convention)
-            exit_status = subprocess_.get_exit_status() if subprocess_.get_if_exited() else -subprocess_.get_term_sig()
-            on_error(subprocess.CalledProcessError(exit_status, cmd, output=stdout, stderr=stderr))
-            return
-        on_success(stdout)
+        scheduling.run_when_idle(on_success, proc.stdout)
 
-    proc.communicate_utf8_async(None, None, on_done)
+    threading.Thread(target=_worker, daemon=True, name="run_command").start()
 
 
-# Run Python/urllib.request in a Gio.Subprocess to avoid needing a dependency like libsoup, gvfsd-http, curl or wget.
+# Run Python/urllib.request in a subprocess to avoid needing a dependency like curl or wget.
 _DOWNLOAD_SCRIPT = (
     "import sys, urllib.request, shutil; "
     "shutil.copyfileobj(urllib.request.urlopen(sys.argv[1], timeout=30), open(sys.argv[2], 'wb'))"

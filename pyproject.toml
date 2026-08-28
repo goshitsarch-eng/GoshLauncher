@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ulauncher"
-description = "GTK 4 + libadwaita launcher matching Spotlight-goshos"
+description = "Qt 6 + Kirigami launcher matching Spotlight-goshos"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [
@@ -20,8 +20,8 @@ urls.Homepage = "https://github.com/goshitsarch-eng/GoshLauncher"
 urls.Documentation = "https://docs.ulauncher.io/"
 urls.Repository = "https://github.com/goshitsarch-eng/GoshLauncher.git"
 urls.Issues = "https://github.com/goshitsarch-eng/GoshLauncher/issues"
-keywords = [ "linux", "desktop", "application", "launcher", "gtk" ]
-dependencies = [ "PyGObject", "pycairo", "python-xlib" ]
+keywords = [ "linux", "desktop", "application", "launcher", "qt", "kde", "kirigami" ]
+dependencies = [ "PySide6", "python-xlib" ]
 dynamic = ["version", "license"]
 
 [tool.setuptools.dynamic]
@@ -31,7 +31,7 @@ version = {attr = "ulauncher._version.version"}
 python-interpreter-path = ".venv/bin/python"
 python-platform = "linux"
 python-version = "3.8"
-# tests/ is GTK mocks and fixtures, not the shipped type surface.
+# tests/ is mocks and fixtures, not the shipped type surface.
 project-includes = ["ulauncher"]
 min-severity = "error"
 preset = "strict"
@@ -40,12 +40,11 @@ preset = "strict"
 bad-param-name-override = false
 missing-override-decorator = false
 implicit-any-lambda = false
-# pygobject-stubs 2.12 with preset=strict: empty {} / [] and GLib.GError's stub base class.
+# Empty {} / [] literals and dynamic Qt attribute surfaces.
 implicit-any-type-argument = false
 implicit-any-empty-container = false
 implicit-any-attribute = false
 invalid-inheritance = false
-# GTK getters are already bool/int/str; wrapping them trips this on Ubuntu 22.04 stubs.
 unnecessary-type-conversion = false
 redundant-cast = false
 
@@ -173,9 +172,9 @@ select = [
 banned-module-level-imports = ["typing_extensions"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"asyncio" = {msg = "To handle async operations, use Gio or Glib async methods that run in the background. See ulauncher.utils.subprocess_utils."}
-"gi.repository" = {msg = "Import GI modules from ulauncher.gi, not gi.repository directly."}
-"ulauncher.ui" = {msg = "Import ulauncher.ui only from ulauncher/cli/commands/start.py - it pulls in GTK and must not leak into extension or CLI runtime."}
+"asyncio" = {msg = "To handle async operations, use the scheduling module's callbacks. See ulauncher.utils.subprocess_utils."}
+"gi.repository" = {msg = "GObject introspection was removed in the Qt rewrite. Use PySide6 / ulauncher.utils.qdbus."}
+"ulauncher.ui" = {msg = "Import ulauncher.ui only from ulauncher/cli/commands - it pulls in Qt and must not leak into extension runtime."}
 "ulauncher.api" = {msg = "ulauncher.api is the extension process API. Importing it into the app runs its module-level setup there. Shared types belong in ulauncher.internals."}
 "functools.lru_cache" = {msg = "Use ulauncher.utils.lru_cache instead to preserve parameter types."}
 "functools.cache" = {msg = "Use ulauncher.utils.lru_cache instead to preserve parameter types."}
@@ -190,9 +189,9 @@ banned-module-level-imports = ["typing_extensions"]
   "S108",       # /tmp paths in tests are opaque strings for assertions, not files we write
   "T201",       # Allow print statements
 ]
-"ulauncher/gi.py" = ["TID251"]           # This IS the canonical gi import module
 "ulauncher/utils/lru_cache.py" = ["TID251"]  # This IS the lru_cache wrapper
-"tests/ui/**/*.py" = ["TID251"]          # UI tests need to import from ulauncher.ui
+"ulauncher/utils/subprocess_utils.py" = ["TID251"]  # Worker thread delivers callbacks to the loop
+"tests/utils/loop_helpers.py" = ["TID251"]
 "tests/api/**/*.py" = ["TID251"]         # API tests need to import from ulauncher.api
 "ulauncher/modes/launcher/**" = [        # Recursive-descent parsers ported from spotlight-goshos
   "ANN001", "BLE001", "DTZ005", "E501", "E741",
@@ -200,16 +199,18 @@ banned-module-level-imports = ["typing_extensions"]
   "PLW2901", "RET504", "RUF001", "RUF002", "RUF003", "RUF046",
   "S314", "SIM102", "SIM103", "SIM108", "TRY300", "UP045",
 ]
-"ulauncher/ui/gtk4.py" = ["PLR0912", "PLR0915", "SLF001", "E731", "PLW0108"]
+"ulauncher/ui/**" = ["TID251", "N802", "N815", "ARG002", "PLR0911"]  # Qt slot/signal naming and fixed override signatures
+"ulauncher/cli/commands/**" = ["TID251"]         # The CLI entry points are allowed to pull in the UI
+"ulauncher/utils/scheduling.py" = ["TID251", "SLF001"]  # Backend closures drive Context internals
+"ulauncher/utils/eventloop.py" = ["TID251", "SIM105"]
+"ulauncher/utils/qdbus.py" = ["PLR0911"]
+"ulauncher/modes/apps/launch_app.py" = ["PLR0911", "PLR0912"]  # The launch decision tree
+"ulauncher/ui/results_model.py" = ["PLR0911"]
+"tests/utils/test_scheduling.py" = ["TID251"]
 
 [tool.pytest.ini_options]
 log_cli = true
-filterwarnings = [
-  # PyGObject uses deprecated asyncio APIs (AbstractEventLoopPolicy, get_event_loop_policy)
-  # slated for removal in Python 3.16. Not fixable from our side; filter until upstream fixes it.
-  "ignore::DeprecationWarning:gi",
-  "ignore:Gdk.pixbuf_get_from_texture is deprecated:DeprecationWarning",
-]
+filterwarnings = []
 
 [tool.rumdl]
 respect-gitignore = true

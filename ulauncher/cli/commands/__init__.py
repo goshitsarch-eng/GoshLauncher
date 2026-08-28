@@ -16,9 +16,9 @@ T = TypeVar("T")
 
 def run_blocking(start: Callable[[Callable[[T], None], OnError], None]) -> T:
     """Run a main loop until start's operation reports back, then return its value or raise its error."""
-    from ulauncher.gi import GLib
+    from ulauncher.utils.eventloop import get_loop
 
-    loop = GLib.MainLoop()
+    loop = get_loop()
     result: list[T] = []
     error: Exception | None = None
     completed = False
@@ -40,7 +40,7 @@ def run_blocking(start: Callable[[Callable[[T], None], OnError], None]) -> T:
         loop.quit()
 
     start(on_success, on_error)
-    # start() can report back before the loop runs, and GLib does not treat that quit() as
+    # start() can report back before the loop runs, and that quit() would not be
     # pending, so entering the loop afterwards would hang.
     if not completed:
         loop.run()

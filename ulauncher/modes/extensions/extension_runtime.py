@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import signal
 import socket
+import subprocess
 from collections import deque
 from time import time
 from typing import Callable, cast
 from weakref import WeakSet
 
-from ulauncher.gi import Gio, GLib
 from ulauncher.internals import ipc, log_wire
 from ulauncher.modes.extensions.extension_record import ExtensionExitCause
 from ulauncher.utils import scheduling
@@ -16,22 +18,22 @@ from ulauncher.utils.socket_msg_controller import SocketMsgController
 
 DEBUGPY_HOST = "127.0.0.1"
 DEBUGPY_PORT = 5678
+_EXIT_POLL_SEC = 0.1
 
 ExitHandlerCallback = Callable[[ExtensionExitCause, str], None]
 MessageHandlerCallback = Callable[[ipc.ExtensionMessage], None]
 logger = logging.getLogger(__name__)
 
 
-aborted_subprocesses: WeakSet[Gio.Subprocess] = WeakSet()
+aborted_subprocesses: WeakSet[subprocess.Popen] = WeakSet()
 
 
 class ExtensionRuntime:
     _ext_id: str
-    _subprocess: Gio.Subprocess
+    _subprocess: subprocess.Popen
     _start_time: float
     _msg_controller: SocketMsgController
     _parent_socket: socket.socket | None = None
-    _output_streams: dict[str, Gio.DataInputStream]
     _recent_errors: deque[str]
     _exit_handler: ExitHandlerCallback | None
     _message_handler: MessageHandlerCallback | None
@@ -49,60 +51,75 @@ class ExtensionRuntime:
         self._message_handler = message_handler
         self._recent_errors = deque(maxlen=1)
         self._start_time = time()
+        self._exit_handled = False
+        self._exit_poll: scheduling.Context | None = None
+        self._output_watches: dict[str, scheduling.Context] = {}
+        self._output_buffers: dict[str, bytes] = {"stdout": b"", "stderr": b""}
+        self._streams_open = 0
 
-        extension_env: dict[str, str] = env.copy() if env else {}
-        launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
-
-        for env_name, env_value in extension_env.items():
-            launcher.setenv(env_name, env_value, True)
-        launcher.setenv("ULAUNCHER_EXTENSION_ID", ext_id, True)
+        extension_env = dict(os.environ)
+        if env:
+            extension_env.update(env)
+        extension_env["ULAUNCHER_EXTENSION_ID"] = ext_id
         # Python block-buffers stdout when it isn't a terminal, holding back `print` output
-        launcher.setenv("PYTHONUNBUFFERED", "1", True)
+        extension_env["PYTHONUNBUFFERED"] = "1"
 
         def socket_cleanup() -> None:
             if self._parent_socket:
-                self._parent_socket.close()
+                # The SocketMsgController owns (and already closed) the fd; detach so the
+                # socket object doesn't close a possibly-reused fd number again.
+                with contextlib.suppress(OSError):
+                    self._parent_socket.detach()
                 self._parent_socket = None
                 logger.info("Extension %s connection closed", self._ext_id)
+            self._schedule_exit_check()
 
+        child_fd = -1
         try:
-            # Create both parent and child sockets. The child fd is detached and handed over to the launcher.
-            # The parent needs to be stored as a property to avoid getting garbage collected prematurely.
+            # Create both parent and child sockets. The child fd number survives exec thanks
+            # to pass_fds; SOCKETPAIR_FD tells the extension process which fd it is.
             self._parent_socket, child_socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
             child_fd = child_socket.detach()
+            extension_env["SOCKETPAIR_FD"] = str(child_fd)
 
-            launcher.setenv("SOCKETPAIR_FD", str(child_fd), True)
-            launcher.take_fd(child_fd, child_fd)
-
-            self._subprocess = launcher.spawnv(cmd)
+            self._subprocess = subprocess.Popen(
+                cmd,
+                env=extension_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                pass_fds=(child_fd,),
+                close_fds=True,
+            )
 
             # Socket handler for parent process
             self._msg_controller = SocketMsgController(self._parent_socket.fileno(), socket_cleanup)
-        except (OSError, GLib.Error, TypeError):
-            socket_cleanup()
+        except (OSError, TypeError):
+            if self._parent_socket:
+                with contextlib.suppress(OSError):
+                    self._parent_socket.close()
+                self._parent_socket = None
             raise
+        finally:
+            if child_fd >= 0:
+                with contextlib.suppress(OSError):
+                    os.close(child_fd)
 
-        out_pipe = self._subprocess.get_stdout_pipe()
-        err_pipe = self._subprocess.get_stderr_pipe()
-        if not out_pipe or not err_pipe:
-            err_msg = "Subprocess must be created with Gio.SubprocessFlags.STDOUT_PIPE and STDERR_PIPE"
+        logger.debug("Launched %s using subprocess", self._ext_id)
+        if self._subprocess.stdout is None or self._subprocess.stderr is None:
+            err_msg = "Subprocess must be created with stdout/stderr pipes"
             raise AssertionError(err_msg)
-        self._output_streams = {
-            "stdout": Gio.DataInputStream.new(out_pipe),
-            "stderr": Gio.DataInputStream.new(err_pipe),
-        }
-
-        logger.debug("Launched %s using Gio.Subprocess", self._ext_id)
-        self._subprocess.wait_async(None, self.handle_exit)
-        for name in self._output_streams:
-            self.read_output_line(name)
+        self._pipes = {"stdout": self._subprocess.stdout, "stderr": self._subprocess.stderr}
+        for name, pipe in self._pipes.items():
+            os.set_blocking(pipe.fileno(), False)
+            self._streams_open += 1
+            self._output_watches[name] = scheduling.watch_fd(pipe.fileno(), self._read_output, name)
         self._msg_controller.listen(self.handle_message)
 
     def stop(self) -> None:
         """
         Terminates extension
         """
-        if not self._subprocess.get_identifier():
+        if self._subprocess.poll() is not None:
             logger.info("Cannot stop '%s'. It has already been terminated, or was never started", self._ext_id)
             return
 
@@ -114,16 +131,10 @@ class ExtensionRuntime:
         scheduling.timer(0.5, self._kill)
 
     def _kill(self) -> None:
-        if self._subprocess.get_identifier():
+        if self._subprocess.poll() is None:
             logger.info("Sending SIGKILL to extension %s", self._ext_id)
-            # The process may exit between this check and the signal; Gio delivers it race-free.
-            self._subprocess.send_signal(signal.SIGKILL)
-
-    def read_output_line(self, stream_name: str) -> None:
-        stream = self._output_streams[stream_name]
-        stream.read_line_async(
-            GLib.PRIORITY_DEFAULT, None, lambda source, result: self.handle_output(source, result, stream_name)
-        )
+            with contextlib.suppress(ProcessLookupError):
+                self._subprocess.send_signal(signal.SIGKILL)
 
     def send_message(self, message: ipc.Event, request_id: int | None = None) -> None:
         self._msg_controller.send([message, request_id])
@@ -138,32 +149,47 @@ class ExtensionRuntime:
         if self._message_handler:
             self._message_handler(cast("ipc.ExtensionMessage", message))
 
-    def handle_output(self, stream: Gio.DataInputStream, result: Gio.AsyncResult, stream_name: str) -> None:
+    def _read_output(self, stream_name: str) -> None:
+        pipe = self._pipes[stream_name]
         try:
-            output, _ = stream.read_line_finish_utf8(result)
-        except GLib.Error as error:
-            # A decode error only fails its own line, so keep reading. Any other error means the
-            # stream is broken, and re-reading it would fail the same way.
-            if error.matches(GLib.convert_error_quark(), GLib.ConvertError.ILLEGAL_SEQUENCE):
-                logger.warning("Skipping undecodable %s line for %s", stream_name, self._ext_id)
-                self.read_output_line(stream_name)
-                return
+            chunk = os.read(pipe.fileno(), 65536)
+        except BlockingIOError:
+            return
+        except OSError:
             logger.exception("Failed to read %s line for %s", stream_name, self._ext_id)
+            self._end_stream(stream_name)
             return
 
-        # Only None ends the stream. A blank line reads as "" and must keep the loop going, but
-        # isn't emitted - _recent_errors holds one line, which a blank would evict.
-        if output is None:
+        if not chunk:
+            # EOF: flush any unterminated final line, then track stream end
+            remainder = self._output_buffers[stream_name]
+            self._output_buffers[stream_name] = b""
+            if remainder:
+                self._emit_line(remainder, stream_name)
+            self._end_stream(stream_name)
             return
 
-        if output:
-            message = self.emit_output(output, stream_name)
-            if message and stream_name == "stderr":
-                self._recent_errors.append(message)
-        self.read_output_line(stream_name)
+        self._output_buffers[stream_name] += chunk
+        while b"\n" in self._output_buffers[stream_name]:
+            line, self._output_buffers[stream_name] = self._output_buffers[stream_name].split(b"\n", 1)
+            if line:
+                self._emit_line(line, stream_name)
+
+    def _emit_line(self, line: bytes, stream_name: str) -> None:
+        message = self.emit_output(line.decode("utf-8", errors="replace"), stream_name)
+        if message and stream_name == "stderr":
+            self._recent_errors.append(message)
+
+    def _end_stream(self, stream_name: str) -> None:
+        watch = self._output_watches.pop(stream_name, None)
+        if watch:
+            watch.cancel()
+        self._streams_open = max(self._streams_open - 1, 0)
+        if self._streams_open == 0:
+            self._schedule_exit_check()
 
     def emit_output(self, output: str, stream_name: str) -> str:
-        """Re-emit what the extension wrote through Ulauncher's handlers. Returns the message."""
+        """Re-emit what the extension wrote through the app's handlers. Returns the message."""
         record = log_wire.parse(output)
         if record:
             # Sub-loggers of the extension's own logger are already namespaced
@@ -176,7 +202,25 @@ class ExtensionRuntime:
         logging.getLogger(record.name).handle(record)
         return record.getMessage()
 
-    def handle_exit(self, _subprocess: Gio.Subprocess, _result: Gio.AsyncResult) -> None:
+    def _schedule_exit_check(self) -> None:
+        """Wait (without blocking) for the process to actually exit, then report it once."""
+        if self._exit_handled or self._exit_poll is not None:
+            return
+        self._exit_poll = scheduling.interval(_EXIT_POLL_SEC, self._poll_exit)
+        self._poll_exit()
+
+    def _poll_exit(self) -> None:
+        if self._exit_handled:
+            return
+        if self._subprocess.poll() is None:
+            return
+        if self._exit_poll is not None:
+            self._exit_poll.cancel()
+            self._exit_poll = None
+        self._exit_handled = True
+        self.handle_exit()
+
+    def handle_exit(self) -> None:
         self._msg_controller.close()
 
         if self._subprocess in aborted_subprocesses:
@@ -186,7 +230,7 @@ class ExtensionRuntime:
 
         elif self._exit_handler:
             uptime_seconds = time() - self._start_time
-            exit_status = self._subprocess.get_exit_status()
+            exit_status = self._subprocess.returncode
             error_msg = "\n".join(self._recent_errors)
             if "ModuleNotFoundError" in error_msg:
                 package_name = error_msg.split("'")[1].split(".")[0]

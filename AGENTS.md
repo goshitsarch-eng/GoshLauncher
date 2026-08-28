@@ -4,10 +4,10 @@ Critical Ulauncher-specific patterns and constraints.
 
 ## Core Constraints
 
-- **GTK main thread**: All GTK operations must run in the main thread. Use `scheduling.run_when_idle` to schedule work from other contexts.
-- **Callback-based async**: Use GLib callbacks, not Python async/await. Use `scheduling.timer` for delayed execution or `scheduling.interval` if they need to repeat.
+- **Qt main thread**: All Qt/QML operations must run in the main thread. Use `scheduling.run_when_idle` to schedule work from other contexts (it is thread-safe).
+- **Callback-based async**: Use `scheduling` callbacks, not Python async/await. Use `scheduling.timer` for delayed execution or `scheduling.interval` if they need to repeat. The backend is the Qt event loop in the app and a small selectors loop (`utils/eventloop.py`) in extension/CLI processes.
 - **Lazy module loading**: Defer imports not needed for the initial window to keep startup fast.
-- **Exception handling**: Errors are caught at barriers (the central dispatchers where GLib enters our code) and translated at subsystem boundaries (public functions raise only their own error family or `OSError`). Code in between raises freely and must not catch-and-log "just in case". See [docs/architecture/error-handling.md](docs/architecture/error-handling.md) for the full policy. A bare `except:` stays banned: it also swallows `KeyboardInterrupt` and `SystemExit`, which `Exception` leaves alone.
+- **Exception handling**: Errors are caught at barriers (the central dispatchers where the event loop enters our code) and translated at subsystem boundaries (public functions raise only their own error family or `OSError`). Code in between raises freely and must not catch-and-log "just in case". See [docs/architecture/error-handling.md](docs/architecture/error-handling.md) for the full policy. A bare `except:` stays banned: it also swallows `KeyboardInterrupt` and `SystemExit`, which `Exception` leaves alone.
 - **Dict access**: Index directly (`d["key"]`) when the key is guaranteed by a known type or invariant. It reads clearer and enables type narrowing. Use `d.get()` when a missing key is a legitimate, expected case with a sensible default.
 - **Atomic writes**: A killed process must not lose user data or leave the app broken. Persist JSON with `json_save` (or `JsonConf`/`JsonKeyValueConf`) rather than `Path.write_text` - it renames a temp file over the target. `extension_registry._swap_dir` does the same for directories. Exempt: logs, throwaway temp files, and staging writes that end in a rename.
 
@@ -42,7 +42,7 @@ ulauncher/
 ├── api/          # Extension API (separate process)
 ├── data/         # Core data classes (BaseDataClass, JsonConf, JsonKeyValueConf)
 ├── modes/        # Query handlers (apps, files, extensions, etc.)
-├── ui/           # GTK components
+├── ui/           # Qt/QML Kirigami UI (windows in ui/qml/)
 └── utils/        # Shared utilities
 ```
 

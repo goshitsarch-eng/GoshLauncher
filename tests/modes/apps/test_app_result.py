@@ -6,8 +6,8 @@ from typing import Any
 import pytest
 from pytest_mock import MockerFixture
 
-from ulauncher.gi import GioUnix
 from ulauncher.modes.apps.app_result import AppResult
+from ulauncher.utils.desktop_app import DesktopApp
 
 # Note: These mock apps actually need real values for Exec or Icon, or they won't load,
 # and they need to load from actual files or get_id() and get_filename() will return None
@@ -17,10 +17,10 @@ ENTRIES_DIR = Path(__file__).parent.joinpath("mock_desktop_entries").resolve()
 class TestAppResult:
     @pytest.fixture(autouse=True)
     def patch_desktop_app_info_new(self, mocker: MockerFixture) -> Any:
-        def mkappinfo(app_id: str) -> GioUnix.DesktopAppInfo | None:
-            return GioUnix.DesktopAppInfo.new_from_filename(f"{ENTRIES_DIR}/{app_id}")
+        def mkappinfo(app_id: str) -> DesktopApp | None:
+            return DesktopApp.new_from_filename(f"{ENTRIES_DIR}/{app_id}")
 
-        return mocker.patch("ulauncher.modes.apps.app_result.GioUnix.DesktopAppInfo.new", new=mkappinfo)
+        return mocker.patch("ulauncher.modes.apps.app_result.DesktopApp.new", new=mkappinfo)
 
     @pytest.fixture
     def app1(self) -> AppResult | None:
@@ -46,7 +46,7 @@ class TestAppResult:
 
     def test_from_id_swallows_invalid_desktop_encoding(self, mocker: MockerFixture) -> None:
         mocker.patch(
-            "ulauncher.modes.apps.app_result.GioUnix.DesktopAppInfo.new",
+            "ulauncher.modes.apps.app_result.DesktopApp.new",
             side_effect=RuntimeError("invalid desktop encoding"),
         )
         assert AppResult.from_id("broken.desktop") is None

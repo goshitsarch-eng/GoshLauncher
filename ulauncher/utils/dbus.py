@@ -1,3 +1,11 @@
+"""Session-bus helpers built on QtDBus.
+
+The app process registers the ``io.ulauncher.Ulauncher`` service and exposes a
+``TriggerEvent`` method (see ``ulauncher.ui.dbus_service``); short-lived CLI
+processes use these helpers to check whether the app runs and to deliver
+EventBus events into it.
+"""
+
 from __future__ import annotations
 
 import json
@@ -5,79 +13,56 @@ import logging
 from typing import Any
 
 import ulauncher
-from ulauncher.gi import Gio, GLib
-from ulauncher.utils.lru_cache import lru_cache
 
 logger = logging.getLogger(__name__)
 
 
-def dbus_query_freedesktop(
-    bus: Gio.DBusConnection,
-    method_name: str,
-    parameters: GLib.Variant | None = None,
-    response_type: GLib.VariantType | None = None,
-    flags: Gio.DBusCallFlags | None = None,
-    timeout_msec: int | None = None,
-    cancellable: Gio.Cancellable | None = None,
-) -> GLib.Variant:
-    """Helper function to query the standard D-Bus interface org.freedesktop.DBus."""
-    return bus.call_sync(
-        bus_name="org.freedesktop.DBus",
-        object_path="/org/freedesktop/DBus",
-        interface_name="org.freedesktop.DBus",
-        method_name=method_name,
-        parameters=parameters,
-        reply_type=response_type,
-        flags=flags or Gio.DBusCallFlags.NONE,
-        timeout_msec=timeout_msec or -1,
-        cancellable=cancellable,
-    )
+def _session_bus() -> Any:
+    """The QtDBus session bus.
+
+    Deliberately does NOT create a QCoreApplication: synchronous calls work without
+    one, and creating a QCoreApplication here would block the real QApplication from
+    being constructed later in the app process (v5_killer runs before it exists).
+    """
+    from PySide6.QtDBus import QDBusConnection
+
+    return QDBusConnection.sessionBus()
 
 
-def check_app_running(app_id: str, bus: Gio.DBusConnection | None = None) -> bool:
+def check_app_running(app_id: str) -> bool:
     """Check if app is running by checking if the D-Bus service name is owned."""
-    params = GLib.Variant("(s)", (app_id,))
-    response_type = GLib.VariantType("(b)")
-    bus = bus or Gio.bus_get_sync(Gio.BusType.SESSION)
-    (is_running,) = dbus_query_freedesktop(bus, "NameHasOwner", params, response_type).unpack()
-    return bool(is_running)
+    bus = _session_bus()
+    if not bus.isConnected():
+        return False
+    reply = bus.interface().isServiceRegistered(app_id)
+    return bool(reply.isValid() and reply.value())
 
 
 def get_app_pid(app_id: str) -> int | None:
     """Get the PID of a D-Bus app"""
-    bus = Gio.bus_get_sync(Gio.BusType.SESSION)
-
-    if not check_app_running(app_id, bus):
+    bus = _session_bus()
+    if not bus.isConnected() or not check_app_running(app_id):
         return None
-
-    get_owner_params = GLib.Variant("(s)", (app_id,))
-    get_owner_response_type = GLib.VariantType("(s)")
-    (owner,) = dbus_query_freedesktop(bus, "GetNameOwner", get_owner_params, get_owner_response_type).unpack()
-
-    get_pid_params = GLib.Variant("(s)", (owner,))
-    get_pid_response_type = GLib.VariantType("(u)")
-    (pid,) = dbus_query_freedesktop(bus, "GetConnectionUnixProcessID", get_pid_params, get_pid_response_type).unpack()
-    return int(pid)
-
-
-@lru_cache(maxsize=1)
-def get_ulauncher_dbus_action_group(bus: Gio.DBusConnection) -> Gio.DBusActionGroup:
-    return Gio.DBusActionGroup.get(bus, ulauncher.app_id, ulauncher.dbus_path)
+    reply = bus.interface().servicePid(app_id)
+    if not reply.isValid():
+        return None
+    return int(reply.value())
 
 
 def dbus_trigger_event(name: str, *args: Any) -> None:
-    """Sends a D-Bus message to the Ulauncher App, which is delegated to the EventBus listener matching the name."""
-    bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+    """Sends a D-Bus message to the app, which is delegated to the EventBus listener matching the name."""
+    from PySide6.QtDBus import QDBusMessage
 
-    if not check_app_running(ulauncher.app_id, bus):
-        logger.debug("Ulauncher app is not running, skipping D-Bus trigger event: %s", name)
+    bus = _session_bus()
+    if not check_app_running(ulauncher.app_id):
+        logger.debug("App is not running, skipping D-Bus trigger event: %s", name)
         return
 
     json_message = json.dumps({"name": name, "args": list(args)})
-    get_ulauncher_dbus_action_group(bus).activate_action("trigger-event", GLib.Variant.new_string(json_message))
-    # activate_action only queues the message; flush it so it reaches the bus before the short-lived
-    # CLI process exits and drops the still-pending write.
-    try:
-        bus.flush_sync(None)
-    except GLib.Error as e:
-        logger.warning("DBus flush failed: %s", e)
+    # Empty interface name matches the method on whatever interface the app exported it under.
+    message = QDBusMessage.createMethodCall(ulauncher.app_id, ulauncher.dbus_path, "", "TriggerEvent")
+    message.setArguments([json_message])
+    # Synchronous call so the message reaches the bus before a short-lived CLI process exits.
+    reply = bus.call(message)
+    if reply.type() == QDBusMessage.MessageType.ErrorMessage:
+        logger.warning("DBus call failed: %s", reply.errorMessage())

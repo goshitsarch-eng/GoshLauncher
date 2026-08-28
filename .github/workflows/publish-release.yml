@@ -9,9 +9,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - name: Install GTK 4 and packaging tools
+      - name: Install Qt 6 runtime and packaging tools
         run: |
-          sudo bash scripts/ci-install-gtk4.sh
+          sudo bash scripts/ci-install-qt6.sh
           sudo apt-get install -y --no-install-recommends \
             debhelper dh-python python3-all python3-setuptools \
             devscripts dput gnupg help2man
