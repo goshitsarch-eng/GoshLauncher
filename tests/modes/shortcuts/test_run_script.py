@@ -5,17 +5,17 @@ import textwrap
 from pathlib import Path
 from unittest.mock import patch
 
-from ulauncher.gi import GLib
 from ulauncher.modes.shortcuts.run_script import run_script
+from ulauncher.utils.eventloop import get_loop
 
 
-def _drive_run_script(script: str, arg: str, timeout_ms: int = 10000) -> list[str]:
-    """Run run_script under a private GLib main loop, returning the paths it cleaned up.
+def _drive_run_script(script: str, arg: str, timeout_sec: float = 10.0) -> list[str]:
+    """Run run_script under the event loop, returning the paths it cleaned up.
 
     run_script is fire-and-forget, so we hook its final action (deleting the temp file) to know
     when the subprocess has finished and quit the loop.
     """
-    loop = GLib.MainLoop()
+    loop = get_loop()
     removed: list[str] = []
     real_remove = os.remove  # captured before patching; the patch replaces os.remove globally
 
@@ -24,17 +24,13 @@ def _drive_run_script(script: str, arg: str, timeout_ms: int = 10000) -> list[st
         real_remove(path)
         loop.quit()
 
-    def on_timeout() -> bool:
-        loop.quit()
-        return False
-
     with patch("ulauncher.modes.shortcuts.run_script.os.remove", side_effect=fake_remove):
-        source_id = GLib.timeout_add(timeout_ms, on_timeout)
+        timeout_handle = loop.call_later(timeout_sec, loop.quit)
         run_script(script, arg)
         loop.run()
         timed_out = not removed
         if not timed_out:
-            GLib.source_remove(source_id)
+            timeout_handle.cancel()
         assert not timed_out, "run_script did not finish before timeout"
 
     return removed

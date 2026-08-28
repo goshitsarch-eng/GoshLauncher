@@ -2,13 +2,12 @@
 Type=Application
 Version=1.5
 Name=GoshLauncher
-Comment=GTK 4 launcher with Spotlight-goshos search and looks
+Comment=Qt 6 + Kirigami launcher with Spotlight-goshos search
 Icon=ulauncher
 GenericName=Launcher
-Categories=GNOME;GTK;Utility;
-DBusActivatable=true
+Categories=Qt;KDE;Utility;
 Terminal=false
 TryExec=ulauncher
-Exec=gapplication launch io.ulauncher.Ulauncher
+Exec=ulauncher show
+StartupWMClass=ulauncher
 SingleMainWindow=true
-X-GNOME-UsesNotifications=true

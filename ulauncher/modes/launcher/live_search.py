@@ -51,7 +51,7 @@ class LiveSearchWatcher:
         self._apps_handler = 0
         self._fingerprint: tuple[Any, ...] = ()
         self._bus: Any = None
-        self._windows_changed_ids: list[int] = []
+        self._windows_changed_ids: list[Any] = []
         self._x11: Any = None
         self._ext_ws: Any = None
         self._ext_list: Any = None
@@ -78,9 +78,9 @@ class LiveSearchWatcher:
         if self._timer:
             self._timer.cancel()
             self._timer = None
-        if self._apps is not None and self._apps_handler:
+        if self._apps is not None:
             with contextlib.suppress(TypeError, RuntimeError):
-                self._apps.disconnect(self._apps_handler)
+                self._apps.directoryChanged.disconnect()
         self._unlisten_shell_windows()
         self._unlisten_host_signals()
         self._apps = None
@@ -132,53 +132,48 @@ class LiveSearchWatcher:
         return windows_for_live_track(list_fn)
 
     def _listen_apps(self) -> None:
+        # App installs/removals: watch the applications dirs directly.
         try:
-            from ulauncher.gi import Gio
+            import os
+            import sys
 
-            monitor = Gio.AppInfoMonitor.get()
+            qt_core = sys.modules.get("PySide6.QtCore")
+            if qt_core is None or qt_core.QCoreApplication.instance() is None:
+                return
+            from ulauncher.utils.desktop_entry import _application_dirs
+
+            watcher = qt_core.QFileSystemWatcher([d for d in _application_dirs() if os.path.isdir(d)])
+            watcher.directoryChanged.connect(lambda *_args: self._notify())
         except (AttributeError, TypeError, RuntimeError, OSError):
             return
-        self._apps = monitor
-        try:
-            self._apps_handler = monitor.connect("changed", lambda *_args: self._notify())
-        except (TypeError, RuntimeError):
-            self._apps = None
-            self._apps_handler = 0
+        self._apps = watcher
 
     def _listen_shell_windows(self) -> None:
-        # goshos uses window-created and AppSystem app-state-changed; GTK gets
+        # goshos uses window-created and AppSystem app-state-changed; we get
         # WindowsChanged and RunningApplicationsChanged from Mutter introspect
+        self._windows_changed_ids = []
         try:
-            from ulauncher.gi import Gio
+            from ulauncher.utils import qdbus
 
-            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
-            self._windows_changed_ids = []
+            bus = qdbus.session_bus()
+        except (AttributeError, TypeError, RuntimeError, OSError, ValueError, ImportError):
             self._bus = None
             return
         self._bus = bus
-        self._windows_changed_ids = []
+        subscriptions = []
         for dest, path, iface, member in INTROSPECT_WINDOW_WATCHES + INTROSPECT_RUNNING_WATCHES:
             try:
-                watch_id = bus.signal_subscribe(
-                    dest,
-                    iface,
-                    member,
-                    path,
-                    None,
-                    Gio.DBusSignalFlags.NONE,
-                    lambda *_args: self._notify(),
-                )
+                subscription = qdbus.subscribe(bus, dest, path, iface, member, lambda *_args: self._notify())
             except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
                 continue
-            if watch_id:
-                self._windows_changed_ids.append(int(watch_id))
+            if subscription is not None:
+                subscriptions.append(subscription)
+        self._windows_changed_ids = subscriptions
 
     def _unlisten_shell_windows(self) -> None:
-        if self._bus is not None:
-            for watch_id in self._windows_changed_ids:
-                with contextlib.suppress(TypeError, RuntimeError, OSError, AttributeError):
-                    self._bus.signal_unsubscribe(watch_id)
+        for subscription in self._windows_changed_ids:
+            with contextlib.suppress(TypeError, RuntimeError, OSError, AttributeError):
+                subscription.unsubscribe()
         self._bus = None
         self._windows_changed_ids = []
 

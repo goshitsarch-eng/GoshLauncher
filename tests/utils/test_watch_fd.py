@@ -1,11 +1,11 @@
-"""watch_fd against a real GLib loop; test_scheduling.py mocks GLib away."""
+"""watch_fd against the real MiniLoop backend; test_scheduling.py covers the API surface."""
 
 from __future__ import annotations
 
 import contextlib
 import socket
 
-from ulauncher.gi import GLib
+from tests.utils.loop_helpers import process_pending_events
 from ulauncher.utils.scheduling import fd_is_hung_up, watch_fd
 
 
@@ -15,7 +15,7 @@ def _drain(sock: socket.socket) -> None:
 
 
 def test_watch_fd_stops_itself_when_the_peer_hangs_up() -> None:
-    # A hung-up fd stays permanently ready, so a repeating source over one is re-dispatched as
+    # A hung-up fd stays permanently ready, so a repeating watch over one is re-dispatched as
     # fast as the loop can spin. A compositor restart used to pin a core for the whole session.
     ours, peer = socket.socketpair()
     ours.setblocking(False)
@@ -27,15 +27,13 @@ def test_watch_fd_stops_itself_when_the_peer_hangs_up() -> None:
 
     context = watch_fd(ours.fileno(), on_readable)
     peer.close()
-    loop = GLib.MainLoop()
-    GLib.timeout_add(150, lambda: (loop.quit(), False)[1])
-    loop.run()
+    process_pending_events(0.15)
     context.cancel()
     ours.close()
 
-    # one last dispatch so the watcher sees the EOF, then the source is gone
+    # one last dispatch so the watcher sees the EOF, then the watch is gone
     assert calls == [1]
-    assert context.source is None
+    assert not context.active
 
 
 def test_watch_fd_keeps_firing_while_the_peer_is_alive() -> None:
@@ -48,35 +46,23 @@ def test_watch_fd_keeps_firing_while_the_peer_is_alive() -> None:
         _drain(ours)
 
     context = watch_fd(ours.fileno(), on_readable)
-    loop = GLib.MainLoop()
-    sent: list[int] = []
+    peer.sendall(b"a")
+    process_pending_events(0.05)
+    peer.sendall(b"b")
+    process_pending_events(0.05)
+    assert len(calls) >= 2
+    assert context.active
 
-    def tick() -> bool:
-        if len(sent) >= 4:
-            loop.quit()
-            return False
-        sent.append(1)
-        peer.send(b"x")
-        return True
-
-    GLib.timeout_add(20, tick)
-    loop.run()
-    still_watching = context.source is not None
     context.cancel()
     peer.close()
     ours.close()
 
-    assert len(calls) >= 4
-    assert still_watching
-
 
 def test_fd_is_hung_up() -> None:
     ours, peer = socket.socketpair()
-    ours.setblocking(False)
-    assert fd_is_hung_up(ours.fileno()) is False
+    assert not fd_is_hung_up(ours.fileno())
     peer.close()
-    assert fd_is_hung_up(ours.fileno()) is True
+    assert fd_is_hung_up(ours.fileno())
     fd = ours.fileno()
     ours.close()
-    # a closed fd counts as hung up rather than raising
-    assert fd_is_hung_up(fd) is True
+    assert fd_is_hung_up(fd)

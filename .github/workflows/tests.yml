@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
-      - name: Install GTK 4 and libadwaita
-        run: sudo bash scripts/ci-install-gtk4.sh
+      - name: Install Qt 6 runtime
+        run: sudo bash scripts/ci-install-qt6.sh
       - uses: actions/cache@v4
         with:
           path: .venv

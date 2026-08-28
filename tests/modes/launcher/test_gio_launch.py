@@ -64,8 +64,7 @@ def test_open_uri_rejects_unsafe_and_canonicalizes_file() -> None:
 
 def test_launch_uri_uses_gio_app_info() -> None:
     source = Path(gio_launch.__file__).read_text()
-    assert "Gio.AppInfo.launch_default_for_uri_async" in source
-    assert "Gio.AppLaunchContext()" in source
+    assert "open_detached" in source
     assert "display.get_app_launch_context()" not in source
 
 

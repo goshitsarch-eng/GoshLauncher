@@ -67,22 +67,17 @@ def next_accent_listen_action(schema: Any) -> str:
 
 
 def session_accent_nick() -> str:
+    """The GNOME session accent color nick, via the gsettings CLI (absent on
+    non-GNOME sessions, where Kirigami follows the palette accent natively)."""
+    import subprocess
+
     try:
-        from ulauncher.gi import Gio, GLib
-    except ImportError:
+        raw = subprocess.check_output(  # noqa: S603, S607
+            ["gsettings", "get", "org.gnome.desktop.interface", "accent-color"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).strip().strip("'\"")
+    except (OSError, subprocess.SubprocessError):
         return "blue"
-    try:
-        source = Gio.SettingsSchemaSource.get_default()
-        if source is None:
-            return "blue"
-        schema = source.lookup("org.gnome.desktop.interface", True)
-        if not schema_has_accent_key(schema):
-            return "blue"
-        settings = Gio.Settings.new("org.gnome.desktop.interface")
-        try:
-            return accent_nick_from_enum(int(settings.get_enum("accent-color")))
-        except (GLib.GError, TypeError, ValueError):
-            raw = str(settings.get_string("accent-color") or "blue")
-            return raw if raw in ACCENT_NICKS else "blue"
-    except (GLib.GError, AttributeError, TypeError, ValueError, OSError):
-        return "blue"
+    return raw if raw in ACCENT_NICKS else "blue"

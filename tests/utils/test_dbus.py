@@ -1,43 +1,31 @@
-from unittest.mock import MagicMock, call
+import json
+from unittest.mock import MagicMock
 
-import pytest
 from pytest_mock import MockerFixture
 
 from ulauncher.utils import dbus
 
 
-@pytest.fixture
-def gio(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("ulauncher.utils.dbus.Gio")
-
-
-@pytest.fixture
-def action_group(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("ulauncher.utils.dbus.get_ulauncher_dbus_action_group").return_value
-
-
 class TestDbusTriggerEvent:
-    def test_flushes_the_bus_after_activating_the_action(
-        self, gio: MagicMock, action_group: MagicMock, mocker: MockerFixture
-    ) -> None:
+    def test_sends_the_message_synchronously(self, mocker: MockerFixture) -> None:
+        # A synchronous call is what guarantees the message reaches the bus before a
+        # short-lived CLI process exits.
         mocker.patch("ulauncher.utils.dbus.check_app_running", return_value=True)
-        bus = gio.bus_get_sync.return_value
-
-        # flush must follow activate so the queued message is on the socket before the process exits
-        parent = MagicMock()
-        parent.attach_mock(action_group.activate_action, "activate")
-        parent.attach_mock(bus.flush_sync, "flush")
+        bus = MagicMock()
+        mocker.patch("ulauncher.utils.dbus._session_bus", return_value=bus)
 
         dbus.dbus_trigger_event("extensions:stop_preview")
 
-        assert parent.mock_calls == [call.activate("trigger-event", mocker.ANY), call.flush(None)]
+        bus.call.assert_called_once()
+        message = bus.call.call_args.args[0]
+        payload = json.loads(message.arguments()[0])
+        assert payload == {"name": "extensions:stop_preview", "args": []}
 
-    def test_does_nothing_when_app_is_not_running(
-        self, gio: MagicMock, action_group: MagicMock, mocker: MockerFixture
-    ) -> None:
+    def test_does_nothing_when_app_is_not_running(self, mocker: MockerFixture) -> None:
         mocker.patch("ulauncher.utils.dbus.check_app_running", return_value=False)
+        bus = MagicMock()
+        mocker.patch("ulauncher.utils.dbus._session_bus", return_value=bus)
 
         dbus.dbus_trigger_event("extensions:stop_preview")
 
-        action_group.activate_action.assert_not_called()
-        gio.bus_get_sync.return_value.flush_sync.assert_not_called()
+        bus.call.assert_not_called()

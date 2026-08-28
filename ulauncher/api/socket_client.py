@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import ulauncher.api
 from ulauncher.api._logging import get_extension_logger
 from ulauncher.api.event import EventType
-from ulauncher.gi import GLib
+from ulauncher.utils.eventloop import MiniLoop, get_loop
 from ulauncher.utils.socket_msg_controller import SocketMsgController, summarize_ipc_args
 
 if TYPE_CHECKING:
@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 
 class Client:
     """
-    Manages the extension's communication with Ulauncher.
+    Manages the extension's communication with the app.
 
     The socket connection is established before this process starts:
-    - Ulauncher (parent process) creates a socket pair (two connected endpoints)
+    - The app (parent process) creates a socket pair (two connected endpoints)
     - Parent keeps one endpoint, passes the other's FD to child process (this)
 
     Communication layers:
@@ -26,12 +26,12 @@ class Client:
     • This class
     → SocketMsgController
     → (OS) Unix socket (pair) connection
-    → Ulauncher ExtensionRuntime (parent runtime)
+    → App ExtensionRuntime (parent runtime)
     """
 
     extension: ulauncher.api.Extension
     msg_controller: SocketMsgController
-    mainloop: GLib.MainLoop
+    mainloop: MiniLoop
 
     def __init__(self, extension: ulauncher.api.Extension) -> None:
         fd_str = os.environ.get("SOCKETPAIR_FD")
@@ -46,22 +46,22 @@ class Client:
 
         self.extension = extension
         self.logger = get_extension_logger()
-        self.mainloop = GLib.MainLoop()
+        self.mainloop = get_loop()
         self.msg_controller = SocketMsgController(file_descriptor, on_close=self.unload)
 
     def connect(self) -> None:
         """
-        Sets up message listener and starts the GLib mainloop (blocks thread).
+        Sets up message listener and starts the event loop (blocks thread).
         """
         self.msg_controller.listen(self.on_message)
 
-        self.logger.debug("Starting GLib mainloop")
+        self.logger.debug("Starting event loop")
         self.mainloop.run()
-        self.logger.debug("GLib mainloop stopped")
+        self.logger.debug("Event loop stopped")
 
     def on_message(self, message: ipc.EventEnvelope) -> None:
         """
-        Parses message from Ulauncher and triggers extension event
+        Parses message from the app and triggers extension event
         """
         self.logger.debug("Incoming message: %s", summarize_ipc_args([message]))
         try:

@@ -19,11 +19,9 @@ do
       exit 2
     fi
     warn "ulauncher-toggle is deprecated. Use \`ulauncher show \"$1\"\` instead."
-    escaped_query=$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g")
-    gapplication action io.ulauncher.Ulauncher set-query "'$escaped_query'"
-    exit 0
+    exec ulauncher show "$1"
   fi
 done
 
 warn 'ulauncher-toggle is deprecated. Use `ulauncher toggle` instead.'
-gapplication action io.ulauncher.Ulauncher toggle-window
+exec ulauncher toggle

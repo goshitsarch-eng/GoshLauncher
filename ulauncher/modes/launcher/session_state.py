@@ -16,27 +16,13 @@ def _dbus_call(
     method: str,
 ) -> Any | None:
     try:
-        from ulauncher.gi import Gio
-    except Exception:
-        return None
-    try:
-        bus = Gio.BusType.SESSION if bus_type == "session" else Gio.BusType.SYSTEM
-        connection = Gio.bus_get_sync(bus, None)
-        result = connection.call_sync(
-            dest,
-            path,
-            iface,
-            method,
-            None,
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
-        )
-        unpacked = result.unpack() if result is not None else None
-        if unpacked:
-            return unpacked[0]
-        return unpacked
+        from ulauncher.utils import qdbus
+
+        bus = qdbus.session_bus() if bus_type == "session" else qdbus.system_bus()
+        reply = qdbus.call(bus, dest, path, iface, method, timeout_ms=200)
+        if reply:
+            return reply[0]
+        return reply
     except Exception:
         return None
 

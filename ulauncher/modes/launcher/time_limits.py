@@ -171,24 +171,23 @@ def load_wellbeing_history(path: Path | None = None) -> list[dict[str, Any]] | N
 
 def probe_wellbeing_settings() -> tuple[bool, float] | None:
     """Return (daily_limit_enabled, daily_limit_seconds) or None if the schema is missing."""
+    import subprocess
+
+    def _gsettings_get(key: str) -> str:
+        return subprocess.check_output(  # noqa: S603, S607
+            ["gsettings", "get", WELLBEING_SCHEMA, key], text=True, stderr=subprocess.DEVNULL, timeout=2
+        ).strip()
+
     try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
+        history_enabled = _gsettings_get("history-enabled") == "true"
+        daily_enabled = _gsettings_get("daily-limit-enabled") == "true"
+        daily_seconds = float(_gsettings_get("daily-limit-seconds").split()[-1])
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        # Schema missing (non-GNOME session) or no gsettings CLI
         return None
-    try:
-        source = Gio.SettingsSchemaSource.get_default()
-        schema = source.lookup(WELLBEING_SCHEMA, True) if source else None
-        if schema is None:
-            return None
-        settings = Gio.Settings.new(WELLBEING_SCHEMA)
-        history_enabled = bool(settings.get_boolean("history-enabled"))
-        daily_enabled = bool(settings.get_boolean("daily-limit-enabled"))
-        daily_seconds = float(settings.get_uint("daily-limit-seconds"))
-        if not history_enabled or not daily_enabled:
-            return (False, daily_seconds)
-        return (True, daily_seconds)
-    except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError, ValueError):
-        return None
+    if not history_enabled or not daily_enabled:
+        return (False, daily_seconds)
+    return (True, daily_seconds)
 
 
 def live_wellbeing_state(
@@ -265,22 +264,19 @@ def seconds_until_limit(
 
 def probe_malcontent_estimated_times() -> dict[str, Any]:
     try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return {}
-    try:
-        connection = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
-        result = connection.call_sync(
+        from ulauncher.utils import qdbus
+
+        result = qdbus.call(
+            qdbus.system_bus(),
             MALCONTENT_TIMER_DEST,
             MALCONTENT_TIMER_PATH,
             MALCONTENT_TIMER_IFACE,
             "GetEstimatedTimes",
-            GLib.Variant("(s)", (LOGIN_SESSION,)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
+            [LOGIN_SESSION],
+            timeout_ms=200,
         )
+        if result is None:
+            return {}
         return malcontent_times_from_reply(result)
     except Exception:
         return {}

@@ -371,21 +371,12 @@ def probe_gtk_actions(bus_name: str, object_path: str) -> list[str] | None:
     if not bus_name or not object_path:
         return None
     try:
-        from ulauncher.gi import Gio, GLib
+        from ulauncher.utils import qdbus
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        result = bus.call_sync(
-            bus_name,
-            object_path,
-            "org.gtk.Actions",
-            "List",
-            None,
-            GLib.VariantType.new("(as)"),
-            Gio.DBusCallFlags.NONE,
-            80,
-            None,
-        )
-        return [str(item) for item in result.unpack()[0]]
+        reply = qdbus.call(qdbus.session_bus(), bus_name, object_path, "org.gtk.Actions", "List", timeout_ms=80)
+        if reply is None:
+            return None
+        return [str(item) for item in reply[0]]
     except Exception:
         return None
 

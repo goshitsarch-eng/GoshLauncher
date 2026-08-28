@@ -363,31 +363,11 @@ def _apply_path_kind(trimmed: str, resolved: str, kind: str, load_id: int) -> No
 
 
 def _start_path_stat(resolved: str, on_kind: Callable[[str], None]) -> None:
-    try:
-        from ulauncher.gi import Gio, GLib
-    except Exception:
-        on_kind(_stat_path_kind(resolved))
-        return
+    # Deferred to the next main-loop turn to keep the callback contract async
+    # (callers arm their lookup state before the result may arrive).
+    from ulauncher.utils import scheduling
 
-    def _done(source: Any, result: Any) -> None:
-        kind = "missing"
-        try:
-            info = source.query_info_finish(result)
-            kind = "directory" if info.get_file_type() == Gio.FileType.DIRECTORY else "file"
-        except Exception:
-            kind = "missing"
-        on_kind(kind)
-
-    try:
-        Gio.File.new_for_path(resolved).query_info_async(
-            "standard::type",
-            Gio.FileQueryInfoFlags.NONE,
-            GLib.PRIORITY_DEFAULT,
-            None,
-            _done,
-        )
-    except Exception:
-        on_kind(_stat_path_kind(resolved))
+    scheduling.run_when_idle(lambda: on_kind(_stat_path_kind(resolved)))
 
 
 def invalidate_path_lookup() -> None:

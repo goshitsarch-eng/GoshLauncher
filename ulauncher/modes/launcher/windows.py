@@ -1459,27 +1459,15 @@ def _compositor_windows() -> list[WindowInfo]:
 
 def _introspect_windows_payload() -> dict[Any, Any]:
     try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return {}
-    try:
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        from ulauncher.utils import qdbus
+
+        bus = qdbus.session_bus()
     except Exception:
         return {}
     for dest in INTROSPECT_DESTS:
         try:
-            result = bus.call_sync(
-                dest,
-                INTROSPECT_PATH,
-                INTROSPECT_IFACE,
-                "GetWindows",
-                None,
-                GLib.VariantType.new("(a{ta{sv}})"),
-                Gio.DBusCallFlags.NONE,
-                80,
-                None,
-            )
-            payload = result.unpack()[0]
+            reply = qdbus.call(bus, dest, INTROSPECT_PATH, INTROSPECT_IFACE, "GetWindows", timeout_ms=80)
+            payload = reply[0] if reply else None
         except Exception:
             logger.debug("Introspect GetWindows failed on %s", dest, exc_info=True)
             continue
@@ -2198,20 +2186,13 @@ def gtk_muxer_close(
 
 def _gtk_actions_activate(bus_name: str, object_path: str, action: str) -> bool:
     try:
-        from ulauncher.gi import Gio, GLib
+        from ulauncher.utils import qdbus
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        bus.call_sync(
-            bus_name,
-            object_path,
-            "org.gtk.Actions",
-            "Activate",
-            GLib.Variant("(sava{sv})", (action, [], {})),
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
+        reply = qdbus.call(
+            qdbus.session_bus(), bus_name, object_path, "org.gtk.Actions", "Activate", [action, [], {}], timeout_ms=200
         )
+        if reply is None:
+            return False
     except Exception:
         logger.debug("org.gtk.Actions %s failed on %s", action, bus_name, exc_info=True)
         return False
@@ -2265,11 +2246,11 @@ def _desktop_hints(
 
 def _list_desktop_hints() -> list[tuple[str, str]]:
     try:
-        from ulauncher.gi import GioUnix
+        from ulauncher.utils.desktop_app import DesktopApp
     except (ImportError, AttributeError, RuntimeError, OSError):
         return []
     try:
-        infos = GioUnix.DesktopAppInfo.get_all()
+        infos = DesktopApp.get_all()
     except Exception:
         logger.debug("DesktopAppInfo.get_all failed", exc_info=True)
         return []
@@ -2381,20 +2362,13 @@ def _focus_application(app_id: str) -> bool:
     if not bus_name or not path:
         return False
     try:
-        from ulauncher.gi import Gio, GLib
+        from ulauncher.utils import qdbus
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        bus.call_sync(
-            bus_name,
-            path,
-            "org.freedesktop.Application",
-            "Activate",
-            GLib.Variant("(a{sv})", ({},)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
+        reply = qdbus.call(
+            qdbus.session_bus(), bus_name, path, "org.freedesktop.Application", "Activate", [{}], timeout_ms=200
         )
+        if reply is None:
+            return False
         return True
     except Exception:
         logger.debug("Application.Activate failed for %s", bus_name, exc_info=True)
@@ -2524,21 +2498,12 @@ def _run_workspace_argv(argv: list[str]) -> bool:
 
 def _kwin_set_current_desktop(desktop: int) -> bool:
     try:
-        from ulauncher.gi import Gio, GLib
+        from ulauncher.utils import qdbus
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        bus.call_sync(
-            "org.kde.KWin",
-            "/KWin",
-            "org.kde.KWin",
-            "setCurrentDesktop",
-            GLib.Variant("(i)", (desktop,)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
+        reply = qdbus.call(
+            qdbus.session_bus(), "org.kde.KWin", "/KWin", "org.kde.KWin", "setCurrentDesktop", [desktop], timeout_ms=200
         )
-        return True
+        return reply is not None
     except Exception:
         return False
 

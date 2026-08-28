@@ -2,8 +2,6 @@ import logging
 import os
 import signal
 
-from ulauncher.gi import GLib
-
 logger = logging.getLogger(__name__)
 v5_service_name = "net.launchpad.ulauncher"
 
@@ -17,15 +15,11 @@ def kill_ulauncher_v5() -> None:
     starts every extension twice. v5 refuses to start while v6 is running, so only v6 kills.
     See https://github.com/Ulauncher/Ulauncher/issues/1093 for more.
     """
-    # Find the Ulauncher v5 service on the session bus
+    # Find the Ulauncher v5 service on the session bus. get_app_pid returns None when
+    # there is no session bus to ask, so there is nothing running to kill either.
     from ulauncher.utils.dbus import get_app_pid
 
-    try:
-        pid = get_app_pid(v5_service_name)
-    except GLib.Error:
-        # No session bus to ask, so there is nothing running to kill either
-        return
-
+    pid = get_app_pid(v5_service_name)
     if not pid:
         return
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
-from ulauncher.gi import Gio, GioUnix, GLib
 from ulauncher.internals.result import Result
+from ulauncher.utils.desktop_app import DesktopApp
+from ulauncher.utils.mime_apps import content_type_of, recommended_apps_for
 
 logger = logging.getLogger(__name__)
 
@@ -15,30 +17,17 @@ class OpenWithAppResult(Result):
     actions = {"open_with_app": {"name": "Open with this application", "icon": "system-run"}}
 
 
-def _get_content_type(path: str) -> str:
-    gfile = Gio.File.new_for_path(path)
-    try:
-        file_info = gfile.query_info("standard::content-type", Gio.FileQueryInfoFlags.NONE, None)
-        if content_type := file_info.get_content_type():
-            return content_type
-    except GLib.Error:
-        pass
-    content_type, _ = Gio.content_type_guess(path, None)
-    return content_type
-
-
 def get_open_with_results(path: str) -> list[Result]:
     """Build a result for each application that can open the file at the given path."""
     results: list[Result] = []
-    for app_info in Gio.AppInfo.get_recommended_for_type(_get_content_type(path)):
-        app_id = app_info.get_id()
+    for app in recommended_apps_for(content_type_of(path)):
+        app_id = app.get_id()
         if not app_id:
             continue
-        desktop_app = GioUnix.DesktopAppInfo.new(app_id)
         results.append(
             OpenWithAppResult(
-                name=app_info.get_display_name(),
-                icon=(desktop_app.get_string("Icon") if desktop_app else None) or "",
+                name=app.get_display_name(),
+                icon=app.get_string("Icon") or "",
                 path=path,
                 app_id=app_id,
             )
@@ -50,13 +39,12 @@ def get_open_with_results(path: str) -> list[Result]:
 
 
 def open_path_with_app(app_id: str, path: str) -> bool:
-    app_info = GioUnix.DesktopAppInfo.new(app_id)
-    if not app_info:
+    app = DesktopApp.new(app_id)
+    if not app:
         logger.error("Could not load app %s to open %s", app_id, path)
         return False
-    uri = Gio.File.new_for_path(path).get_uri()
-    try:
-        return app_info.launch_uris([uri])
-    except GLib.Error:
-        logger.exception("Could not open %s with app %s", uri, app_id)
+    uri = Path(path).absolute().as_uri()
+    if not app.launch_uris([uri]):
+        logger.error("Could not open %s with app %s", uri, app_id)
         return False
+    return True

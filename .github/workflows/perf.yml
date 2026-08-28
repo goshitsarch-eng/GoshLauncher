@@ -31,8 +31,8 @@ jobs:
         with:
           fetch-depth: 0 # `git worktree add` in `make perf-compare` needs base branch history
 
-      - name: Install GTK 4 and libadwaita
-        run: sudo bash scripts/ci-install-gtk4.sh
+      - name: Install Qt 6 runtime
+        run: sudo bash scripts/ci-install-qt6.sh
 
       - name: Mark workspace as a safe git directory
         # Checkout can be owned by a different user than the one that runs later steps.

@@ -1,111 +1,117 @@
-from unittest.mock import MagicMock, Mock
+"""Behavior tests for scheduling on the MiniLoop backend (no Qt in test processes)."""
+
+from unittest.mock import Mock
 
 import pytest
-from pytest_mock import MockerFixture
 
+from tests.utils.loop_helpers import process_pending_events
 from ulauncher.utils import scheduling
 
 
-@pytest.fixture(autouse=True)
-def glib(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch("ulauncher.utils.scheduling.GLib")
-
-
 class TestContext:
-    def test_attaches_source_with_callback(self) -> None:
-        source = Mock()
-        schedule = scheduling.Context(source, Mock(), repeat=False, args=(), kwargs={})
-        source.set_callback.assert_called_once_with(schedule._trigger)
-        source.attach.assert_called_once_with(None)
+    def test_cancel_is_idempotent(self) -> None:
+        context = scheduling.timer(60, Mock())
+        assert context.active
+        context.cancel()
+        context.cancel()
+        assert not context.active
 
-    def test_cancel_destroys_source_and_is_idempotent(self) -> None:
-        source = Mock()
-        schedule = scheduling.Context(source, Mock(), repeat=False, args=(), kwargs={})
-        schedule.cancel()
-        schedule.cancel()
-        source.destroy.assert_called_once_with()
-        assert schedule.source is None
-
-    def test_trigger_runs_func_and_signals_removal_for_one_shot(self) -> None:
+    def test_run_once_forwards_arguments(self) -> None:
         func = Mock()
-        schedule = scheduling.Context(Mock(), func, repeat=False, args=("a", "b"), kwargs={"kw": "v"})
-        assert schedule._trigger() is False
+        context = scheduling.Context(func, False, ("a", "b"), {"kw": "v"})
+        assert context._run_once() is False
         func.assert_called_once_with("a", "b", kw="v")
 
-    def test_trigger_clears_source_after_one_shot_fires(self) -> None:
-        schedule = scheduling.Context(Mock(), Mock(), repeat=False, args=(), kwargs={})
-        schedule._trigger()
-        assert schedule.source is None
-
-    def test_trigger_signals_continuation_when_repeating(self) -> None:
+    def test_run_once_signals_continuation_when_repeating(self) -> None:
         func = Mock()
-        schedule = scheduling.Context(Mock(), func, repeat=True, args=(), kwargs={})
-        assert schedule._trigger() is True
+        context = scheduling.Context(func, True, (), {})
+        assert context._run_once() is True
         func.assert_called_once_with()
 
-    def test_trigger_signals_removal_when_func_cancels_a_repeating_schedule(self) -> None:
-        schedule = scheduling.Context(Mock(), Mock(), repeat=True, args=(), kwargs={})
-        schedule._func = schedule.cancel
-        assert schedule._trigger() is False
-        assert schedule.source is None
+    def test_run_once_signals_removal_when_func_cancels_a_repeating_schedule(self) -> None:
+        context = scheduling.Context(Mock(), True, (), {})
+        context._func = context.cancel
+        assert context._run_once() is False
+        assert not context.active
 
-    def test_trigger_logs_and_contains_func_errors(self, caplog: pytest.LogCaptureFixture) -> None:
-        schedule = scheduling.Context(Mock(), Mock(side_effect=RuntimeError("boom")), repeat=False, args=(), kwargs={})
-        assert schedule._trigger() is False
-        assert schedule.source is None
+    def test_run_once_logs_and_contains_func_errors(self, caplog: pytest.LogCaptureFixture) -> None:
+        context = scheduling.Context(Mock(side_effect=RuntimeError("boom")), False, (), {})
+        assert context._run_once() is False
+        assert not context.active
         assert "Unhandled error in scheduled call" in caplog.text
 
-    def test_trigger_keeps_repeating_schedule_alive_when_func_raises(self) -> None:
-        schedule = scheduling.Context(Mock(), Mock(side_effect=RuntimeError("boom")), repeat=True, args=(), kwargs={})
-        assert schedule._trigger() is True
-        assert schedule.source is not None
+    def test_run_once_keeps_repeating_schedule_alive_when_func_raises(self) -> None:
+        context = scheduling.Context(Mock(side_effect=RuntimeError("boom")), True, (), {})
+        assert context._run_once() is True
+        assert context.active
 
-    def test_trigger_does_not_run_func_after_cancel(self) -> None:
+    def test_run_once_does_not_run_func_after_cancel(self) -> None:
         func = Mock()
-        schedule = scheduling.Context(Mock(), func, repeat=True, args=(), kwargs={})
-        schedule.cancel()
-        assert schedule._trigger() is False
+        context = scheduling.Context(func, False, (), {})
+        context.cancel()
+        assert context._run_once() is False
         func.assert_not_called()
+
+    def test_stop_when_ends_a_repeating_schedule(self) -> None:
+        context = scheduling.Context(Mock(), True, (), {}, stop_when=lambda: True)
+        assert context._run_once() is False
+        assert not context.active
 
 
 class TestTimer:
-    def test_creates_timeout_source_with_delay_in_milliseconds(self, glib: MagicMock) -> None:
-        scheduling.timer(0.1, Mock())
-        glib.timeout_source_new.assert_called_once_with(100)
-
-    def test_returns_a_schedule(self) -> None:
-        assert isinstance(scheduling.timer(0.1, Mock()), scheduling.Context)
-
-    def test_forwards_arguments_to_func(self) -> None:
+    def test_fires_once(self) -> None:
         func = Mock()
-        schedule = scheduling.timer(0.1, func, "arg1", "arg2", kw="value")
-        schedule._trigger()
-        func.assert_called_once_with("arg1", "arg2", kw="value")
+        scheduling.timer(0.01, func, "a", kw="v")
+        process_pending_events(0.1)
+        func.assert_called_once_with("a", kw="v")
+
+    def test_cancel_prevents_firing(self) -> None:
+        func = Mock()
+        context = scheduling.timer(0.01, func)
+        context.cancel()
+        process_pending_events(0.1)
+        func.assert_not_called()
+
+
+class TestInterval:
+    def test_fires_repeatedly_until_cancelled(self) -> None:
+        calls: list[int] = []
+        context = scheduling.interval(0.01, lambda: calls.append(1))
+        process_pending_events(0.08)
+        context.cancel()
+        count = len(calls)
+        assert count >= 2
+        process_pending_events(0.05)
+        assert len(calls) == count
+
+    def test_survives_a_raising_run(self) -> None:
+        calls: list[int] = []
+
+        def flaky() -> None:
+            calls.append(1)
+            if len(calls) == 1:
+                msg = "boom"
+                raise RuntimeError(msg)
+
+        context = scheduling.interval(0.01, flaky)
+        process_pending_events(0.08)
+        context.cancel()
+        assert len(calls) >= 2
 
 
 class TestRunWhenIdle:
-    def test_creates_idle_source(self, glib: MagicMock) -> None:
-        scheduling.run_when_idle(Mock())
-        glib.idle_source_new.assert_called_once_with()
-
-    def test_returns_a_schedule(self) -> None:
-        assert isinstance(scheduling.run_when_idle(Mock()), scheduling.Context)
-
-    def test_forwards_arguments_to_func(self) -> None:
+    def test_runs_soon(self) -> None:
         func = Mock()
-        schedule = scheduling.run_when_idle(func, "arg1", "arg2", kw="value")
-        schedule._trigger()
-        func.assert_called_once_with("arg1", "arg2", kw="value")
+        scheduling.run_when_idle(func, 1, kw=2)
+        process_pending_events(0.05)
+        func.assert_called_once_with(1, kw=2)
 
+    def test_is_thread_safe(self) -> None:
+        import threading
 
-class TestWatchFd:
-    def test_creates_unix_fd_source(self, glib: MagicMock) -> None:
-        scheduling.watch_fd(7, Mock())
-        glib.unix_fd_source_new.assert_called_once()
-        fd = glib.unix_fd_source_new.call_args[0][0]
-        assert fd == 7
-
-    def test_returns_a_repeating_schedule(self) -> None:
-        schedule = scheduling.watch_fd(3, Mock())
-        assert isinstance(schedule, scheduling.Context)
-        assert schedule._trigger() is True
+        func = Mock()
+        thread = threading.Thread(target=lambda: scheduling.run_when_idle(func))
+        thread.start()
+        thread.join()
+        process_pending_events(0.05)
+        func.assert_called_once_with()

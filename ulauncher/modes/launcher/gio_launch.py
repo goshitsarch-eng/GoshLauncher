@@ -1,8 +1,7 @@
-"""Spawn and URI launch that always finishes Gio async, from goshos gioLaunch.js."""
+"""Spawn and URI launch, from goshos gioLaunch.js."""
 
 from __future__ import annotations
 
-import contextlib
 import os
 from shutil import which
 from typing import Any, Callable
@@ -80,19 +79,8 @@ def open_uri(uri: str, opener: Callable[[str], Any] | None = None) -> None:
     if opener is not None:
         opener(launch)
         return
-    try:
-        from ulauncher.gi import Gio
+    # open_detached resolves the URI's registered handler itself (remote filesystem
+    # schemes fall back to the default file manager, which mounts the share).
+    from ulauncher.utils.launch_detached import open_detached
 
-        context = Gio.AppLaunchContext()
-        _launch_contexts.add(context)
-
-        def _finished(_source: Any, result: Any) -> None:
-            with contextlib.suppress(Exception):
-                Gio.AppInfo.launch_default_for_uri_finish(result)
-            _launch_contexts.discard(context)
-
-        Gio.AppInfo.launch_default_for_uri_async(launch, context, None, _finished)
-    except Exception:
-        from ulauncher.utils.launch_detached import open_detached
-
-        open_detached(launch)
+    open_detached(launch)

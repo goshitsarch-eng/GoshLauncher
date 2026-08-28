@@ -123,7 +123,7 @@ class GlobalShortcutsPortal:
         self._connection: Any = None
         self._session_handle = ""
         self._accel = ""
-        self._subs: list[int] = []
+        self._subs: list[Any] = []
 
     def start(self, accel: str, application_id: str, bus: Any | None = None) -> bool:
         connection = bus if bus is not None else _session_connection()
@@ -140,10 +140,7 @@ class GlobalShortcutsPortal:
         if not trigger:
             return False
         _register_host_app(connection, application_id)
-        unique = ""
-        getter = getattr(connection, "get_unique_name", None)
-        if callable(getter):
-            unique = str(getter() or "")
+        unique = _connection_unique_name(connection)
         handle_token = new_handle_token()
         session_token = new_handle_token("uls")
         request_path = portal_request_path(unique, handle_token)
@@ -157,10 +154,7 @@ class GlobalShortcutsPortal:
             logger.debug("GlobalShortcuts CreateSession did not return a session")
             return
         self._session_handle = handle
-        unique = ""
-        getter = getattr(self._connection, "get_unique_name", None)
-        if callable(getter):
-            unique = str(getter() or "")
+        unique = _connection_unique_name(self._connection)
         handle_token = new_handle_token("ulb")
         request_path = portal_request_path(unique, handle_token)
         self._subscribe_request(self._connection, request_path, self._on_bind_response)
@@ -195,43 +189,41 @@ class GlobalShortcutsPortal:
         if not handle or connection is None:
             return
         try:
-            from ulauncher.gi import Gio
+            from PySide6.QtDBus import QDBusMessage
 
-            connection.call(
-                PORTAL_BUS,
-                handle,
-                SESSION_IFACE,
-                "Close",
-                None,
-                None,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                None,
-                None,
-            )
+            message = QDBusMessage.createMethodCall(PORTAL_BUS, handle, SESSION_IFACE, "Close")
+            connection.asyncCall(message)
         except Exception:
             logger.debug("GlobalShortcuts Session.Close failed", exc_info=True)
         self._session_handle = ""
 
     def _unsubscribe(self) -> None:
-        connection = self._connection
-        if connection is not None:
-            unsub = getattr(connection, "signal_unsubscribe", None)
-            if callable(unsub):
-                for sub_id in self._subs:
-                    try:
-                        unsub(sub_id)
-                    except (TypeError, ValueError, RuntimeError, OSError):
-                        continue
+        for subscription in self._subs:
+            try:
+                subscription.unsubscribe()
+            except (TypeError, ValueError, RuntimeError, OSError, AttributeError):
+                continue
         self._subs = []
         self._session_handle = ""
 
 
+def _connection_unique_name(connection: Any) -> str:
+    for getter_name in ("baseService", "get_unique_name"):
+        getter = getattr(connection, getter_name, None)
+        if callable(getter):
+            try:
+                return str(getter() or "")
+            except (TypeError, RuntimeError):
+                continue
+    return ""
+
+
 def _session_connection() -> Any | None:
     try:
-        from ulauncher.gi import Gio
+        from ulauncher.utils import qdbus
 
-        return Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        bus = qdbus.session_bus()
+        return bus if bus.isConnected() else None
     except Exception:
         logger.debug("No session bus for GlobalShortcuts", exc_info=True)
         return None
@@ -240,24 +232,17 @@ def _session_connection() -> Any | None:
 def _register_host_app(connection: Any, application_id: str) -> None:
     # xdg-desktop-portal 1.20+ rejects CreateSession from a host app without this.
     try:
-        from ulauncher.gi import Gio, GLib
+        from PySide6.QtDBus import QDBusMessage
     except (ImportError, AttributeError, RuntimeError, OSError):
         return
-    args = GLib.Variant("(sa{sv})", (application_id, {}))
     for iface in HOST_REGISTRY_IFACES:
         try:
-            connection.call_sync(
-                PORTAL_BUS,
-                PORTAL_PATH,
-                iface,
-                "Register",
-                args,
-                None,
-                Gio.DBusCallFlags.NONE,
-                200,
-                None,
-            )
-            return
+            message = QDBusMessage.createMethodCall(PORTAL_BUS, PORTAL_PATH, iface, "Register")
+            message.setArguments([application_id, {}])
+            reply = connection.call(message, timeout=200)
+            if reply.type() == QDBusMessage.MessageType.ReplyMessage:
+                return
+            logger.debug("Host Registry.Register failed on %s: %s", iface, reply.errorMessage())
         except Exception:
             logger.debug("Host Registry.Register failed on %s", iface, exc_info=True)
             continue
@@ -265,24 +250,15 @@ def _register_host_app(connection: Any, application_id: str) -> None:
 
 def _call_create_session(connection: Any, handle_token: str, session_token: str) -> bool:
     try:
-        from ulauncher.gi import Gio, GLib
+        from PySide6.QtDBus import QDBusMessage
 
         options = {
-            "handle_token": GLib.Variant("s", handle_token),
-            "session_handle_token": GLib.Variant("s", session_token),
+            "handle_token": handle_token,
+            "session_handle_token": session_token,
         }
-        connection.call(
-            PORTAL_BUS,
-            PORTAL_PATH,
-            GLOBAL_SHORTCUTS_IFACE,
-            "CreateSession",
-            GLib.Variant("(a{sv})", (options,)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            -1,
-            None,
-            None,
-        )
+        message = QDBusMessage.createMethodCall(PORTAL_BUS, PORTAL_PATH, GLOBAL_SHORTCUTS_IFACE, "CreateSession")
+        message.setArguments([options])
+        connection.asyncCall(message)
         return True
     except Exception:
         logger.debug("GlobalShortcuts CreateSession failed", exc_info=True)
@@ -290,27 +266,32 @@ def _call_create_session(connection: Any, handle_token: str, session_token: str)
 
 
 def _call_bind_shortcuts(connection: Any, session_handle: str, trigger: str, handle_token: str) -> None:
+    """BindShortcuts has signature (oa(sa{sv})sa{sv}), which QtDBus cannot infer from
+    plain Python values - the shortcuts array must be streamed into a QDBusArgument.
+    On failure the shortcut degrades to the DE keybinding / a compositor bind of
+    `ulauncher toggle`."""
     try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return
-    entries = []
-    for shortcut_id, fields in bind_shortcuts_entries(trigger):
-        entries.append((shortcut_id, {key: GLib.Variant("s", value) for key, value in fields.items()}))
-    options = {"handle_token": GLib.Variant("s", handle_token)}
-    try:
-        connection.call(
-            PORTAL_BUS,
-            PORTAL_PATH,
-            GLOBAL_SHORTCUTS_IFACE,
-            "BindShortcuts",
-            GLib.Variant("(oa(sa{sv})sa{sv})", (session_handle, entries, "", options)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            -1,
-            None,
-            None,
-        )
+        from PySide6.QtCore import QMetaType
+        from PySide6.QtDBus import QDBusArgument, QDBusMessage, QDBusObjectPath, QDBusVariant
+
+        entries_arg = QDBusArgument()
+        entries_arg.beginArray(QMetaType.Type.UnknownType.value)
+        for shortcut_id, fields in bind_shortcuts_entries(trigger):
+            entries_arg.beginStructure()
+            entries_arg.add(shortcut_id, QMetaType.Type.QString.value)
+            entries_arg.beginMap(QMetaType.Type.QString.value, QMetaType.Type.QVariant.value)
+            for key, value in fields.items():
+                entries_arg.beginMapEntry()
+                entries_arg.add(key, QMetaType.Type.QString.value)
+                entries_arg.add(QDBusVariant(value))
+                entries_arg.endMapEntry()
+            entries_arg.endMap()
+            entries_arg.endStructure()
+        entries_arg.endArray()
+
+        message = QDBusMessage.createMethodCall(PORTAL_BUS, PORTAL_PATH, GLOBAL_SHORTCUTS_IFACE, "BindShortcuts")
+        message.setArguments([QDBusObjectPath(session_handle), entries_arg, "", {"handle_token": handle_token}])
+        connection.asyncCall(message)
     except Exception:
         logger.debug("GlobalShortcuts BindShortcuts failed", exc_info=True)
 
@@ -321,40 +302,29 @@ def _signal_subscribe(
     member: str,
     path: str,
     callback: Callable[..., None],
-) -> int:
+) -> Any:
     try:
-        from ulauncher.gi import Gio
+        from ulauncher.utils import qdbus
 
-        sub_id = connection.signal_subscribe(
-            PORTAL_BUS,
-            iface,
-            member,
-            path,
-            None,
-            Gio.DBusSignalFlags.NONE,
-            callback,
-        )
-        return int(sub_id or 0)
+        subscription = qdbus.SignalSubscription(connection, "", path, iface, member, callback)
+        return subscription if subscription.connected else 0
     except Exception:
         logger.debug("Could not subscribe to %s.%s", iface, member, exc_info=True)
         return 0
 
 
 def _request_response_callback(handler: Callable[[int, Any], None]) -> Callable[..., None]:
-    def _callback(
-        _connection: Any,
-        _sender: str,
-        _path: str,
-        _iface: str,
-        _member: str,
-        params: Any,
-        *_user: object,
-    ) -> None:
-        payload = params.unpack() if hasattr(params, "unpack") else params
+    def _callback(args: Any) -> None:
+        from ulauncher.utils import qdbus
+
+        payload = qdbus.unwrap(list(args))
         code = 1
         results: Any = {}
         if isinstance(payload, (list, tuple)) and payload:
-            code = int(payload[0])
+            try:
+                code = int(payload[0])
+            except (TypeError, ValueError):
+                code = 1
             results = payload[1] if len(payload) > 1 else {}
         handler(code, results)
 
@@ -362,15 +332,9 @@ def _request_response_callback(handler: Callable[[int, Any], None]) -> Callable[
 
 
 def _activated_callback(handler: Callable[[Any], None]) -> Callable[..., None]:
-    def _callback(
-        _connection: Any,
-        _sender: str,
-        _path: str,
-        _iface: str,
-        _member: str,
-        params: Any,
-        *_user: object,
-    ) -> None:
-        handler(params)
+    def _callback(args: Any) -> None:
+        from ulauncher.utils import qdbus
+
+        handler(qdbus.unwrap(list(args)))
 
     return _callback

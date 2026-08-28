@@ -3,9 +3,9 @@ from __future__ import annotations
 from os.path import basename
 from typing import Any, Literal
 
-from ulauncher.gi import GioUnix
 from ulauncher.internals.result import Result
 from ulauncher.modes.apps.app_rankings import AppRankings
+from ulauncher.utils.desktop_app import DesktopApp
 
 ACTION_PREFIX = "action:"
 
@@ -72,7 +72,7 @@ class AppResult(Result):
     # goshos Shell.App.can_open_new_window() is false for these while running
     single_window: bool = False
 
-    def __init__(self, app_info: GioUnix.DesktopAppInfo) -> None:
+    def __init__(self, app_info: DesktopApp) -> None:
         super().__init__(
             name=app_info.get_display_name(),
             icon=app_info.get_string("Icon") or "",
@@ -97,7 +97,7 @@ class AppResult(Result):
         # Uninstalled ids, invalid encoding, and missing desktop-only methods
         # must not hide the rest of an empty-state or rankings list.
         try:
-            app_info = GioUnix.DesktopAppInfo.new(app_id)
+            app_info = DesktopApp.new(app_id)
             if app_info:
                 return AppResult(app_info)
         except Exception:  # noqa: BLE001

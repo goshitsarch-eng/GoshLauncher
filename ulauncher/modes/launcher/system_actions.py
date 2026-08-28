@@ -147,22 +147,20 @@ def probe_logind(*, force: bool = False) -> dict[str, str]:
         return _logind.cache
     answers: dict[str, str] = {}
     try:
-        from ulauncher.gi import Gio, GLib
+        from ulauncher.utils import qdbus
 
-        bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        bus = qdbus.system_bus()
         for method in ("CanPowerOff", "CanReboot", "CanSuspend"):
-            result = bus.call_sync(
+            result = qdbus.call(
+                bus,
                 "org.freedesktop.login1",
                 "/org/freedesktop/login1",
                 "org.freedesktop.login1.Manager",
                 method,
-                None,
-                GLib.VariantType.new("(s)"),
-                Gio.DBusCallFlags.NONE,
-                150,
-                None,
+                timeout_ms=150,
             )
-            answers[method] = str(result.unpack()[0])
+            if result:
+                answers[method] = str(result[0])
     except Exception:
         logger.debug("logind Can* probe failed", exc_info=True)
     _logind.cache = answers
@@ -185,32 +183,22 @@ ORIENTATION_SCHEMA = "org.gnome.settings-daemon.peripherals.touchscreen"
 ORIENTATION_KEY = "orientation-lock"
 
 
-def _orientation_settings() -> Any | None:
-    try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return None
-    try:
-        source = Gio.SettingsSchemaSource.get_default()
-        if source is None or source.lookup(ORIENTATION_SCHEMA, True) is None:
-            return None
-        return Gio.Settings.new(ORIENTATION_SCHEMA)
-    except (GLib.GError, AttributeError, TypeError, RuntimeError, OSError):
-        return None
-
-
 def get_orientation_locked() -> bool:
-    settings = _orientation_settings()
-    if settings is None:
+    import subprocess
+
+    exe = shutil.which("gsettings")
+    if not exe:
         return False
-    return bool(settings.get_boolean(ORIENTATION_KEY))
+    try:
+        raw = subprocess.check_output(  # noqa: S603
+            [exe, "get", ORIENTATION_SCHEMA, ORIENTATION_KEY], text=True, stderr=subprocess.DEVNULL, timeout=2
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return raw.strip() == "true"
 
 
 def set_orientation_locked(locked: bool) -> bool:
-    settings = _orientation_settings()
-    if settings is not None:
-        settings.set_boolean(ORIENTATION_KEY, locked)
-        return True
     exe = shutil.which("gsettings")
     if not exe:
         return False
@@ -271,23 +259,18 @@ def show_screenshot_ui(bus_call: Callable[[], bool] | None = None) -> bool:
 
 def _portal_screenshot_call() -> bool:
     try:
-        from ulauncher.gi import Gio, GLib
-    except (ImportError, AttributeError, RuntimeError, OSError):
-        return False
-    try:
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        bus.call_sync(
+        from ulauncher.utils import qdbus
+
+        reply = qdbus.call(
+            qdbus.session_bus(),
             "org.freedesktop.portal.Desktop",
             "/org/freedesktop/portal/desktop",
             "org.freedesktop.portal.Screenshot",
             "Screenshot",
-            GLib.Variant("(sa{sv})", ("", {"interactive": GLib.Variant("b", True)})),
-            None,
-            Gio.DBusCallFlags.NONE,
-            400,
-            None,
+            ["", {"interactive": True}],
+            timeout_ms=400,
         )
-        return True
+        return reply is not None
     except Exception:
         return False
 

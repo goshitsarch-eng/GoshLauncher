@@ -8,21 +8,12 @@ from unittest.mock import Mock
 
 import pytest
 
-from ulauncher.gi import GLib
+from tests.utils.loop_helpers import process_pending_events
 from ulauncher.utils.socket_msg_controller import SocketMsgController
 
 
 def receive_msg(sock: socket.socket) -> str:
     return sock.recv(1024).decode()
-
-
-def process_pending_events(iterations: int = 10) -> None:
-    """Process pending GLib events."""
-    context = GLib.MainContext.default()
-    for _ in range(iterations):
-        while context.pending():
-            context.iteration(False)
-        GLib.usleep(1000)  # 1ms
 
 
 @pytest.fixture
@@ -42,12 +33,13 @@ def controller_pair(
 ) -> Generator[tuple[SocketMsgController, socket.socket], None, None]:
     parent, child = socket_pair
     controller = SocketMsgController(parent.fileno())
+    # The controller owns the fd from here on; keep the socket object from double-closing it.
+    parent.detach()
     yield controller, child
-    # Close child first so any pending read_line_async gets EOF and stops re-queuing.
     with contextlib.suppress(OSError):
         child.close()
     controller.close()
-    # Drain pending GLib I/O callbacks so the fd watch is removed before new tests
+    # Drain pending I/O callbacks so the fd watch is removed before new tests
     # allocate fds that might reuse the same fd numbers.
     process_pending_events()
 
@@ -92,17 +84,18 @@ class TestSocketMsgController:
         """Test on_close is only called once."""
         parent, child = socket_pair
         on_close = Mock()
-        controller = SocketMsgController(parent.fileno(), on_close=on_close)
+        controller = SocketMsgController(parent.detach(), on_close=on_close)
         controller.listen(lambda _on_msg: None)
         child.close()
         process_pending_events()
         assert on_close.call_count == 1
+        controller.close()
 
     def test_close_method(self, socket_pair: tuple[socket.socket, socket.socket]) -> None:
         """Test that close can be called multiple times but only trigger on_close once."""
         parent, _child = socket_pair
         on_close = Mock()
-        controller = SocketMsgController(parent.fileno(), on_close=on_close)
+        controller = SocketMsgController(parent.detach(), on_close=on_close)
         controller.close()
         controller.close()
         controller.close()
@@ -112,12 +105,13 @@ class TestSocketMsgController:
         """Test that sending after close triggers on_close."""
         parent, child = socket_pair
         on_close = Mock()
-        controller = SocketMsgController(parent.fileno(), on_close=on_close)
+        controller = SocketMsgController(parent.detach(), on_close=on_close)
 
         child.close()
         controller.send({"test": "data"})
 
         assert on_close.called
+        controller.close()
 
     def test_two_way_communication(self, controller_pair: tuple[SocketMsgController, socket.socket]) -> None:
         """Test sending and receiving in both directions."""

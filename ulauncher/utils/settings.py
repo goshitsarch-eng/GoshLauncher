@@ -67,6 +67,8 @@ class Settings(JsonConf):
     show_web_search: bool = True
     enable_empty_suggestions: bool = True
     enable_app_actions: bool = True
+    # Qt UI color scheme: "system" follows the desktop, or force "light"/"dark"
+    color_scheme: str = "system"
 
     # Convert dash to underscore
     def __setitem__(self, key: str, value: Any) -> None:  # type: ignore[override]

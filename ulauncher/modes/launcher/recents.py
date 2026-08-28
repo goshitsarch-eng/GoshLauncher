@@ -258,33 +258,7 @@ def _apply_uris(uris: list[str], load_id: int) -> None:
     _flush_ready()
 
 
-def _decode_contents(source: Any, result: Any) -> str:
-    try:
-        finished = source.load_contents_finish(result)
-    except Exception:
-        return ""
-    contents: Any = finished
-    if isinstance(finished, tuple):
-        contents = finished[1] if isinstance(finished[0], bool) else finished[0]
-    if isinstance(contents, memoryview):
-        contents = contents.tobytes()
-    if isinstance(contents, bytes):
-        return contents.decode("utf-8", errors="replace")
-    return str(contents or "")
 
-
-def _exists_finished(source: Any, result: Any) -> bool:
-    try:
-        return bool(source.query_exists_finish(result))
-    except Exception:
-        return False
-
-
-def _query_exists_async(file: Any, glib: Any, callback: Callable[[Any, Any], None]) -> None:
-    try:
-        file.query_exists_async(glib.PRIORITY_DEFAULT, None, callback)
-    except TypeError:
-        file.query_exists_async(None, callback)
 
 
 def _uri_exists_sync(uri: str) -> bool:
@@ -311,75 +285,6 @@ def _keep_existing_sync(uris: list[str]) -> list[str]:
     return kept
 
 
-def _start_exists(load_id: int, uris: list[str]) -> None:
-    if load_id != _recent_lookup.load_id or _recent_lookup.uris is not None:
-        return
-    if not uris:
-        _apply_uris([], load_id)
-        return
-
-    kept: list[str] = [""] * len(uris)
-    pending = len(uris)
-    started = time.monotonic()
-    settled = False
-
-    def settle() -> None:
-        nonlocal settled
-        if settled or load_id != _recent_lookup.load_id:
-            return
-        settled = True
-        _apply_uris(kept, load_id)
-
-    def finish_sync() -> None:
-        if _recent_lookup.uris is not None:
-            return
-        _apply_uris(_keep_existing_sync(uris), load_id)
-
-    _recent_lookup.pending_finish = finish_sync
-    try:
-        from ulauncher.gi import Gio, GLib
-    except Exception:
-        finish_sync()
-        return
-
-    try:
-        from ulauncher.utils import scheduling
-
-        _recent_lookup.timeout = scheduling.timer(RECENT_EXISTS_BUDGET_MS / 1000.0, settle)
-    except Exception:
-        _recent_lookup.timeout = None
-
-    for index, raw in enumerate(uris):
-        uri = canonicalize_launch_uri(raw)
-        if not uri:
-            pending -= 1
-            if recent_exists_should_settle(pending, (time.monotonic() - started) * 1000):
-                settle()
-            continue
-        file = Gio.File.new_for_uri(uri)
-
-        def on_exists(src: Any, res: Any, slot: int = index, checked: str = uri) -> None:
-            nonlocal pending
-            exists = _exists_finished(src, res)
-            if load_id != _recent_lookup.load_id:
-                return
-            if exists:
-                kept[slot] = checked
-            pending -= 1
-            elapsed_ms = (time.monotonic() - started) * 1000
-            if recent_exists_should_settle(pending, elapsed_ms):
-                settle()
-
-        try:
-            _query_exists_async(file, GLib, on_exists)
-        except Exception:
-            if _uri_exists_sync(uri):
-                kept[index] = uri
-            pending -= 1
-            if recent_exists_should_settle(pending, (time.monotonic() - started) * 1000):
-                settle()
-
-
 def _start_load() -> None:
     load_id = _recent_lookup.load_id
     _recent_lookup.loading = True
@@ -390,36 +295,17 @@ def _start_load() -> None:
         _apply_uris(_keep_existing_sync(parse_recent_xbel(_read_xbel_sync())), load_id)
 
     _recent_lookup.pending_finish = finish_sync
-    try:
-        from ulauncher.gi import Gio, GLib
-    except Exception:
-        finish_sync()
-        return
+    # Deferred sync read: local paths are checked with a plain stat, remote URIs are
+    # kept without probing (see _uri_exists_sync) - a network probe here could block
+    # search on an unreachable mount, and the open path handles unreachable shares.
+    from ulauncher.utils import scheduling
 
-    file = Gio.File.new_for_path(str(XBEL))
-
-    def on_exists(src: Any, exists_res: Any) -> None:
-        exists = _exists_finished(src, exists_res)
+    def _load_deferred() -> None:
         if load_id != _recent_lookup.load_id or _recent_lookup.uris is not None:
             return
-        if not exists:
-            _apply_uris([], load_id)
-            return
-
-        def on_loaded(loaded: Any, load_res: Any) -> None:
-            if load_id != _recent_lookup.load_id or _recent_lookup.uris is not None:
-                return
-            _start_exists(load_id, parse_recent_xbel(_decode_contents(loaded, load_res)))
-
-        try:
-            src.load_contents_async(None, on_loaded)
-        except Exception:
-            _apply_uris([], load_id)
-
-    try:
-        _query_exists_async(file, GLib, on_exists)
-    except Exception:
         finish_sync()
+
+    scheduling.run_when_idle(_load_deferred)
 
 
 def ensure_recent_files(on_ready: Callable[[], None]) -> None:

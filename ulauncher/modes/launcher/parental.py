@@ -90,44 +90,30 @@ def app_is_allowed(app: Any) -> bool:
 
 def _malcontent_available() -> bool:
     try:
-        from ulauncher.gi import Gio
+        from ulauncher.utils import qdbus
 
-        proxy = Gio.DBusProxy.new_for_bus_sync(
-            Gio.BusType.SESSION,
-            Gio.DBusProxyFlags.DO_NOT_LOAD_PROPERTIES
-            | Gio.DBusProxyFlags.DO_NOT_CONNECT_SIGNALS
-            | Gio.DBusProxyFlags.DO_NOT_AUTO_START,
-            None,
-            "org.freedesktop.Malcontent1",
-            "/org/freedesktop/Malcontent1/Manager",
-            "org.freedesktop.Malcontent1.Manager",
-            None,
-        )
-        # A proxy is handed back for a name nobody owns, so the object alone proves nothing.
-        # Without this, a session with no malcontent looks like one whose probe is still pending
-        # and every app is withheld until PARENTAL_GIVE_UP_MS has passed.
-        return proxy is not None and bool(proxy.get_name_owner())
+        # A session with no malcontent must not look like one whose probe is still
+        # pending, or every app is withheld until PARENTAL_GIVE_UP_MS has passed.
+        return qdbus.name_has_owner(qdbus.session_bus(), "org.freedesktop.Malcontent1")
     except Exception:
         return False
 
 
 def _load_app_filter() -> Callable[[str], bool] | None:
     try:
-        from ulauncher.gi import Gio, GLib
+        from ulauncher.utils import qdbus
 
-        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        result = bus.call_sync(
+        payload = qdbus.call(
+            qdbus.session_bus(),
             "org.freedesktop.Malcontent1",
             "/org/freedesktop/Malcontent1/Manager",
             "org.freedesktop.Malcontent1.Manager",
             "GetAppFilter",
-            GLib.Variant("(ub)", (os.getuid(), False)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            200,
-            None,
+            [qdbus.uint32(os.getuid()), False],
+            timeout_ms=200,
         )
-        payload = result.unpack()
+        if payload is None:
+            return None
         blocked: set[str] = set()
         if payload:
             first = payload[0]

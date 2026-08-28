@@ -220,34 +220,11 @@ def _apply_command_ready(query: str, argv: list[str], ready: bool, load_id: int)
 
 
 def _start_command_stat(exe: str, on_ready: Callable[[bool], None]) -> None:
-    try:
-        from ulauncher.gi import Gio, GLib
-    except Exception:
-        on_ready(_command_file_ready(exe))
-        return
+    # Deferred to the next main-loop turn to keep the callback contract async
+    # (callers arm their lookup state before the result may arrive).
+    from ulauncher.utils import scheduling
 
-    def _done(source: Any, result: Any) -> None:
-        ready = False
-        try:
-            info = source.query_info_finish(result)
-            ready = command_file_is_ready(
-                info.get_file_type() == Gio.FileType.DIRECTORY,
-                info.get_attribute_boolean("access::can-execute"),
-            )
-        except Exception:
-            ready = False
-        on_ready(ready)
-
-    try:
-        Gio.File.new_for_path(exe).query_info_async(
-            "standard::type,access::can-execute",
-            Gio.FileQueryInfoFlags.NONE,
-            GLib.PRIORITY_DEFAULT,
-            None,
-            _done,
-        )
-    except Exception:
-        on_ready(_command_file_ready(exe))
+    scheduling.run_when_idle(lambda: on_ready(_command_file_ready(exe)))
 
 
 def invalidate_command_lookup() -> None:

@@ -1,73 +1,137 @@
+"""The Qt application: lifecycle, single instance, EventBus surface, windows."""
+
 from __future__ import annotations
 
-import json
 import logging
+import os
 import signal
-from typing import TYPE_CHECKING, Any, Literal, cast
-from weakref import WeakValueDictionary
-
-import gi
-from gi.repository import Adw, Gtk
+import time
+from typing import TYPE_CHECKING, Any
 
 import ulauncher
-from ulauncher import app_display_name, app_id, first_run, paths
+from ulauncher import app_display_name, first_run, paths
 from ulauncher.core import UlauncherCore
-from ulauncher.gi import Gio, GLib
-from ulauncher.internals.results_update import ResultsUpdate
-from ulauncher.ui.ulauncher_window import UlauncherWindow
 from ulauncher.utils import scheduling
 from ulauncher.utils.eventbus import EventBus
 from ulauncher.utils.settings import Settings
 
 if TYPE_CHECKING:
     from ulauncher.internals.result import Result
+    from ulauncher.internals.results_update import ResultsUpdate
+    from ulauncher.ui.launcher_window import LauncherWindow
 
 logger = logging.getLogger(__name__)
 events = EventBus("app")
 
 
-class UlauncherApp(Adw.Application):
-    # Gtk.Applications check if the app is already registered and if so,
-    # new instances sends the signals to the registered one
-    # So all methods except __init__ runs on the main app
+class UlauncherApp:
     query = ""
-    # One-shot: set to True to make the next activation a no-op.
-    skip_next_activate: bool = False
-    # Whether the app should keep running with no windows open. Set in setup() from the
-    # systemd unit state (or keep_alive fallback) and kept in sync by toggle_hold().
-    _persistent: bool = False
-    # App-scoped query/mode controller, shared by every launcher window.
     core: UlauncherCore
-    windows: WeakValueDictionary[Literal["main", "preferences"], Gtk.Window]
-    _tray_icon: ulauncher.ui.helpers.tray_icon.TrayIcon | None = None  # pyrefly: ignore[implicit-import]
+    _persistent: bool = False
+    _tray_icon: Any = None
+    _launcher_window: LauncherWindow | None = None
+    _preferences_window: Any = None
+    _dbus_service: Any = None
+    _quit_timer: scheduling.Context | None = None
 
-    @staticmethod
-    def get_gtk_version() -> tuple[int, int, int]:
-        return (Gtk.get_major_version(), Gtk.get_minor_version(), Gtk.get_micro_version())
+    def __init__(self) -> None:
+        from PySide6.QtGui import QIcon
+        from PySide6.QtQml import QQmlApplicationEngine
+        from PySide6.QtQuickControls2 import QQuickStyle
+        from PySide6.QtWidgets import QApplication
 
-    @staticmethod
-    def get_pygobject_version() -> tuple[int, int, int]:
-        return gi.version_info  # type: ignore[attr-defined]
+        # qqc2-desktop-style makes QML controls render like native KDE widgets;
+        # respect an explicit user override via the standard env var.
+        if not os.environ.get("QT_QUICK_CONTROLS_STYLE"):
+            QQuickStyle.setStyle("org.kde.desktop")
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        kwargs.update(application_id=app_id)
-        super().__init__(*args, **kwargs)
-        self.windows = WeakValueDictionary()
-        self._popup_open_idle = None
-        self._popup_close_idle = None
-        self._popup_open_pending = False
-        self._popup_close_pending = False
-        self._popup_reopen_after_close = False
-        self._popup_close_save_query = False
+        self.qt_app = QApplication([])
+        self.qt_app.setApplicationName("ulauncher")
+        self.qt_app.setApplicationDisplayName(app_display_name)
+        self.qt_app.setDesktopFileName(ulauncher.app_id)
+        self.qt_app.setQuitOnLastWindowClosed(False)
+        icon = QIcon.fromTheme("ulauncher")
+        if icon.isNull():
+            icon = QIcon(os.path.join(paths.ASSETS, "icons", "system", "apps", "ulauncher.svg"))
+        self.qt_app.setWindowIcon(icon)
+
+        from ulauncher.ui.icons import AppIconProvider
+
+        self.qml_engine = QQmlApplicationEngine()
+        self.qml_engine.addImageProvider(AppIconProvider.NAME, AppIconProvider())
+
         self._toggle_last_time_us = 0
         events.set_self(self)
-        self.connect("startup", lambda *_: self.setup())  # runs only once on the main instance
 
-    @events.on
-    def set_query(self, value: str, update_input: bool = True) -> None:
-        self.query = value.lstrip()
-        if update_input and (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
-            main_window.set_input(self.query)
+    # Lifecycle
+
+    def start(self, *, activate: bool = True) -> int:
+        from ulauncher.ui import dbus_service
+
+        service = dbus_service.register(self)
+        if service is None:
+            # Another instance owns the bus name; delegate and exit.
+            logger.info("%s is already running", app_display_name)
+            if activate:
+                dbus_service.call_running_instance("ShowWindow")
+            return 0
+        self._dbus_service = service
+        self._setup()
+        if activate:
+            self.show_launcher()
+        return self.qt_app.exec()
+
+    def _setup(self) -> None:
+        settings = Settings.load()
+        self.core = UlauncherCore()
+
+        from ulauncher.ui.theme import apply_color_scheme
+
+        apply_color_scheme(getattr(settings, "color_scheme", "system"))
+
+        self._persistent = settings.is_persistent()
+        if self._persistent:
+            # Warm the modes so extension handlers register and enabled extensions start.
+            def _warm_triggers() -> None:
+                if self._launcher_window is None:
+                    self.core.load_triggers()
+
+            scheduling.run_when_idle(_warm_triggers)
+
+        if settings.show_tray_icon and self._persistent:
+            self.toggle_tray_icon(True)
+
+        # SIGTERM must interrupt the Qt loop; the interval keeps the interpreter
+        # waking up so Python-level signal handlers actually run.
+        signal.signal(signal.SIGTERM, lambda *_: self.quit())
+        signal.signal(signal.SIGINT, lambda *_: self.quit())
+        scheduling.interval(0.5, lambda: None)
+
+        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
+        from ulauncher.ui.hotkey_controller import HotkeyController
+
+        hotkey = settings.hotkey_show_app or DEFAULT_FALLBACK
+        # Portal sessions die with the process, so this must run on every startup.
+        portal_bound = HotkeyController.bind_session_hotkey(hotkey, self.toggle_window)
+
+        if first_run:
+            if HotkeyController.is_supported():
+                if HotkeyController.setup_default(hotkey):
+                    from ulauncher.modes.launcher.shortcut import format_accelerator
+
+                    body = (
+                        f"{app_display_name} has added a global keyboard shortcut: "
+                        f'"{format_accelerator(hotkey)}" to your desktop settings'
+                    )
+                    self.show_notification("de_hotkey_auto_created", "Global shortcut created", body)
+            elif not portal_bound:
+                body = (
+                    f"{app_display_name} doesn't support setting global keyboard shortcuts for your desktop. "
+                    "There are more details on this in the preferences view."
+                )
+                self.show_notification("de_hotkey_unsupported", "Cannot create global shortcut", body)
+
+    # Core interaction
 
     def query_changed(self, query_str: str) -> None:
         """Run the new query string through the core and render the results."""
@@ -82,126 +146,54 @@ class UlauncherApp(Adw.Application):
         return self.core.handle_backspace(query_str)
 
     def window_ready(self) -> None:
-        # The window decides when this runs, to control startup performance.
         self.core.load_triggers(force=True)
         self.core.set_query(self.query, self.show_results)
 
+    def show_results(self, update: ResultsUpdate) -> None:
+        """Render results in the launcher window if it is currently open."""
+        if self._launcher_window is not None and self._launcher_window.visible:
+            self._launcher_window.show_results(update)
+
+    # EventBus surface (also reachable over D-Bus TriggerEvent)
+
+    @events.on
+    def set_query(self, value: str, update_input: bool = True) -> None:
+        self.query = value.lstrip()
+        if update_input and self._launcher_window is not None:
+            self._launcher_window.set_input(self.query)
+
     @events.on
     def reload_query(self) -> None:
-        if "main" in self.windows:
+        if self._launcher_window is not None and self._launcher_window.visible:
             self.core.set_query(self.query, self.show_results)
 
     @events.on
     def prefs_saved(self, keys: tuple[str, ...]) -> None:
         from ulauncher.modes.launcher.prefs_live import live_pref_actions
 
+        if "color_scheme" in keys:
+            from ulauncher.ui.theme import apply_color_scheme
+
+            apply_color_scheme(getattr(Settings.load(), "color_scheme", "system"))
         actions = live_pref_actions(keys)
-        if not actions:
-            return
-        if (main_window := self.windows.get("main")) and isinstance(main_window, UlauncherWindow):
-            main_window.apply_live_prefs(actions)
-
-    def do_startup(self) -> None:
-        Adw.Application.do_startup(self)
-        Gio.ActionMap.add_action_entries(
-            self,
-            [
-                ("show-preferences", lambda *_: self.show_preferences(), None),
-                ("show-window", lambda *_: self.show_launcher(), None),
-                ("hide-window", lambda *_: self.close_launcher(), None),
-                ("toggle-window", lambda *_: self.toggle_window(), None),
-                ("toggle-tray-icon", lambda *args: self.toggle_tray_icon(args[1].get_boolean()), "b"),
-                ("set-query", lambda *args: self.activate_query(args[1].get_string()), "s"),
-                ("trigger-event", lambda *args: self.delegate_custom_message(args[1].get_string()), "s"),
-            ],
-        )
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._on_sigterm)
-
-    def _on_sigterm(self) -> bool:
-        self.quit()
-        return False
-
-    def do_activate(self, *_args: Any, **_kwargs: Any) -> None:
-        if self.skip_next_activate:
-            self.skip_next_activate = False
-            return
-        logger.debug("Activated via gapplication")
-        self.show_launcher()
-
-    def start(self, *, activate: bool = True) -> None:
-        self.register()
-        if self.get_is_remote() and not activate:
-            # Daemon already running in another process; this invocation has nothing to do.
-            return
-        self.skip_next_activate = not activate
-        self.run([])
-
-    def setup(self) -> None:
-        settings = Settings.load()
-        self.core = UlauncherCore()
-        # Always hold on app start (conditionally release after closing window)
-        self.hold()
-        self._persistent = settings.is_persistent()
-        if self._persistent:
-            # Sync additional hold with user settings
-            self.hold()
-
-            # Warm the modes so extension handlers register and enabled extensions start.
-            # Skip if a window exists - it needs to control when this runs for startup performance reasons.
-            def _warm_triggers() -> None:
-                if "main" not in self.windows:
-                    self.core.load_triggers()
-
-            scheduling.run_when_idle(_warm_triggers)
-
-        if settings.show_tray_icon and self._persistent:
-            self.toggle_tray_icon(True)
-
-        from ulauncher.modes.launcher.shortcut import DEFAULT_FALLBACK
-        from ulauncher.ui.helpers.hotkey_controller import HotkeyController
-
-        hotkey = settings.hotkey_show_app or DEFAULT_FALLBACK
-        # Portal sessions die with the process, so this must run on every startup.
-        portal_bound = HotkeyController.bind_session_hotkey(hotkey, self.toggle_window)
-
-        if first_run:
-            if HotkeyController.is_supported():
-                if HotkeyController.setup_default(hotkey):
-                    from ulauncher.ui import gtk4
-
-                    display_name = gtk4.accelerator_label(hotkey)
-                    body = (
-                        f"{app_display_name} has added a global keyboard shortcut: "
-                        f'"{display_name}" to your desktop settings'
-                    )
-                    self.show_notification("de_hotkey_auto_created", "Global shortcut created", body)
-            elif not portal_bound:
-                body = (
-                    f"{app_display_name} doesn't support setting global keyboard shortcuts for your desktop. "
-                    "There are more details on this in the preferences view (click here to open)."
-                )
-                self.show_notification(
-                    "de_hotkey_unsupported", "Cannot create global shortcut", body, "app.show-preferences"
-                )
+        if actions and self._launcher_window is not None:
+            self._launcher_window.apply_live_prefs(actions)
 
     @events.on
     def rebind_hotkey(self, accel: str) -> None:
-        from ulauncher.ui.helpers.hotkey_controller import HotkeyController
+        from ulauncher.ui.hotkey_controller import HotkeyController
 
         HotkeyController.rebind_portal(accel)
 
     @events.on
     def show_notification(self, notification_id: str | None, title: str, body: str, default_action: str = "-") -> None:
-        notification = Gio.Notification.new(title)
-        # Defaults to non-existing action "-" to prevent activating on click
-        notification.set_default_action(default_action)
-        notification.set_body(body)
-        notification.set_priority(Gio.NotificationPriority.URGENT)
-        self.send_notification(notification_id, notification)
+        from ulauncher.ui.notify import show_notification
+
+        show_notification(title, body)
 
     @events.on
     def clipboard_store(self, data: str) -> None:
-        from ulauncher.ui.gtk4 import clipboard_set_text
+        from ulauncher.ui.clipboard import clipboard_set_text
 
         clipboard_set_text(data)
 
@@ -217,166 +209,80 @@ class UlauncherApp(Adw.Application):
 
         locked, greeter, limits = session_popup_blockers()
         if should_close_on_session(locked, greeter, limits):
-            if self.windows.get("main"):
-                self.close_launcher()
+            self.close_launcher()
             return
         if not can_open_popup(False, False, locked, greeter, limits):
             return
 
-        # goshos launcherPopup.open: invalidate then this._entry.set_text('').
+        self._cancel_quit_timer()
         self.query = popup_open_entry_text()
 
-        if (main_window := self.windows.get("main")) and not main_window.get_mapped():
-            logger.warning("Ignoring stale main window reference")
-            del self.windows["main"]
+        if self._launcher_window is None:
+            from ulauncher.ui.launcher_window import LauncherWindow
 
-        if "main" not in self.windows:
-            main_window = UlauncherWindow(application=self)
-            main_window.connect("destroy", self._on_window_destroyed, "main")
-            self.windows["main"] = main_window
-        elif (main_window := self.windows.get("main")) is not None:
-            setter = getattr(main_window, "set_input", None)
-            if callable(setter):
-                setter(self.query)
-
-    def _on_window_destroyed(self, _window: Gtk.Window, key: Literal["main", "preferences"]) -> None:
-        self.windows.pop(key, None)
-        self._popup_close_pending = False
-        if key == "main" and getattr(self, "_popup_reopen_after_close", False):
-            self._popup_reopen_after_close = False
-            self.show_launcher()
-            return
-        if not self.windows and not self._persistent:
-            # Clipboard contents only live as long as the owning app, and clipboard managers
-            # (klipper, gpaste, wl-clip-persist, ...) need time to snapshot them after we set
-            # ownership. X11/Wayland have no "snapshot done" event, and managers react on their
-            # own schedule with non-trivial wakeup latency. GTK4's Gdk.Clipboard.store_async
-            # can persist the selection, but compositors still race shutdown. Delay the quit by 1s on the
-            # chance the user's last action was a clipboard copy. 0.25s wasn't enough; 1s seems
-            # to work, but maybe not on all systems.
-            #
-            # re-check windows in case the user re-opened it during the delay
-            scheduling.timer(1, lambda: self.quit() if not self.windows else None)
-
-    def show_results(self, update: ResultsUpdate) -> None:
-        """Render results in the launcher window if it is currently open."""
-        if main_window := cast("UlauncherWindow | None", self.windows.get("main")):
-            main_window.show_results(update)
+            self._launcher_window = LauncherWindow(self)
+        self._launcher_window.set_input(self.query)
+        self._launcher_window.show()
+        scheduling.run_when_idle(self.window_ready)
 
     @events.on
     def close_launcher(self) -> None:
-        self.request_close(save_query=False)
+        self.request_close()
 
     def request_close(self, save_query: bool = False) -> None:
-        self._cancel_pending_open()
-        self._schedule_close(save_query=save_query)
+        if self._launcher_window is not None and self._launcher_window.visible:
+            self._launcher_window.hide()
+            from ulauncher.core import reject_async_paints
 
-    def close_window(self) -> None:
-        self.close_launcher()
+            # Drop in-flight async provider paints so a stale finish can't repaint later
+            reject_async_paints()
+        self.query = ""
+        self._maybe_quit_later()
 
-    def _schedule_open(self) -> None:
-        from ulauncher.modes.launcher.popup_gate import should_schedule_open
-
-        main = self.windows.get("main")
-        if not should_schedule_open(
-            self._popup_open_idle is not None or self._popup_open_pending,
-            main is not None,
-            bool(main is not None and main.get_mapped()),
-        ):
+    def _maybe_quit_later(self) -> None:
+        if self._persistent or self._windows_open():
             return
-        self._popup_open_pending = True
-        self._popup_open_idle = scheduling.run_when_idle(self._run_pending_open)
+        # Clipboard managers need time to snapshot our clipboard ownership after a
+        # copy action; there is no "snapshot done" event, so delay the quit by 1s.
+        self._cancel_quit_timer()
+        self._quit_timer = scheduling.timer(1, lambda: None if self._windows_open() or self._persistent else self.quit())
 
-    def _run_pending_open(self) -> None:
-        from ulauncher.modes.launcher.popup_gate import next_open_error_action
+    def _cancel_quit_timer(self) -> None:
+        if self._quit_timer is not None:
+            self._quit_timer.cancel()
+            self._quit_timer = None
 
-        self._popup_open_idle = None
-        self._popup_open_pending = False
-        try:
-            self.show_launcher()
-        except Exception:
-            logger.exception("Opening the launcher failed")
-            main = self.windows.get("main")
-            visible = bool(main is not None and main.get_mapped())
-            if next_open_error_action(main is not None, visible) == "close":
-                self.request_close()
-
-    def _cancel_pending_open(self) -> None:
-        idle = self._popup_open_idle
-        self._popup_open_idle = None
-        self._popup_open_pending = False
-        if idle is not None:
-            idle.cancel()
-
-    def _schedule_close(self, save_query: bool = False) -> None:
-        from ulauncher.modes.launcher.popup_gate import should_schedule_close
-
-        if save_query:
-            self._popup_close_save_query = True
-        if not should_schedule_close(self._popup_close_idle is not None or self._popup_close_pending):
-            return
-        self._popup_close_pending = True
-        self._popup_close_idle = scheduling.run_when_idle(self._run_pending_close)
-
-    def _run_pending_close(self) -> None:
-        self._popup_close_idle = None
-        save_query = bool(self._popup_close_save_query)
-        self._popup_close_save_query = False
-        if main_window := self.windows.get("main"):
-            cast("UlauncherWindow", main_window).close(save_query=save_query)
-        else:
-            self._popup_close_pending = False
-
-    def _arm_reopen_after_close(self) -> None:
-        from ulauncher.modes.launcher.popup_gate import next_reopen_after_close
-
-        if not self._popup_close_pending:
-            return
-        self._popup_reopen_after_close = next_reopen_after_close(True, self._popup_reopen_after_close)
+    def _windows_open(self) -> bool:
+        launcher_open = self._launcher_window is not None and self._launcher_window.visible
+        prefs_open = self._preferences_window is not None and self._preferences_window.visible
+        return launcher_open or prefs_open
 
     @events.on
     def show_preferences(self, page: str | None = None) -> None:
-        # It's technically possible to trigger this GAction before the app has started,
-        # in which case we would have to start all the modes + extensions just for the preferences
-        # or it would be broken in several ways (runtime status, start, install, preferences event)
-        # and the cli would send dbus messages to the preferences (would break `ulauncher preview`)
-        if not self._persistent and not self.windows:
+        if not self._persistent and not self._windows_open():
             logger.error("You have to start %s before you can open preferences.", app_display_name)
             self.quit()
             return
 
-        # Register prefs in self.windows before closing main, so the main destroy handler
-        # sees a remaining window and doesn't quit the app on non-persistent setups.
-        from ulauncher.ui.preferences.preferences_window import PreferencesWindow
+        self._cancel_quit_timer()
+        if self._launcher_window is not None:
+            self._launcher_window.hide()
 
-        preferences = cast("PreferencesWindow | None", self.windows.get("preferences"))
-        if preferences and not preferences.get_mapped():
-            logger.warning("Ignoring stale Preferences window reference (suspecting a memory leak)")
-            del self.windows["preferences"]
-            preferences = None
-        is_new = preferences is None
-        if preferences is None:
-            preferences = PreferencesWindow(application=self)
-            preferences.connect("destroy", self._on_window_destroyed, "preferences")
-            self.windows["preferences"] = preferences
+        if self._preferences_window is None:
+            from ulauncher.ui.preferences.prefs_window import PreferencesWindow
 
-        if main_window := self.windows.get("main"):
-            cast("UlauncherWindow", main_window).close(save_query=True)
+            self._preferences_window = PreferencesWindow(self)
+        self._preferences_window.show(page)
 
-        if is_new:
-            preferences.show(page)
-        else:
-            preferences.present(page)
+    def preferences_closed(self) -> None:
+        self._maybe_quit_later()
 
     def activate_query(self, query_str: str) -> None:
-        self.activate()
+        self.show_launcher()
         self.set_query(query_str)
 
     def toggle_window(self) -> None:
         """Toggle window visibility - for explicit toggle requests only."""
-        import time
-
-        from ulauncher.modes.launcher.popup_gate import can_open_popup, next_toggle_action
         from ulauncher.modes.launcher.shortcut import should_ignore_shortcut_repeat
 
         now_us = time.monotonic_ns() // 1000
@@ -385,48 +291,15 @@ class UlauncherApp(Adw.Application):
             return
         self._toggle_last_time_us = now_us
 
-        main = self.windows.get("main")
-        is_open = main is not None
-        visible = bool(main is not None and main.get_mapped())
-        action = next_toggle_action(
-            is_open,
-            visible,
-            bool(self._popup_open_pending),
-            bool(self._popup_close_pending),
-        )
-        if action == "toggle-reopen":
-            self._arm_reopen_after_close()
-            return
-        if action == "cancel-open":
-            self._cancel_pending_open()
-            return
-        if action == "close":
+        if self._launcher_window is not None and self._launcher_window.visible:
             self.request_close()
-            return
-        from ulauncher.modes.launcher.session_state import session_popup_blockers
-
-        locked, greeter, limits = session_popup_blockers()
-        if not can_open_popup(False, False, locked, greeter, limits):
-            return
-        self._schedule_open()
-
-    def delegate_custom_message(self, json_message: str) -> None:
-        """Parses and delegates custom JSON messages to the EventBus listener (if any)"""
-        try:
-            if (data := json.loads(json_message)) and isinstance(data, dict):
-                name = data.get("name")
-                args = data.get("args")
-                if isinstance(name, str) and isinstance(args, list):
-                    events.emit(name, *args)
-                    return
-            logger.error("Custom message fields 'name' or 'args' are missing or invalid: %s", json_message)
-        except json.JSONDecodeError:
-            logger.exception("Failed to parse custom message as JSON: %s", json_message)
+        else:
+            self.show_launcher()
 
     @events.on
     def toggle_tray_icon(self, enable: bool) -> None:
         if not self._tray_icon:
-            from ulauncher.ui.helpers.tray_icon import TrayIcon
+            from ulauncher.ui.tray_icon import TrayIcon
 
             self._tray_icon = TrayIcon()
         # A tray icon is only meaningful while the app keeps running in the background.
@@ -434,15 +307,12 @@ class UlauncherApp(Adw.Application):
 
     @events.on
     def toggle_hold(self, value: bool) -> None:
-        # Idempotent: gio's release() logs a critical warning on underflow.
         if value != self._persistent:
             self._persistent = value
-            self.hold() if value else self.release()
             self.toggle_tray_icon(Settings.load().show_tray_icon)
+            self._maybe_quit_later()
 
     def _cleanup(self) -> None:
-        import os
-        import time
         from contextlib import suppress
         from shutil import rmtree
 
@@ -465,4 +335,4 @@ class UlauncherApp(Adw.Application):
     @events.on
     def quit(self) -> None:
         self._cleanup()
-        super().quit()
+        self.qt_app.quit()

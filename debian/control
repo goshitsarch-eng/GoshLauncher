@@ -16,18 +16,23 @@ Package: ulauncher
 Architecture: all
 Depends: ${misc:Depends},
  ${python3:Depends},
- libgtk-4-1 (>= 4.6),
- gir1.2-gtk-4.0,
- libadwaita-1-0 (>= 1.1),
- gir1.2-adw-1,
- gir1.2-glib-2.0,
- gir1.2-gdkpixbuf-2.0,
- python3-gi,
- python3-gi-cairo
-Recommends: python3-levenshtein, python3-xlib, wmctrl, x11-utils, gir1.2-ayatanaappindicator3-0.1, xdg-desktop-portal, gir1.2-gtk4-layer-shell-1.0 | libgtk4-layer-shell0
+ python3-pyside6.qtcore,
+ python3-pyside6.qtgui,
+ python3-pyside6.qtwidgets,
+ python3-pyside6.qtqml,
+ python3-pyside6.qtquick,
+ python3-pyside6.qtquickcontrols2,
+ python3-pyside6.qtdbus,
+ qml6-module-org-kde-kirigami,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-effects,
+ qml6-module-org-kde-qqc2-desktop-style
+Recommends: python3-levenshtein, python3-xlib, wmctrl, x11-utils, xdg-desktop-portal
 Suggests: git
-Description: GTK 4 + libadwaita application launcher
+Description: Qt 6 + Kirigami application launcher
  GoshLauncher opens with Ctrl+Space and searches URLs, paths, folders,
  bookmarks, apps, calculator, units, color, clock, windows, system actions,
- GNOME Settings, recent files, and the web last unless @. Seventeen looks
- own popup colors. See https://github.com/goshitsarch-eng/spotlight-goshos
+ Settings panels, recent files, and the web last unless @. Built with
+ Qt 6 and KDE Kirigami, following the system light/dark color scheme.
+ See https://github.com/goshitsarch-eng/spotlight-goshos

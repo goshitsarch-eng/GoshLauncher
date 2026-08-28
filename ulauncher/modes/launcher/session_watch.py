@@ -202,62 +202,19 @@ class SessionWatcher:
 
     def _subscribe_dbus(self) -> None:
         try:
-            from ulauncher.gi import Gio
-        except (ImportError, AttributeError, RuntimeError, OSError):
+            from ulauncher.utils import qdbus
+        except ImportError:
             return
-        try:
-            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-        except Exception:
-            return
-
-        def _callback(
-            _connection: Any,
-            _sender: str,
-            _path: str,
-            iface: str,
-            member: str,
-            params: Any,
-            *_user: object,
-        ) -> None:
-            args = params.unpack() if hasattr(params, "unpack") else params
-            self._on_signal(iface, member, args)
 
         system_names = {"org.freedesktop.login1", "org.freedesktop.MalcontentTimer1"}
         for dest, path, iface, member in ALL_WATCHES:
-            connection = _bus_for_dest(Gio, bus, dest, system_names)
-            if connection is None:
-                continue
-            sub_id = _subscribe_signal(connection, Gio, dest, path, iface, member, _callback)
-            if sub_id:
-                self._ids.append((connection, int(sub_id)))
+            bus = qdbus.system_bus() if dest in system_names else qdbus.session_bus()
 
+            def _callback(args: Any, iface: str = iface, member: str = member) -> None:
+                self._on_signal(iface, member, tuple(args))
 
-def _bus_for_dest(gio: Any, session_bus: Any, dest: str, system_names: set[str]) -> Any | None:
-    if dest not in system_names:
-        return session_bus
-    with contextlib.suppress(Exception):
-        return gio.bus_get_sync(gio.BusType.SYSTEM, None)
-    return None
-
-
-def _subscribe_signal(
-    connection: Any,
-    gio: Any,
-    dest: str,
-    path: str,
-    iface: str,
-    member: str,
-    callback: Callable[..., None],
-) -> int:
-    with contextlib.suppress(Exception):
-        sub_id = connection.signal_subscribe(
-            dest,
-            iface,
-            member,
-            path,
-            None,
-            gio.DBusSignalFlags.NONE,
-            callback,
-        )
-        return int(sub_id or 0)
-    return 0
+            with contextlib.suppress(Exception):
+                subscription = qdbus.subscribe(bus, dest, path, iface, member, _callback)
+                if subscription is not None:
+                    # stop() calls signal_unsubscribe(id) on the first tuple element
+                    self._ids.append((subscription, 1))

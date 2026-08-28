@@ -2,10 +2,10 @@ extend = "../../pyproject.toml"
 
 # override the api ban, while preserving all other ban rules
 [lint.flake8-tidy-imports.banned-api]
-"asyncio" = {msg = "To handle async operations, use Gio or Glib async methods that run in the background. See ulauncher.utils.subprocess_utils."}
+"asyncio" = {msg = "To handle async operations, use the scheduling module's callbacks. See ulauncher.utils.subprocess_utils."}
 "gi.repository" = {msg = "Import GI modules from ulauncher.gi, not gi.repository directly."}
 "ulauncher.ui" = {msg = "Import ulauncher.ui only from ulauncher/cli/commands/start.py - it pulls in GTK and must not leak into extension or CLI runtime."}
 "functools.lru_cache" = {msg = "Use ulauncher.utils.lru_cache instead to preserve parameter types."}
 "functools.cache" = {msg = "Use ulauncher.utils.lru_cache instead to preserve parameter types."}
 "functools.cached_property" = {msg = "cached_property erases property types. If you need to use this, create a typed wrapper similar to ulauncher.utils.lru_cache"}
-"threading" = {msg = "Avoid threading. Use callbacks with Glib async methods that run in the background when possible"}
+"threading" = {msg = "Avoid threading. Use callbacks scheduled on the event loop when possible"}
