@@ -93,7 +93,7 @@ let
 
       substituteInPlace \
           ulauncher.service \
-          io.ulauncher.Ulauncher.service \
+          com.goshapps.GoshLauncher.service \
         --replace-fail "/usr" "$out"
 
       substituteInPlace \
@@ -182,7 +182,6 @@ let
       license = licenses.gpl3;
       platforms = platforms.linux;
       mainProgram = "ulauncher";
-      maintainers = with maintainers; [ nazarewk ];
     };
   };
 in

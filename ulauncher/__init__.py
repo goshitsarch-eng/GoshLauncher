@@ -5,7 +5,7 @@ from ._version import version
 
 __all__ = ["version"]
 
-app_id = "io.ulauncher.Ulauncher"
+app_id = "com.goshapps.GoshLauncher"
 app_display_name = "GoshLauncher"
 show_launcher_label = f"Show {app_display_name}"
 dbus_path = "/" + app_id.replace(".", "/")

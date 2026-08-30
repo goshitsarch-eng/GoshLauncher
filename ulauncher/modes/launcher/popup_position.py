@@ -36,7 +36,7 @@ def empty_popup_height(measured: float, fallback: int = 80) -> int:
 
 
 def gtk_default_window_size(width: int, height: int) -> tuple[int, int]:
-    """GTK 4 treats a default height of 1 as a real 1px window and never builds a GSK tree."""
+    """Normalize the retained popup geometry contract for an unset height."""
     return width, height if height > 1 else -1
 
 
@@ -369,7 +369,7 @@ def work_area_avoiding_keyboard(work_area: WorkArea, keyboard: Any) -> dict[str,
 
 
 def popup_surface_can_move(surface: Any) -> bool:
-    """GTK 4 dropped Gtk.Window.move; GdkX11.X11Surface.move is the X11 stand-in."""
+    """Return whether a compatibility surface exposes an explicit move operation."""
     return callable(getattr(surface, "move", None))
 
 

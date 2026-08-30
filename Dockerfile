@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 # Run `make docker` to build this image
 
-LABEL maintainer="ulauncher.app@gmail.com"
+LABEL maintainer="Gosh"
 
 # NOTE: Keep lines separate. One "RUN" per dependency/change
 # https://stackoverflow.com/a/47451019/633921
@@ -36,16 +36,8 @@ RUN apt-get install -y git-buildpackage
 RUN apt-get install -y dput
 RUN apt-get install -y python3-paramiko
 
-# App dependencies
-RUN apt-get install -y gobject-introspection
+# Python runtime used by package and compatibility tests
 RUN apt-get install -y python3-all
-RUN apt-get install -y python3-gi
-RUN apt-get install -y python3-gi-cairo
-RUN apt-get install -y gir1.2-glib-2.0
-RUN apt-get install -y gir1.2-gtk-4.0
-RUN apt-get install -y gir1.2-adw-1
-RUN apt-get install -y libgtk-4-1
-RUN apt-get install -y libadwaita-1-0
 
 # Python 3.8 (the oldest version Ulauncher supports) for the test venv.
 # The system python stays 3.10 for apt and the deb build tooling.
@@ -54,25 +46,13 @@ RUN apt-get install -y python3.8
 RUN apt-get install -y python3.8-venv
 RUN apt-get install -y python3.8-dev
 
-# PyGObject build dependencies. The system python3-gi is built for 3.10, so
-# the 3.8 venv needs its own, installed from source below.
+# Native-extension build tools used by test dependencies.
 RUN apt-get install -y build-essential
 RUN apt-get install -y pkg-config
-RUN apt-get install -y libgirepository1.0-dev
-RUN apt-get install -y libcairo2-dev
 
 # Debian disables ensurepip outside venvs, so bootstrap pip for 3.8 with get-pip
 RUN curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python3.8
 RUN python3.8 -m pip install setuptools wheel
-# pycairo 1.26+ and PyGObject 3.48+ build with meson-python, which can't
-# resolve a working toolchain on 3.8 (pygobject/pycairo#384). These are the
-# last setuptools-built versions. PyGObject is built without isolation so it
-# uses this pycairo instead of resolving 1.26 in an isolated build env.
-# --ignore-installed because python3.8 also sees the apt-installed pycairo and
-# PyGObject (built for 3.10) through /usr/lib/python3/dist-packages, and pip
-# can't uninstall distutils-installed packages. /usr/local shadows them.
-RUN python3.8 -m pip install --ignore-installed "pycairo==1.25.*"
-RUN python3.8 -m pip install --ignore-installed --no-build-isolation "PyGObject==3.46.*"
 RUN python3.8 -m pip install python-xlib
 
 # Make the venv in the makefile use 3.8

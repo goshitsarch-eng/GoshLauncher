@@ -7,15 +7,9 @@ name = "ulauncher"
 description = "Qt 6 + Kirigami launcher matching Spotlight-goshos"
 readme = "README.md"
 requires-python = ">=3.8"
-authors = [
-  {name = "GoshLauncher contributors"},
-]
+authors = [{name = "Gosh"}]
 # GoshLauncher is a fork of Ulauncher; see AUTHORS for the full attribution.
-maintainers = [
-  {name = "Aleksandr Gornostal"},
-  {name = "Albin Larsson"},
-  {name = "Troy Curtis"},
-]
+maintainers = [{name = "Gosh"}]
 urls.Homepage = "https://github.com/goshitsarch-eng/GoshLauncher"
 urls.Documentation = "https://docs.ulauncher.io/"
 urls.Repository = "https://github.com/goshitsarch-eng/GoshLauncher.git"
@@ -117,7 +111,7 @@ select = [
   "B909",     # Mutating a collection while iterating it (preview) ^
   "BLE",      # flake8-blind-except
   "C4",       # flake8-comprehensions
-  # "C90",    # mccabe complexity (we already have PLR0911-PLR0915, and mccabe works poorly with our GLib callback style)
+  # "C90",    # mccabe complexity (we already have PLR0911-PLR0915, and mccabe works poorly with callback-heavy event-loop code)
   # "COM",    # flake8-commas (we use ruff format instead)
   # "CPY",    # flake8-copyright (enforces copyright headers in python files)
   "DTZ",      # flake8-datetimez
@@ -181,7 +175,7 @@ banned-module-level-imports = ["typing_extensions"]
 "functools.lru_cache" = {msg = "Use ulauncher.utils.lru_cache instead to preserve parameter types."}
 "functools.cache" = {msg = "Use ulauncher.utils.lru_cache instead to preserve parameter types."}
 "functools.cached_property" = {msg = "cached_property erases property types. If you need to use this, create a typed wrapper similar to ulauncher.utils.lru_cache"}
-"threading" = {msg = "Avoid threading. Use callbacks with Glib async methods that run in the background when possible"}
+"threading" = {msg = "Avoid threading. Use callbacks scheduled on the Qt event loop when possible."}
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [  # Relax some linting rules for tests

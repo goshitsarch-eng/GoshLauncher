@@ -175,7 +175,7 @@ def run(args: CLIArguments) -> int:
     Returns 0 on success, non-zero otherwise.
     """
     if not check_app_running(app_id):
-        logger.error("Error: Ulauncher needs to be running in order to preview extensions.")
+        logger.error("Error: GoshLauncher needs to be running in order to preview extensions.")
         return 1
 
     if args.with_debugger and not _ensure_debugger_available():
@@ -205,7 +205,7 @@ def run(args: CLIArguments) -> int:
         log_tail.start()
         dbus_trigger_event("extensions:preview_ext", ext_id, str(path), args.with_debugger)
         logger.info(
-            "Previewing extension '%s'. Its output is shown below, and in %s along with Ulauncher's.",
+            "Previewing extension '%s'. Its output is shown below, and in %s along with GoshLauncher's.",
             ext_id,
             paths.LOG_FILE,
         )

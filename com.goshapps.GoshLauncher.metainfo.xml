@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.goshapps.GoshLauncher</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>GoshLauncher</name>
+  <summary>Qt 6 and KDE Kirigami application launcher</summary>
+  <description>
+    <p>
+      GoshLauncher opens with Ctrl+Space and searches applications, files, folders,
+      bookmarks, windows, settings, calculations, units, colors, URLs, and the web.
+    </p>
+    <p>
+      It uses Qt 6 and KDE Kirigami, follows the desktop color scheme, and keeps
+      compatibility with Ulauncher extension API 3.0 and existing user data.
+    </p>
+  </description>
+  <developer id="com.goshapps">
+    <name>Gosh</name>
+  </developer>
+  <launchable type="desktop-id">com.goshapps.GoshLauncher.desktop</launchable>
+  <provides>
+    <binary>ulauncher</binary>
+  </provides>
+  <url type="homepage">https://github.com/goshitsarch-eng/GoshLauncher</url>
+  <url type="bugtracker">https://github.com/goshitsarch-eng/GoshLauncher/issues</url>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="6.0.0" date="2026-08-30">
+      <description>
+        <ul>
+          <li>Promotes the Qt 6 and KDE Kirigami rewrite to its first stable release.</li>
+          <li>Adopts com.goshapps.GoshLauncher as the permanent catalog and desktop identity.</li>
+          <li>Preserves Ulauncher-era settings, extensions, commands, and data paths for rollback.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

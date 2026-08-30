@@ -49,7 +49,7 @@ def changed_signal(key: str) -> str:
 
 
 def bind_settings_changed(settings: Any, key: str, widget: Any, handler: Callable[..., Any]) -> int:
-    """gio.settings outlives the prefs window; disconnect on widget destroy."""
+    """Disconnect a longer-lived settings object when its preferences widget is destroyed."""
     handler_id = settings.connect(changed_signal(key), handler)
 
     def on_destroy(*_args: object) -> None:
@@ -57,14 +57,14 @@ def bind_settings_changed(settings: Any, key: str, widget: Any, handler: Callabl
 
     connect = getattr(widget, "connect", None)
     if callable(connect):
-        # GTK4 widgets dropped destroy; PreferencesView.unbind_settings is the fallback
+        # Compatibility widgets may omit destroy; PreferencesView.unbind_settings is the fallback.
         with contextlib.suppress(TypeError):
             connect("destroy", on_destroy)
     return handler_id
 
 
 def _uses_adw_combo(row: Any) -> bool:
-    # Adw.ComboRow exposes get_selected/set_selected; `.selected` is not a Python attr on GI
+    # Compatibility rows may expose get_selected/set_selected instead of a Python attribute.
     return callable(getattr(row, "get_selected", None)) and callable(getattr(row, "set_selected", None))
 
 
@@ -120,7 +120,7 @@ def dependent_row_sensitive(parent_enabled: bool) -> bool:
 
 
 class JsonSettingsSignals:
-    """JsonConf Settings as Gio.Settings.connect('changed::key') for the prefs window."""
+    """Expose JsonConf changes through the preferences window's `changed::key` callback API."""
 
     def __init__(self, settings: Any, bus: EventBus | None = None) -> None:
         self._settings = settings

@@ -64,7 +64,7 @@ if [ "$status" -ne 0 ] && [ -f /etc/arch-release ] && ! python3 -c 'import ulaun
     export PYTHONPATH="$(dirname "$arch_pkg")${PYTHONPATH:+:$PYTHONPATH}"
   done
   if [ "$arch_pkg_found" -eq 1 ]; then
-    print_color '1;31' 'Your Arch Linux system Python version is updated after installing Ulauncher.\nPlease do a clean reinstall of Ulauncher, and any other AUR packages that may be affected by this.\nFor more info, see https://github.com/Ulauncher/Ulauncher/discussions/1280'
+    print_color '1;31' 'Your Arch Linux system Python version changed after installing GoshLauncher.\nPlease do a clean reinstall of GoshLauncher, and any other AUR packages that may be affected by this.\nFor upstream context, see https://github.com/Ulauncher/Ulauncher/discussions/1280'
     exec python3 -m ulauncher "$@"
   fi
 fi

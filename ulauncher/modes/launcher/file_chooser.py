@@ -1,4 +1,4 @@
-"""GTK4 file-open helpers. FileChooserNative (4.6) instead of FileDialog (4.10+)."""
+"""Compatibility helpers for extracting local paths from file chooser objects."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 
 def chooser_selected_path(chooser: Any) -> Optional[str]:
-    """Path from a GTK4 FileChooser, or None if the user picked a non-local URI."""
+    """Return a local chooser path, or None for a non-local URI."""
     get_file = getattr(chooser, "get_file", None)
     file = get_file() if callable(get_file) else None
     if file is not None:

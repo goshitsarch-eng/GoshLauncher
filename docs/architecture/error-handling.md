@@ -9,8 +9,8 @@ annotations.
 
 A barrier is a place where control enters our code from the outside (the event loop, an
 async callback, a subprocess result, an IPC message). An exception that escapes through
-a barrier is dumped to stderr by PyGObject, bypassing our logging, and can kill the source
-that dispatched it.
+a barrier bypasses structured logging and can disable the callback source that dispatched
+it.
 
 Barriers catch `Exception` and log with `logger.exception`. They live in the dispatchers,
 not in the callbacks:
