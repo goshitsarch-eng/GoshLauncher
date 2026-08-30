@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>com.goshapps.GoshLauncher</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0-only</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <name>GoshLauncher</name>
   <summary>Qt 6 and KDE Kirigami application launcher</summary>
   <description>
@@ -29,6 +29,14 @@
   </categories>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="6.0.1" date="2026-08-30">
+      <description>
+        <ul>
+          <li>Adds native Fedora RPM packaging using distribution Qt, Kirigami, and Python dependencies.</li>
+          <li>Preserves the canonical application identity, commands, extension API, and existing user paths.</li>
+        </ul>
+      </description>
+    </release>
     <release version="6.0.0" date="2026-08-30">
       <description>
         <ul>
