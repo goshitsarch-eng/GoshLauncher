@@ -925,7 +925,15 @@ Kirigami.ApplicationWindow {
 
                         QQC2.Label {
                             Layout.alignment: Qt.AlignHCenter
+                            text: "Made by Gosh"
+                            accessibleName: "Maker: Gosh"
+                            opacity: 0.7
+                        }
+
+                        QQC2.Label {
+                            Layout.alignment: Qt.AlignHCenter
                             text: "Qt 6 + Kirigami launcher · GNU GPL v3.0"
+                            accessibleName: "Qt 6 and Kirigami launcher, licensed under GNU GPL version 3"
                             opacity: 0.7
                             font.pointSize: 9
                         }

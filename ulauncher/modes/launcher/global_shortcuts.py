@@ -278,11 +278,14 @@ def _call_bind_shortcuts(connection: Any, session_handle: str, trigger: str, han
         entries_arg.beginArray(QMetaType.Type.UnknownType.value)
         for shortcut_id, fields in bind_shortcuts_entries(trigger):
             entries_arg.beginStructure()
+            # pyrefly: ignore [missing-attribute]
             entries_arg.add(shortcut_id, QMetaType.Type.QString.value)
             entries_arg.beginMap(QMetaType.Type.QString.value, QMetaType.Type.QVariant.value)
             for key, value in fields.items():
                 entries_arg.beginMapEntry()
+                # pyrefly: ignore [missing-attribute]
                 entries_arg.add(key, QMetaType.Type.QString.value)
+                # pyrefly: ignore [missing-attribute]
                 entries_arg.add(QDBusVariant(value))
                 entries_arg.endMapEntry()
             entries_arg.endMap()

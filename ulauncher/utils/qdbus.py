@@ -91,6 +91,7 @@ def uint32(value: int) -> Any:
     from PySide6.QtCore import QMetaType
     from PySide6.QtDBus import QDBusArgument
 
+    # pyrefly: ignore [no-matching-overload]
     return QDBusArgument(int(value), QMetaType.Type.UInt.value)
 
 
@@ -119,6 +120,7 @@ class SignalSubscription(QObject):
         self._message_callback = message_callback
         # The receiver+slot-signature overload dispatches the full QDBusMessage to us,
         # so one generic slot serves any signal signature.
+        # pyrefly: ignore [bad-argument-type]
         self.connected = bus.connect(service, path, interface, signal_name, self, "handleDBusSignal(QDBusMessage)")
 
     @Slot(QDBusMessage)
@@ -133,6 +135,7 @@ class SignalSubscription(QObject):
 
     def unsubscribe(self) -> None:
         if self.connected:
+            # pyrefly: ignore [no-matching-overload]
             self._bus.disconnect(*self._args, self, "handleDBusSignal(QDBusMessage)")
             self.connected = False
 

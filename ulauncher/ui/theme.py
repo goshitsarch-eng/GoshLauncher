@@ -55,6 +55,7 @@ def apply_color_scheme(scheme: str) -> None:
     if scheme not in VALID_SCHEMES:
         scheme = "system"
 
+    # pyrefly: ignore [missing-attribute]
     hints = app.styleHints()
     set_scheme = getattr(hints, "setColorScheme", None)
     if callable(set_scheme):  # Qt >= 6.8
@@ -71,6 +72,8 @@ def apply_color_scheme(scheme: str) -> None:
             return
 
     if scheme == "system":
+        # pyrefly: ignore [missing-attribute]
         app.setPalette(QPalette())
     else:
+        # pyrefly: ignore [missing-attribute]
         app.setPalette(_forced_palette(scheme == "dark"))
