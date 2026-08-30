@@ -57,7 +57,7 @@ def bind_settings_changed(settings: Any, key: str, widget: Any, handler: Callabl
 
     connect = getattr(widget, "connect", None)
     if callable(connect):
-        # GTK4 widgets dropped destroy; PreferencesView.unbind_settings is the fallback
+        # Compatibility widgets may omit destroy; PreferencesView.unbind_settings is the fallback.
         with contextlib.suppress(TypeError):
             connect("destroy", on_destroy)
     return handler_id

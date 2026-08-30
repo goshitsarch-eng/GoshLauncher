@@ -26,7 +26,7 @@ You need the following to set up the local build environment:
 
 - Git
 - python3-pip and python3-setuptools
-- Application runtime dependencies (if you already installed Ulauncher you should have most of these, but **python-xlib is new for v6**)
+- Application runtime dependencies (an installed GoshLauncher package already provides most of these)
 
 #### Distro specific instructions
 
@@ -40,11 +40,11 @@ You need the following to set up the local build environment:
   make venv
   ```
 
-  If you don't have Ulauncher installed already, install the runtime dependencies as well (requires universe repo):
+  If you don't have GoshLauncher installed already, install the runtime dependencies as well (requires universe repo):
 
   ```sh
   sudo add-apt-repository universe
-  sudo apt install python3-{all,gi,gi-cairo,xlib} gobject-introspection \
+  sudo apt install python3-{all,xlib} \
     libegl1 libxkbcommon0 qml6-module-org-kde-kirigami qml6-module-org-kde-qqc2-desktop-style
   ```
 
@@ -66,7 +66,7 @@ You need the following to set up the local build environment:
   make venv
   ```
 
-  If you don't have Ulauncher installed already, install the runtime dependencies as well:
+  If you don't have GoshLauncher installed already, install the runtime dependencies as well:
 
   ```sh
   sudo pacman -Syu --needed pyside6 kirigami qqc2-desktop-style python-xlib
@@ -86,26 +86,21 @@ You need the following to set up the local build environment:
 Alternatively you can run the current code directly `make nix-run ARGS="<arg1> <arg2...>"`, without any IDE completion.
 
 PySide6 ships type stubs, so IDE completion works out of the box.
-You will need to instruct it to build stub files from binaries by:
-
-1. placing your cursor over red-underlined import,
-2. pressing `Alt+Enter` to invoke a dropdown menu with suggested fixes,
-3. selecting `Generate stubs for binary module gi.repository.Gtk`
 
 </details>
 
 #### Running the app from the local repository
 
 1. `git clone` the repository locally
-1. Open a terminal window and cd into the ulauncher repository root directory.
-1. Run `make run` to start the app, so you can test it. If you had Ulauncher running before, this command will also attempt to stop that instance first, because there can only be one Ulauncher instance running.
-1. When you are done testing or want to restart, press ctrl+c to stop the Ulauncher process. And you can then start it normally again (`systemctl --user start ulauncher` if using systemd).
+1. Open a terminal window and cd into the GoshLauncher repository root directory.
+1. Run `make run` to start the app. If GoshLauncher is already running, this command stops that instance first because only one launcher instance can own the D-Bus name.
+1. When you are done testing or want to restart, press Ctrl+C. You can then start it normally again (`systemctl --user start ulauncher` if using systemd).
 
 ### How to contribute
 
-Use the Ulauncher main branch, and verify that the issue or feature hasn't already been fixed there.
+Use the GoshLauncher main branch, and verify that the issue or feature has not already been fixed there.
 
-1. Follow the steps above to set up and test locally, but fork the Ulauncher repo and git clone from that fork instead (or change/add the remote to your fork).
+1. Follow the steps above to set up and test locally, but fork the GoshLauncher repo and clone from that fork instead (or change/add the remote to your fork).
 1. When you are ready to contribute code, create a new branch for your PR.
 1. Commit and push your changes. When possible, try to make your changes so that each commit changes just one thing, and please use [Conventional Commits](https://www.conventionalcommits.org/) for your commit messages.
 1. Create a pull request (provide the relevant information suggested by the template). Use the main branch as the base branch and target.
@@ -114,7 +109,7 @@ See the [Qt for Python docs](https://doc.qt.io/qtforpython-6/) and the [Kirigami
 
 There are some more helpful developer and maintainer commands provided by using our `make` targets. Run `make` to list them all.
 
-If you have any questions, feel free to ask in our [Code Contributions](https://github.com/Ulauncher/Ulauncher/discussions/categories/code-contributions) Discussions.
+If you have questions, open an issue in the [GoshLauncher repository](https://github.com/goshitsarch-eng/GoshLauncher/issues).
 
 ## Project Structure
 

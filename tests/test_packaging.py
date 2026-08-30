@@ -138,6 +138,7 @@ def test_no_gobject_introspection_left() -> None:
 
 def test_qml_ui_ships_with_the_package() -> None:
     qml_dir = ROOT / "ulauncher" / "ui" / "qml"
+    assert (qml_dir / "__init__.py").is_file()
     assert (qml_dir / "LauncherWindow.qml").is_file()
     assert (qml_dir / "PreferencesWindow.qml").is_file()
     setup = (ROOT / "setup.py").read_text()

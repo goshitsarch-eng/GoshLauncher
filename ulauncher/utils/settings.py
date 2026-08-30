@@ -85,7 +85,7 @@ class Settings(JsonConf):
         super().__setitem__(normalized, value)
 
     def get_jump_keys(self) -> list[str]:
-        # Leftover Ulauncher JSON helper. Nothing in the GTK4 popup reads this.
+        # Retained Ulauncher JSON compatibility helper; the Qt/QML popup does not read it.
         return list(dict.fromkeys(list(self.jump_keys)))
 
     def is_persistent(self) -> bool:

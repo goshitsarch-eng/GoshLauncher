@@ -1,7 +1,7 @@
 """Scroll helpers, ported from spotlight-goshos scrollView.js.
 
-GTK4 ScrolledWindow uses set_child / get_vadjustment. Older St.ScrollView
-builds used add_child and get_vscroll_bar. Feature-detect so tests and
+Compatibility scroll views expose either set_child / get_vadjustment or the
+older add_child / get_vscroll_bar pair. Feature-detect so tests and
 hosts can speak both without a version branch.
 """
 
