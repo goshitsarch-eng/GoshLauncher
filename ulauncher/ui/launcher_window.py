@@ -207,14 +207,14 @@ class LauncherWindow:
         self._app = app
         self.backend = LauncherBackend(app)
         engine = app.qml_engine
-        component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "LauncherWindow.qml")))
-        if component.isError():
-            for error in component.errors():
+        self._component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "LauncherWindow.qml")))
+        if self._component.isError():
+            for error in self._component.errors():
                 logger.error("QML error: %s", error.toString())
             msg = "Could not load LauncherWindow.qml"
             raise RuntimeError(msg)
         context = engine.rootContext()
-        self._window = component.createWithInitialProperties({"backend": self.backend}, context)
+        self._window = self._component.createWithInitialProperties({"backend": self.backend}, context)
         if self._window is None:
             msg = "Could not instantiate LauncherWindow.qml"
             raise RuntimeError(msg)
