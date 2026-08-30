@@ -18,7 +18,7 @@ GoshLauncher (this fork, from August 2026)
 ------------------------------------------
 Copyright (C) 2026 the GoshLauncher contributors <https://github.com/goshitsarch-eng/GoshLauncher>
 
-The GTK 4 + libadwaita popup, the Spotlight-goshos search order and looks, and
+The Qt 6 + KDE Kirigami popup, the Spotlight-goshos search order and looks, and
 the rebrand are the changes made here. Ulauncher does not endorse them.
 
 

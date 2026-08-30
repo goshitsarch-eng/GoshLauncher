@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from ulauncher import app_display_name
+from ulauncher import app_display_name, app_id
 
 logger = logging.getLogger(__name__)
 
 _URGENCY_CRITICAL = 2
 
 
-def show_notification(title: str, body: str, icon: str = "ulauncher") -> None:
+def show_notification(title: str, body: str, icon: str = app_id) -> None:
     from PySide6.QtDBus import QDBusConnection, QDBusMessage
 
     bus = QDBusConnection.sessionBus()

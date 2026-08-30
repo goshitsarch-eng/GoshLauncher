@@ -99,6 +99,35 @@ def test_pyproject_points_at_goshlauncher() -> None:
     assert 'authors = [{name = "Gosh"}]' in text
 
 
+def test_container_build_has_no_gtk_or_pygobject_dependencies() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    forbidden = (
+        "gobject-introspection",
+        "python3-gi",
+        "gir1.2-",
+        "libgtk",
+        "libadwaita",
+        "libgirepository",
+        "libcairo",
+        "PyGObject",
+        "pycairo",
+    )
+    assert not any(item in dockerfile for item in forbidden)
+
+
+def test_canonical_icon_and_product_wording_are_exclusive() -> None:
+    assert not (ROOT / "data/icons/system/apps/ulauncher.svg").exists()
+    notify = (ROOT / "ulauncher/ui/notify.py").read_text()
+    preview = (ROOT / "ulauncher/cli/commands/preview.py").read_text()
+    launcher = (ROOT / "bin/ulauncher").read_text()
+    authors = (ROOT / "AUTHORS").read_text()
+    assert "icon: str = app_id" in notify
+    assert "GoshLauncher needs to be running" in preview
+    assert "along with GoshLauncher's" in preview
+    assert "reinstall of GoshLauncher" in launcher
+    assert "GTK 4 + libadwaita popup" not in authors
+
+
 def test_no_gobject_introspection_left() -> None:
     """The Qt rewrite must not regress back into GTK/GLib bindings."""
     for path in (ROOT / "ulauncher").rglob("*.py"):
