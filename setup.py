@@ -43,8 +43,9 @@ setuptools.setup(
     package_data={"ulauncher.ui": ["qml/*.qml"]},
     # These will be placed in /usr
     data_files=[
-        ("share/applications", ["io.ulauncher.Ulauncher.desktop"]),
-        ("share/dbus-1/services", ["io.ulauncher.Ulauncher.service"]),
+        ("share/applications", ["com.goshapps.GoshLauncher.desktop"]),
+        ("share/dbus-1/services", ["com.goshapps.GoshLauncher.service"]),
+        ("share/metainfo", ["com.goshapps.GoshLauncher.metainfo.xml"]),
         ("share/man/man1", [gzip_file("ulauncher.1")]),
         ("lib/systemd/user", ["ulauncher.service"]),
         ("share/licenses/ulauncher", ["LICENSE", "AUTHORS"]),

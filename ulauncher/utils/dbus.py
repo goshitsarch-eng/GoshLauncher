@@ -1,6 +1,6 @@
 """Session-bus helpers built on QtDBus.
 
-The app process registers the ``io.ulauncher.Ulauncher`` service and exposes a
+The app process registers the ``com.goshapps.GoshLauncher`` service and exposes a
 ``TriggerEvent`` method (see ``ulauncher.ui.dbus_service``); short-lived CLI
 processes use these helpers to check whether the app runs and to deliver
 EventBus events into it.

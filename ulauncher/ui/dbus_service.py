@@ -25,7 +25,7 @@ events = EventBus()
 
 
 class DBusService(QObject):
-    """Exported at /io/ulauncher/Ulauncher with every public slot callable over D-Bus."""
+    """Exported at /com/goshapps/GoshLauncher with every public slot callable over D-Bus."""
 
     def __init__(self, app: UlauncherApp) -> None:
         super().__init__()

@@ -2,9 +2,17 @@
 
 A Qt 6 + [Kirigami](https://develop.kde.org/frameworks/kirigami/) application launcher for Linux, styled like a modern KDE app and following the system light/dark colour scheme. Open with **Ctrl+Space**. Search, prefixes, and keyboard navigation follow [Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos).
 
-**Current release: 6.0.0-beta37.**
+**Current release: 6.0.0.**
 
 GoshLauncher is a fork of [Ulauncher](https://github.com/Ulauncher/Ulauncher) v6, whose core, extension API, and packaging it still builds on. The installed command is still `ulauncher`. See [Credits](#credits).
+
+## 6.0.0 release notes
+
+- Promotes the Qt 6 + KDE Kirigami rewrite from beta to the first stable GoshLauncher 6 release.
+- Establishes `com.goshapps.GoshLauncher` as the permanent desktop, D-Bus, and AppStream identity.
+- Keeps the `ulauncher` commands, extension API 3.0, and existing Ulauncher-era configuration, data, state, themes,
+  and extension directories in place. No user files are moved or deleted, so rolling back does not require a reverse
+  migration.
 
 ## Search order
 

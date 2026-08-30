@@ -9,7 +9,7 @@ VERSION = $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' ${VERSION_FILE})
 DPKG_ARGS := "--post-clean --build=all --no-sign"
 DEB_VERSION = $(subst -,~,$(VERSION))
 DEB_DISTRO = $(shell eval lsb_release -sc)
-DEB_PACKAGER_NAME := "" # Will default to the user full name if empty
+DEB_PACKAGER_NAME := "Gosh"
 DEB_PACKAGER_EMAIL := ulauncher.app@gmail.com
 VENV_REQUIREMENTS_SNAPSHOT := .venv/.requirements.txt
 # Python bin path, needed to build the venv (allows PYTHON_BIN override for container)
@@ -95,7 +95,7 @@ run-container:
 		echo -e "${BOLD}You need podman or docker to run this command${RESET}"
 		exit 1
 	fi
-	if [[ "${DOCKER_BIN}" == $(shell eval "command -v docker") ]]; then
+	if [[ "${DOCKER_BIN}" == "$(shell eval "command -v docker")" ]]; then
 		HISTFILE_CONTAINER_PATH=/home/ulauncher/.bash_history
 		USER_CMD=bash
 		if [ -n "${CONTAINER_CMD}" ]; then

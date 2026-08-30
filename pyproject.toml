@@ -7,15 +7,9 @@ name = "ulauncher"
 description = "Qt 6 + Kirigami launcher matching Spotlight-goshos"
 readme = "README.md"
 requires-python = ">=3.8"
-authors = [
-  {name = "GoshLauncher contributors"},
-]
+authors = [{name = "Gosh"}]
 # GoshLauncher is a fork of Ulauncher; see AUTHORS for the full attribution.
-maintainers = [
-  {name = "Aleksandr Gornostal"},
-  {name = "Albin Larsson"},
-  {name = "Troy Curtis"},
-]
+maintainers = [{name = "Gosh"}]
 urls.Homepage = "https://github.com/goshitsarch-eng/GoshLauncher"
 urls.Documentation = "https://docs.ulauncher.io/"
 urls.Repository = "https://github.com/goshitsarch-eng/GoshLauncher.git"

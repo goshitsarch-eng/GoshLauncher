@@ -4,7 +4,7 @@ Documentation=https://github.com/goshitsarch-eng/GoshLauncher
 After=graphical-session.target
 
 [Service]
-BusName=io.ulauncher.Ulauncher
+BusName=com.goshapps.GoshLauncher
 Type=dbus
 Restart=always
 RestartSec=1

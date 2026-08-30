@@ -46,13 +46,13 @@ class UlauncherApp:
             QQuickStyle.setStyle("org.kde.desktop")
 
         self.qt_app = QApplication([])
-        self.qt_app.setApplicationName("ulauncher")
+        self.qt_app.setApplicationName(ulauncher.app_id)
         self.qt_app.setApplicationDisplayName(app_display_name)
         self.qt_app.setDesktopFileName(ulauncher.app_id)
         self.qt_app.setQuitOnLastWindowClosed(False)
-        icon = QIcon.fromTheme("ulauncher")
+        icon = QIcon.fromTheme(ulauncher.app_id)
         if icon.isNull():
-            icon = QIcon(os.path.join(paths.ASSETS, "icons", "system", "apps", "ulauncher.svg"))
+            icon = QIcon(os.path.join(paths.ASSETS, "icons", "system", "apps", f"{ulauncher.app_id}.svg"))
         self.qt_app.setWindowIcon(icon)
 
         from ulauncher.ui.icons import AppIconProvider
