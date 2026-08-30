@@ -248,3 +248,16 @@ class TestDownload:
         result, error = _download(remote, self.target_dir)
         assert result is None
         assert isinstance(error, ext_exceptions.RemoteError)
+
+    @patch("ulauncher.modes.extensions.extension_remote.untar", side_effect=ValueError("unsafe archive member"))
+    @patch("ulauncher.modes.extensions.extension_remote.download_file")
+    def test_unsafe_archive_maps_to_remote_error(self, mock_download: MagicMock, *_: Any) -> None:
+        def side_effect(_url: str, dest: str, on_success: Callable[[Any], None], _on_error: Any) -> None:
+            on_success(dest)
+
+        mock_download.side_effect = side_effect
+        remote = ExtensionRemote("https://github.com/user/repo")
+        result, error = _download(remote, self.target_dir)
+        assert result is None
+        assert isinstance(error, ext_exceptions.RemoteError)
+        assert "unsafe archive member" in str(error)
