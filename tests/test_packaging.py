@@ -115,6 +115,18 @@ def test_container_build_has_no_gtk_or_pygobject_dependencies() -> None:
     assert not any(item in dockerfile for item in forbidden)
 
 
+def test_qt_migration_guidance_has_no_stale_gi_wording() -> None:
+    files = (
+        ROOT / "docs/architecture/error-handling.md",
+        ROOT / "ulauncher/ui/ruff.toml",
+        ROOT / "pyproject.toml",
+        ROOT / "ulauncher/modes/launcher/prefs_combo.py",
+    )
+    text = "\n".join(path.read_text() for path in files)
+    for stale in ("stderr by PyGObject", "Gio or Glib", "GLib callback style", "Glib async", "gio.settings"):
+        assert stale not in text
+
+
 def test_canonical_icon_and_product_wording_are_exclusive() -> None:
     assert not (ROOT / "data/icons/system/apps/ulauncher.svg").exists()
     notify = (ROOT / "ulauncher/ui/notify.py").read_text()
