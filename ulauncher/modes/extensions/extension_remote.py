@@ -331,7 +331,7 @@ class ExtensionRemote(UrlParseResult):
                     rmtree(target_dir)
                 move(tmp_dir, target_dir)
             return commit_hash, getmtime(target_dir)
-        except (TarError, OSError) as e:
+        except (TarError, OSError, ValueError) as e:
             msg = f"Failed to install extension from {tar_path}: {e}"
             raise ext_exceptions.RemoteError(msg) from e
 
