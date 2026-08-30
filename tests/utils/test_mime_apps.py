@@ -25,7 +25,7 @@ def xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(mime_apps.paths, "XDG_CONFIG_HOME", str(config))
     monkeypatch.setattr(mime_apps.paths, "XDG_DATA_HOME", str(data))
     monkeypatch.setattr(mime_apps.paths, "XDG_DATA_DIRS", [str(data)])
-    import ulauncher.utils.desktop_entry as desktop_entry
+    from ulauncher.utils import desktop_entry
 
     monkeypatch.setattr(desktop_entry.paths, "XDG_DATA_HOME", str(data))
     monkeypatch.setattr(desktop_entry.paths, "XDG_DATA_DIRS", [str(data)])
@@ -34,12 +34,14 @@ def xdg(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_default_app_for_scheme(xdg: Path) -> None:
+    assert xdg.is_dir()
     handler = mime_apps.default_app_for("x-scheme-handler/smb")
     assert handler is not None
     assert handler.get_id() == "org.example.files.desktop"
 
 
 def test_handler_for_registered_scheme(xdg: Path) -> None:
+    assert xdg.is_dir()
     handler = mime_apps.handler_for_uri("smb://nas.local/media")
     assert handler is not None
     assert handler.get_display_name() == "Example Files"
@@ -48,20 +50,23 @@ def test_handler_for_registered_scheme(xdg: Path) -> None:
 def test_remote_scheme_falls_back_to_the_file_manager(xdg: Path) -> None:
     """An unregistered remote filesystem scheme must still open somewhere sensible:
     the default directory handler mounts the share itself. This is the network-share fix."""
+    assert xdg.is_dir()
     handler = mime_apps.handler_for_uri("sftp://user@host/srv")
     assert handler is not None
     assert handler.get_id() == "org.example.files.desktop"
 
 
 def test_unknown_web_scheme_has_no_handler(xdg: Path) -> None:
+    assert xdg.is_dir()
     assert mime_apps.handler_for_uri("gemini://example.org") is None
 
 
 def test_open_detached_launches_the_handler(xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert xdg.is_dir()
     from ulauncher.utils import launch_detached as launch_detached_mod
 
     spawned: list[list[str]] = []
-    monkeypatch.setattr(launch_detached_mod, "launch_detached", lambda cmd, *a, **k: spawned.append(cmd))
+    monkeypatch.setattr(launch_detached_mod, "launch_detached", lambda cmd, *_args, **_kwargs: spawned.append(cmd))
 
     launch_detached_mod.open_detached("smb://nas.local/media")
 
@@ -69,10 +74,11 @@ def test_open_detached_launches_the_handler(xdg: Path, monkeypatch: pytest.Monke
 
 
 def test_open_detached_falls_back_to_xdg_open(xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert xdg.is_dir()
     from ulauncher.utils import launch_detached as launch_detached_mod
 
     spawned: list[list[str]] = []
-    monkeypatch.setattr(launch_detached_mod, "launch_detached", lambda cmd, *a, **k: spawned.append(cmd))
+    monkeypatch.setattr(launch_detached_mod, "launch_detached", lambda cmd, *_args, **_kwargs: spawned.append(cmd))
 
     launch_detached_mod.open_detached("gemini://example.org")
 

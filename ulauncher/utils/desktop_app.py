@@ -74,7 +74,7 @@ def expand_exec(exec_line: str, desktop_file: str | None = None, uris: list[str]
     """Turn an Exec= line into argv, resolving field codes per the desktop entry spec.
 
     %f/%F get local paths, %u/%U get the URIs as given; the deprecated codes and
-    %i/%c are dropped. Returns None for an unparseable line.
+    %i/%c are dropped. Returns None for an unparsable line.
     """
     if desktop_file:
         exec_line = exec_line.replace("%k", shlex.quote(desktop_file))

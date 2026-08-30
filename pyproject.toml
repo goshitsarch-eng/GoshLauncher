@@ -76,6 +76,8 @@ extend-ignore-re = [
   '"ome"',
   # spoken ordinals 1st/2nd/3rd/4th in calculator.js
   "st\\|nd\\|rd\\|th",
+  # Swedish localized desktop-entry fixture
+  "Exempel",
   # goshos latin-1 percent-byte fixture (café encoded as ISO-8859-1)
   "caf%E9",
 ]

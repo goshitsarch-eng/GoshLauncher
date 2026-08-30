@@ -12,27 +12,23 @@ from ulauncher.utils.desktop_entry import DesktopEntry
 def entry(tmp_path: Path) -> DesktopEntry:
     desktop = tmp_path / "org.example.App.desktop"
     desktop.write_text(
-        "\n".join(
-            [
-                "[Desktop Entry]",
-                "Type=Application",
-                "Name=Example",
-                "Name[sv]=Exempel",
-                "GenericName=Editor",
-                "Comment=Edits\\sthings",
-                "Icon=example",
-                "Exec=env example %U --flag",
-                "TryExec=/usr/bin/example-bin",
-                "Keywords=alpha;beta;",
-                "Terminal=false",
-                "Actions=new-window;",
-                "StartupWMClass=Example",
-                "",
-                "[Desktop Action new-window]",
-                "Name=New Window",
-                "Exec=example --new-window",
-            ]
-        )
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=Example\n"
+        "Name[sv]=Exempel\n"
+        "GenericName=Editor\n"
+        "Comment=Edits\\sthings\n"
+        "Icon=example\n"
+        "Exec=env example %U --flag\n"
+        "TryExec=/usr/bin/example-bin\n"
+        "Keywords=alpha;beta;\n"
+        "Terminal=false\n"
+        "Actions=new-window;\n"
+        "StartupWMClass=Example\n"
+        "\n"
+        "[Desktop Action new-window]\n"
+        "Name=New Window\n"
+        "Exec=example --new-window\n"
     )
     loaded = DesktopEntry.from_file(str(desktop))
     assert loaded is not None
@@ -87,5 +83,5 @@ class TestExpandExec:
     def test_unused_field_codes_are_dropped(self) -> None:
         assert expand_exec("app %U %i %c") == ["app"]
 
-    def test_unparseable_line(self) -> None:
+    def test_unparsable_line(self) -> None:
         assert expand_exec('app "unterminated') is None

@@ -14,6 +14,7 @@ apt-get install -y --no-install-recommends \
     libgl1 \
     libxkbcommon0 \
     libxkbcommon-x11-0 \
+    libxcb-cursor0 \
     libfontconfig1 \
     libdbus-1-3 \
     xvfb

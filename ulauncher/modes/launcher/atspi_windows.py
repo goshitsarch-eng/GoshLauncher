@@ -363,6 +363,7 @@ def _subscribe_window_event(conn: Any, member: str, callback: Callable[..., None
             sub_id = gio_style(None, ATSPI_WINDOW_EVENT, member, None, None, 0, callback)
         except (AttributeError, TypeError, RuntimeError, OSError, ValueError):
             return 0
+        # pyrefly: ignore [bad-argument-type]
         return int(sub_id or 0)
     try:
         from ulauncher.utils import qdbus

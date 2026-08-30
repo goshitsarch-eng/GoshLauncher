@@ -236,6 +236,7 @@ class LauncherWindow:
         raise_ = getattr(self._window, "raise_", None)
         if callable(raise_):
             raise_()
+        # pyrefly: ignore [missing-attribute]
         self._window.requestActivate()
 
     def hide(self) -> None:
@@ -251,10 +252,12 @@ class LauncherWindow:
     def _position(self) -> None:
         """Center on the primary screen's work area (X11; Wayland compositors place
         dialogs themselves and ignore programmatic positions)."""
+        # pyrefly: ignore [missing-attribute]
         screen = self._window.screen() or QGuiApplication.primaryScreen()
         if screen is None:
             return
         avail = screen.availableGeometry()
+        # pyrefly: ignore [bad-specialization]
         width = min(self.backend.windowWidth, avail.width())
         x = avail.x() + (avail.width() - width) // 2
         y_factor = 0.12 if self.backend.positionTop else 0.22

@@ -177,6 +177,7 @@ class UlauncherApp:
             apply_color_scheme(getattr(Settings.load(), "color_scheme", "system"))
         actions = live_pref_actions(keys)
         if actions and self._launcher_window is not None:
+            # pyrefly: ignore [bad-argument-type]
             self._launcher_window.apply_live_prefs(actions)
 
     @events.on

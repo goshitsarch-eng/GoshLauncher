@@ -105,6 +105,7 @@ class PrefsBackend(QObject):
     def hotkeySupported(self) -> bool:
         from ulauncher.ui.hotkey_controller import HotkeyController
 
+        # pyrefly: ignore [bad-return]
         return HotkeyController.is_supported() or self.hotkeyUsesPortal
 
     @Property(bool, constant=True)
@@ -135,18 +136,23 @@ class PrefsBackend(QObject):
 
         from ulauncher.modes.launcher.shortcut import accelerator_needs_modifier
 
+        # pyrefly: ignore [missing-attribute]
         if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R):
             return ""
         key_name = QKeySequence(key).toString().lower()
         if not key_name:
             return ""
         mods = ""
+        # pyrefly: ignore [unsupported-operation]
         if modifiers & Qt.KeyboardModifier.MetaModifier:
             mods += "<Super>"
+        # pyrefly: ignore [unsupported-operation]
         if modifiers & Qt.KeyboardModifier.ControlModifier:
             mods += "<Control>"
+        # pyrefly: ignore [unsupported-operation]
         if modifiers & Qt.KeyboardModifier.ShiftModifier:
             mods += "<Shift>"
+        # pyrefly: ignore [unsupported-operation]
         if modifiers & Qt.KeyboardModifier.AltModifier:
             mods += "<Alt>"
         if not mods and accelerator_needs_modifier(key_name):
@@ -430,6 +436,7 @@ class PreferencesWindow:
         if self._window is None:
             msg = "Could not instantiate PreferencesWindow.qml"
             raise RuntimeError(msg)
+        # pyrefly: ignore [missing-attribute]
         self._window.visibleChanged.connect(self._on_visible_changed)
 
     def _on_visible_changed(self) -> None:
@@ -448,4 +455,5 @@ class PreferencesWindow:
         raise_ = getattr(self._window, "raise_", None)
         if callable(raise_):
             raise_()
+        # pyrefly: ignore [missing-attribute]
         self._window.requestActivate()

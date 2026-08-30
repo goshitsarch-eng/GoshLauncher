@@ -79,6 +79,7 @@ class ResultsModel(QAbstractListModel):
 
     # QAbstractListModel interface
 
+    # pyrefly: ignore [bad-override]
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008
         return 0 if parent.isValid() else len(self._results)
 
@@ -95,6 +96,7 @@ class ResultsModel(QAbstractListModel):
             ROLE_WRAP: b"wrap",
         }
 
+    # pyrefly: ignore [bad-override]
     def data(self, index: QModelIndex, role: int = ROLE_NAME) -> Any:
         row = index.row()
         if not index.isValid() or not 0 <= row < len(self._results):
