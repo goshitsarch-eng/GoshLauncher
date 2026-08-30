@@ -122,8 +122,8 @@ def test_qt_migration_guidance_has_no_stale_gi_wording() -> None:
         ROOT / "pyproject.toml",
         ROOT / "ulauncher/modes/launcher/prefs_combo.py",
     )
-    text = "\n".join(path.read_text() for path in files)
-    for stale in ("stderr by PyGObject", "Gio or Glib", "GLib callback style", "Glib async", "gio.settings"):
+    text = "\n".join(path.read_text() for path in files).lower()
+    for stale in ("stderr by pygobject", "gio or glib", "glib callback style", "glib async", "gio.settings"):
         assert stale not in text
 
 

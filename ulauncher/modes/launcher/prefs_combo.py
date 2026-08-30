@@ -120,7 +120,7 @@ def dependent_row_sensitive(parent_enabled: bool) -> bool:
 
 
 class JsonSettingsSignals:
-    """JsonConf Settings as Gio.Settings.connect('changed::key') for the prefs window."""
+    """Expose JsonConf changes through the preferences window's `changed::key` callback API."""
 
     def __init__(self, settings: Any, bus: EventBus | None = None) -> None:
         self._settings = settings
