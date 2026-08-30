@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 from gzip import GzipFile
 from pathlib import Path
 from shutil import copyfileobj
@@ -12,7 +13,8 @@ import setuptools
 def gzip_file(source_file: str) -> str:
     # This is actually must easier from the cli: python -m gzip --best ulauncher.1
     output_file = f"{source_file}.gz"
-    dst_gzip = GzipFile(filename=output_file, mode="wb", compresslevel=9)
+    mtime = int(os.environ.get("SOURCE_DATE_EPOCH", "0"))
+    dst_gzip = GzipFile(filename=output_file, mode="wb", compresslevel=9, mtime=mtime)
     with open(source_file, "rb") as src_file:
         copyfileobj(src_file, dst_gzip)
     dst_gzip.close()
@@ -48,7 +50,7 @@ setuptools.setup(
         ("share/metainfo", ["com.goshapps.GoshLauncher.metainfo.xml"]),
         ("share/man/man1", [gzip_file("ulauncher.1")]),
         ("lib/systemd/user", ["ulauncher.service"]),
-        ("share/licenses/ulauncher", ["LICENSE", "AUTHORS"]),
+        ("share/licenses/ulauncher", ["LICENSE", "AUTHORS", "debian/copyright"]),
         # Recursively add data as share/ulauncher, then icons
         *data_files_from_path("share/ulauncher", "data"),
         *data_files_from_path("share/icons/hicolor/scalable", "data/icons/system"),
