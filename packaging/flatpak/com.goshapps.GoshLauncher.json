@@ -33,7 +33,7 @@
       "name": "git",
       "buildsystem": "simple",
       "build-commands": [
-        "make -j${FLATPAK_BUILDER_N_JOBS} prefix=/app NO_PERL=YesPlease NO_TCLTK=YesPlease NO_GETTEXT=YesPlease INSTALL_SYMLINKS=1 install"
+        "make -j${FLATPAK_BUILDER_N_JOBS} prefix=/app NO_RUST=YesPlease NO_PERL=YesPlease NO_TCLTK=YesPlease NO_GETTEXT=YesPlease INSTALL_SYMLINKS=1 install"
       ],
       "sources": [
         {
