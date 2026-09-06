@@ -36,7 +36,7 @@ rpmbuild "-b${rpm_stage}" \
   packaging/fedora/goshlauncher.spec
 
 packaging/fedora/verify-rpm.py \
-  .rpmbuild/RPMS/noarch/goshlauncher-6.0.1-1.fc44.noarch.rpm
+  .rpmbuild/RPMS/noarch/goshlauncher-6.0.2-1.fc44.noarch.rpm
 ```
 
 The verifier checks identity, version, license, vendor, runtime dependencies,

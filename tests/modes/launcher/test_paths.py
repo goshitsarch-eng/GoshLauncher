@@ -233,3 +233,9 @@ def test_expand_path_collapses_tilde_parent_like_goshos() -> None:
     assert collapse_home("/home/u/docs", "/home/u") == "~/docs"
     assert collapse_home("/home/u", "/home/u") == "~"
     assert collapse_home("/tmp", "/home/u") == "/tmp"
+
+
+def test_konsole_opens_requested_directory() -> None:
+    assert terminal_command(
+        "/home/user/My Documents", find_in_path=lambda name: name if name == "konsole" else None
+    ) == {"argv": ["konsole", "--workdir=/home/user/My Documents"], "cwd": None}

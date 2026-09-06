@@ -209,12 +209,14 @@ def _connect(environ: Mapping[str, str] | None) -> socket.socket | None:
     path = wayland_socket_path(environ)
     if not path:
         return None
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.settimeout(0.25)
+    sock = None
     try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(0.25)
         sock.connect(path)
     except OSError:
-        sock.close()
+        if sock is not None:
+            sock.close()
         return None
     return sock
 

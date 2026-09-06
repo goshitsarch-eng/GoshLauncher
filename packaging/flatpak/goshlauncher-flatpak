@@ -1,0 +1,8 @@
+#!/bin/sh
+# Native and Flatpak packages share the established user data paths.
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_DIRS="/app/share:/run/host/usr/local/share:/run/host/usr/share:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:/usr/share"
+exec /app/bin/ulauncher "$@"

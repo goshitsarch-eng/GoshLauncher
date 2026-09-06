@@ -161,6 +161,7 @@ class UlauncherApp:
         self.query = value.lstrip()
         if update_input and self._launcher_window is not None:
             self._launcher_window.set_input(self.query)
+        self.core.set_query(self.query, self.show_results)
 
     @events.on
     def reload_query(self) -> None:
@@ -171,12 +172,15 @@ class UlauncherApp:
     def prefs_saved(self, keys: tuple[str, ...]) -> None:
         from ulauncher.modes.launcher.prefs_live import live_pref_actions
 
+        keys = tuple(key.replace("-", "_") for key in keys)
+        if "show_tray_icon" in keys:
+            self.toggle_tray_icon(Settings.load().show_tray_icon)
         if "color_scheme" in keys:
             from ulauncher.ui.theme import apply_color_scheme
 
             apply_color_scheme(getattr(Settings.load(), "color_scheme", "system"))
         actions = live_pref_actions(keys)
-        if actions and self._launcher_window is not None:
+        if self._launcher_window is not None:
             # pyrefly: ignore [bad-argument-type]
             self._launcher_window.apply_live_prefs(actions)
 
@@ -265,14 +269,12 @@ class UlauncherApp:
 
     @events.on
     def show_preferences(self, page: str | None = None) -> None:
-        if not self._persistent and not self._windows_open():
-            logger.error("You have to start %s before you can open preferences.", app_display_name)
-            self.quit()
-            return
-
         self._cancel_quit_timer()
         if self._launcher_window is not None:
             self._launcher_window.hide()
+            from ulauncher.core import reject_async_paints
+
+            reject_async_paints()
 
         if self._preferences_window is None:
             from ulauncher.ui.preferences.prefs_window import PreferencesWindow

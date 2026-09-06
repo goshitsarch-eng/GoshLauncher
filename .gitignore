@@ -34,3 +34,6 @@ data/preferences
 /nix/dev
 /result
 ulauncher.1.gz
+/.flatpak-builder
+/.flatpak-build
+/repo

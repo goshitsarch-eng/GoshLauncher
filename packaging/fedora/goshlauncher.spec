@@ -1,5 +1,5 @@
 Name:           goshlauncher
-Version:        6.0.1
+Version:        6.0.2
 Release:        1%{?dist}
 Summary:        Qt 6 and KDE Kirigami application launcher
 
@@ -64,6 +64,9 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/com.goshapps.Gos
 %license %{_licensedir}/ulauncher/copyright
 
 %changelog
+* Sat Sep 05 2026 Gosh - 6.0.2-1
+- Fix Qt preferences and launcher wiring; add automated multi-architecture Flatpak releases
+
 * Sun Aug 30 2026 Gosh - 6.0.1-1
 - Add native Fedora packaging with distribution Qt, Kirigami, and Python dependencies.
 - Preserve the canonical application identity and Ulauncher compatibility surfaces.

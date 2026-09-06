@@ -12,7 +12,7 @@ import os
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QCursor, QGuiApplication
 
 from ulauncher.modes.launcher.looks import chrome_from_settings, get_look, icon_size_for_look
 from ulauncher.modes.launcher.paint_selection import paint_selection_index, result_selection_key
@@ -157,7 +157,7 @@ class LauncherBackend(QObject):
     @Slot(bool)
     def activateSelected(self, alt: bool) -> None:
         result = self._model.result_at(self._selected)
-        if result is None:
+        if result is None or not is_selectable_result(result):
             return
         self._activate(result, alt)
 
@@ -179,9 +179,8 @@ class LauncherBackend(QObject):
             self.activateIndex(hinted[digit - 1], False)
 
     def _activate(self, result: Result, alt: bool) -> None:
-        if not alt:
-            # Hide before the action runs so slow launches don't leave the popup lingering
-            self._app.request_close()
+        # The core closes only for terminal effects. Extensions can return another
+        # result list or rewrite the query, which needs the popup to remain visible.
         self._app.activate_result(result, alt)
 
     @Slot(str, result=bool)
@@ -204,7 +203,10 @@ class LauncherWindow:
     def __init__(self, app: UlauncherApp) -> None:
         from PySide6.QtQml import QQmlComponent
 
+        from ulauncher.modes.launcher.session_watch import SessionWatcher
+
         self._app = app
+        self._session_watcher = SessionWatcher(app.request_close)
         self.backend = LauncherBackend(app)
         engine = app.qml_engine
         self._component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(QML_DIR, "LauncherWindow.qml")))
@@ -233,6 +235,7 @@ class LauncherWindow:
         self.backend.reload_chrome()
         self._position()
         self._window.setProperty("visible", True)
+        self._session_watcher.start()
         raise_ = getattr(self._window, "raise_", None)
         if callable(raise_):
             raise_()
@@ -240,6 +243,7 @@ class LauncherWindow:
         self._window.requestActivate()
 
     def hide(self) -> None:
+        self._session_watcher.stop()
         self._window.setProperty("visible", False)
 
     def apply_live_prefs(self, actions: set[str]) -> None:
@@ -252,13 +256,15 @@ class LauncherWindow:
     def _position(self) -> None:
         """Center on the primary screen's work area (X11; Wayland compositors place
         dialogs themselves and ignore programmatic positions)."""
-        # pyrefly: ignore [missing-attribute]
-        screen = self._window.screen() or QGuiApplication.primaryScreen()
+        screen = QGuiApplication.primaryScreen()
+        if Settings.load().render_on_screen == "mouse-pointer-monitor":
+            screen = QGuiApplication.screenAt(QCursor.pos()) or screen
         if screen is None:
             return
         avail = screen.availableGeometry()
-        # pyrefly: ignore [bad-specialization]
-        width = min(self.backend.windowWidth, avail.width())
+        self._window.setProperty("availableWidth", avail.width())
+        self._window.setProperty("availableHeight", avail.height())
+        width = int(self._window.property("width"))
         x = avail.x() + (avail.width() - width) // 2
         y_factor = 0.12 if self.backend.positionTop else 0.22
         y = avail.y() + int(avail.height() * y_factor)

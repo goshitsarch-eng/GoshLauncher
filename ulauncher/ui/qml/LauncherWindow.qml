@@ -8,6 +8,8 @@ Window {
     id: root
 
     property var backend
+    property int availableWidth: 1920
+    property int availableHeight: 1080
     readonly property int shadowMargin: 24
     readonly property bool hasQuery: searchField.text.length > 0
 
@@ -16,7 +18,7 @@ Window {
     visible: false
     title: "GoshLauncher"
 
-    width: (backend ? backend.windowWidth : 600) + 2 * shadowMargin
+    width: Math.min((backend ? backend.windowWidth : 600) + 2 * shadowMargin, availableWidth)
     height: card.implicitHeight + 2 * shadowMargin
 
     onActiveChanged: {
@@ -176,7 +178,8 @@ Window {
                 id: resultsList
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, root.backend ? root.backend.resultsMaxHeight : 400)
+                Layout.preferredHeight: Math.min(contentHeight, root.backend ? root.backend.resultsMaxHeight : 400,
+                                                Math.max(0, root.availableHeight * 0.75 - 140))
                 Layout.margins: resultsList.count > 0 ? Kirigami.Units.smallSpacing : 0
                 visible: count > 0
                 clip: true
@@ -258,6 +261,7 @@ Window {
                                 visible: !row.compact && row.description.length > 0
                                          && (root.backend ? root.backend.showDescriptions : true)
                                 text: row.description
+                                textFormat: Text.PlainText
                                 elide: row.wrap ? Text.ElideNone : Text.ElideRight
                                 wrapMode: row.wrap ? Text.WordWrap : Text.NoWrap
                                 maximumLineCount: row.wrap ? 8 : 1

@@ -1,0 +1,99 @@
+{
+  "app-id": "com.goshapps.GoshLauncher",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.11",
+  "sdk": "org.kde.Sdk",
+  "base": "io.qt.PySide.BaseApp",
+  "base-version": "6.11",
+  "command": "goshlauncher-flatpak",
+  "finish-args": [
+    "--share=ipc",
+    "--share=network",
+    "--socket=x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--filesystem=host:ro",
+    "--filesystem=host-os:ro",
+    "--filesystem=home",
+    "--socket=session-bus",
+    "--system-talk-name=org.freedesktop.login1",
+    "--system-talk-name=org.freedesktop.UPower"
+  ],
+  "build-options": {
+    "env": {
+      "BASEAPP_REMOVE_WEBENGINE": "1",
+      "BASEAPP_DISABLE_NUMPY": "1"
+    }
+  },
+  "cleanup-commands": [
+    "/app/cleanup-BaseApp.sh"
+  ],
+  "modules": [
+    {
+      "name": "git",
+      "buildsystem": "simple",
+      "build-commands": [
+        "make -j${FLATPAK_BUILDER_N_JOBS} prefix=/app NO_PERL=YesPlease NO_TCLTK=YesPlease NO_GETTEXT=YesPlease INSTALL_SYMLINKS=1 install"
+      ],
+      "sources": [
+        {
+          "type": "git",
+          "url": "https://github.com/git/git.git",
+          "tag": "v2.55.0",
+          "commit": "e9019fcafe0040228b8631c30f97ae1adb61bcdc",
+          "disable-submodules": true
+        }
+      ],
+      "cleanup": [
+        "/share/doc",
+        "/share/man",
+        "/share/gitweb"
+      ]
+    },
+    {
+      "name": "python-xlib",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --no-index --no-deps --prefix=/app *.whl"
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "url": "https://files.pythonhosted.org/packages/fc/b8/ff33610932e0ee81ae7f1269c890f697d56ff74b9f5b2ee5d9b7fa2c5355/python_xlib-0.33-py2.py3-none-any.whl",
+          "sha256": "c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398"
+        },
+        {
+          "type": "file",
+          "url": "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl",
+          "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+        }
+      ]
+    },
+    {
+      "name": "goshlauncher",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --no-deps --no-build-isolation --prefix=/app .",
+        "install -Dm755 packaging/flatpak/goshlauncher-flatpak /app/bin/goshlauncher-flatpak",
+        "install -Dm755 scripts/check-qml.py /app/share/ulauncher/check-qml.py",
+        "sed -i 's/Exec=ulauncher /Exec=goshlauncher-flatpak /; /TryExec=/d' /app/share/applications/com.goshapps.GoshLauncher.desktop"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../..",
+          "skip": [
+            ".git",
+            ".venv",
+            ".tmp",
+            ".flatpak-builder",
+            ".flatpak-build",
+            "repo",
+            "dist",
+            "build"
+          ]
+        }
+      ]
+    }
+  ]
+}

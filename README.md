@@ -2,9 +2,21 @@
 
 A Qt 6 + [Kirigami](https://develop.kde.org/frameworks/kirigami/) application launcher for Linux, styled like a modern KDE app and following the system light/dark colour scheme. Open with **Ctrl+Space**. Search, prefixes, and keyboard navigation follow [Spotlight-goshos](https://github.com/goshitsarch-eng/spotlight-goshos).
 
-**Current release: 6.0.1.**
+**Current release: 6.0.2.**
 
 GoshLauncher is a fork of [Ulauncher](https://github.com/Ulauncher/Ulauncher) v6, whose core, extension API, and packaging it still builds on. The installed command is still `ulauncher`. See [Credits](#credits).
+
+## 6.0.2 release notes
+
+- Fixes QML preferences startup, extension text settings, and About accessibility properties.
+- Keeps the popup open for extension result lists and query changes; programmatic queries now run immediately.
+- Fixes repeated shortcut saves creating duplicates, preserves custom icons, and validates keywords.
+- Applies tray visibility and X11 monitor selection, bounds the popup to the display, and connects lock/sleep dismissal.
+- Fixes Space and function-key capture; Plasma shortcut changes use the system keyboard settings.
+- Refreshes preferences on reopen and preserves extension selection by ID during updates/removal.
+- Publishes source tar.gz and native x86_64/aarch64 Flatpak bundles automatically after successful release builds.
+
+See the [audit and verification notes](docs/release-6.0.2.md) and [Flatpak instructions](packaging/flatpak/README.md).
 
 ## 6.0.1 release notes
 
@@ -57,7 +69,9 @@ Disable prefix modes in Features if you never want them. `!` stays off unless yo
 
 Keywords you define on the Shortcuts page, and the keywords extensions register, run when you type
 the keyword followed by a space and an argument. A bare keyword with no argument stays an ordinary
-search. The Google, StackOverflow and Wikipedia shortcuts Ulauncher used to seed are removed on
+search. With **Ignore the query argument** enabled, type the keyword followed by a space
+and press Enter to run a fixed command. Legacy fallback flags are preserved in saved shortcuts,
+but the launcher search uses its Web Search provider rather than shortcut fallback rows. The Google, StackOverflow and Wikipedia shortcuts Ulauncher used to seed are removed on
 load, so `g firefox` stays a search.
 
 ## Appearance
@@ -94,6 +108,17 @@ systemctl --user enable --now ulauncher
 ```
 
 Preferences: General, Features, Web Search, Shortcuts, Extensions, Desktop, About — a Kirigami settings window.
+
+On Plasma, change the global shortcut through **General → Open keyboard settings**. On X11,
+**Desktop → Screen to show on** can select the primary display or the display containing the pointer.
+Wayland placement is controlled by the compositor.
+
+### Release downloads
+
+[GitHub Releases](https://github.com/goshitsarch-eng/GoshLauncher/releases) provides the source
+archive (the same Python source supports both architectures), a Debian package, and installable
+Flatpak bundles for **x86_64 (x64)** and **aarch64 (ARM64)**, with SHA-256 checksums.
+See [Flatpak installation](packaging/flatpak/README.md) for commands and desktop integration details.
 
 ### Dependencies
 

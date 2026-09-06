@@ -19,9 +19,9 @@ def test_release_identity_and_version_are_synchronized() -> None:
     manpage = (REPO_ROOT / "ulauncher.1").read_text()
     metainfo = (REPO_ROOT / f"{APP_ID}.metainfo.xml").read_text()
 
-    assert ulauncher.version == "6.0.1"
+    assert ulauncher.version == "6.0.2"
     assert 'text: "Made by Gosh"' in qml
-    assert 'accessibleName: "Maker: Gosh"' in qml
+    assert 'Accessible.name: "Maker: Gosh"' in qml
     assert f"Current release: {ulauncher.version}" in readme
     assert ulauncher.version in manpage
     assert f'version="{ulauncher.version}"' in metainfo

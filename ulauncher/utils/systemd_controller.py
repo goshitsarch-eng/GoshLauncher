@@ -67,3 +67,6 @@ class SystemdController:
             raise OSError(msg)
 
         systemctl_run("reenable" if status else "disable", self._unit)
+        if self.status().is_enabled != status:
+            msg = "Could not change autostart state"
+            raise OSError(msg)

@@ -7,7 +7,7 @@ from typing import Any, Iterable
 # GSettings changed:: keys in goshos map onto these Settings fields.
 RESTYLE_KEYS = frozenset({"look_id", "row_density"})
 LAYOUT_KEYS = frozenset({"base_width"})
-POSITION_KEYS = frozenset({"popup_position"})
+POSITION_KEYS = frozenset({"popup_position", "render_on_screen"})
 SEARCH_ICON_KEYS = frozenset({"show_search_icon"})
 FIT_HEIGHT_KEYS = frozenset({"results_max_height"})
 REPAINT_KEYS = frozenset(

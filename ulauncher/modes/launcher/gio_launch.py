@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from shutil import which
 from typing import Any, Callable
 
 from ulauncher.modes.launcher.commands import (
@@ -13,6 +12,7 @@ from ulauncher.modes.launcher.commands import (
     first_command_arg,
     join_path_dirs,
 )
+from ulauncher.utils.host import find_program
 
 _program_path_cache: dict[str, str | None] = {}
 _launch_contexts: set[Any] = set()
@@ -28,7 +28,7 @@ def find_in_user_path(name: str) -> str | None:
     home = os.path.expanduser("~")
     found = find_user_program(
         name,
-        which,
+        find_program,
         lambda path: os.access(path, os.X_OK),
         extra_path_dirs(home),
     )

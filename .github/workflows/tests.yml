@@ -27,6 +27,18 @@ jobs:
         run: make typos
       - name: pytest
         run: make pytest
+  qml-runtime:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install matching distro Qt and Kirigami
+        run: dnf install -y python3-pyside6 python3-xlib kf6-kirigami kf6-qqc2-desktop-style qt6-qtdeclarative
+      - name: Instantiate launcher and preferences QML
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: python3 scripts/check-qml.py
   nix-build:
     runs-on: ubuntu-latest
     steps:

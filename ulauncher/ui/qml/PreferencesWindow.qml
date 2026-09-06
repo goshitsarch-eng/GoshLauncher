@@ -25,26 +25,47 @@ Kirigami.ApplicationWindow {
             sideList.currentIndex = index
     }
 
+    onVisibleChanged: {
+        if (visible && backend) {
+            refreshSettings()
+            shortcutList.items = backend.shortcuts()
+            extList.refresh()
+        }
+    }
+
+    signal refreshSettings()
+
     // ---------- reusable setting controls ----------
 
     component SettingSwitch: QQC2.Switch {
+        id: control
         property string settingKey
         Component.onCompleted: checked = root.backend.getSetting(settingKey) === true
         onToggled: root.backend.setSetting(settingKey, checked)
+        Connections {
+            target: root
+            function onRefreshSettings() { control.checked = root.backend.getSetting(control.settingKey) === true }
+        }
     }
 
     component SettingSpin: QQC2.SpinBox {
+        id: control
         property string settingKey
         Component.onCompleted: value = Number(root.backend.getSetting(settingKey))
         onValueModified: root.backend.setSetting(settingKey, value)
+        Connections {
+            target: root
+            function onRefreshSettings() { control.value = Number(root.backend.getSetting(control.settingKey)) }
+        }
     }
 
     component SettingCombo: QQC2.ComboBox {
+        id: control
         property string settingKey
         property var entries: []  // [{text, value}]
         textRole: "text"
         model: entries
-        Component.onCompleted: {
+        function refresh() {
             const current = root.backend.getSetting(settingKey)
             for (let i = 0; i < entries.length; i++) {
                 if (entries[i].value === current) {
@@ -53,13 +74,23 @@ Kirigami.ApplicationWindow {
                 }
             }
         }
+        Component.onCompleted: refresh()
+        Connections {
+            target: root
+            function onRefreshSettings() { control.refresh() }
+        }
         onActivated: root.backend.setSetting(settingKey, entries[currentIndex].value)
     }
 
     component SettingText: QQC2.TextField {
+        id: control
         property string settingKey
         Component.onCompleted: text = String(root.backend.getSetting(settingKey) || "")
         onEditingFinished: root.backend.setSetting(settingKey, text)
+        Connections {
+            target: root
+            function onRefreshSettings() { control.text = String(root.backend.getSetting(control.settingKey) || "") }
+        }
     }
 
     pageStack.initialPage: Kirigami.Page {
@@ -76,6 +107,10 @@ Kirigami.ApplicationWindow {
 
                 ListView {
                     id: sideList
+                    onCurrentIndexChanged: {
+                        if (currentIndex >= 0)
+                            root.requestedPage = root.pageIds[currentIndex]
+                    }
                     currentIndex: 0
                     model: ListModel {
                         ListElement { label: "General"; icon: "preferences-desktop-theme-global"; page: "general" }
@@ -218,6 +253,7 @@ Kirigami.ApplicationWindow {
 
                             QQC2.Button {
                                 id: shortcutButton
+                                visible: root.backend && !root.backend.isPlasma
                                 Kirigami.FormData.label: "Toggle shortcut:"
                                 property bool capturing: false
                                 text: capturing ? "Press a key combination..."
@@ -249,6 +285,7 @@ Kirigami.ApplicationWindow {
                             }
 
                             QQC2.Button {
+                                visible: root.backend && !root.backend.isPlasma
                                 Kirigami.FormData.label: "Reset to default:"
                                 text: "Reset (Ctrl+Space)"
                                 onClicked: root.backend.applyAccelerator("<Control>space")
@@ -457,11 +494,12 @@ Kirigami.ApplicationWindow {
 
                                 QQC2.Switch {
                                     id: staticSwitch
-                                    Kirigami.FormData.label: "Static shortcut (runs without argument):"
+                                    Kirigami.FormData.label: "Ignore the query argument:"
                                 }
 
                                 QQC2.Switch {
                                     id: fallbackSwitch
+                                    visible: false
                                     Kirigami.FormData.label: "Use as fallback result:"
                                 }
 
@@ -479,8 +517,12 @@ Kirigami.ApplicationWindow {
                                                 run_without_argument: staticSwitch.checked,
                                                 is_default_search: fallbackSwitch.checked
                                             })
-                                            if (saved)
+                                            if (saved) {
+                                                shortcutEditor.editingId = saved
                                                 root.showPassiveNotification("Shortcut saved")
+                                            } else {
+                                                root.showPassiveNotification("Enter a name, a keyword without spaces, and a command")
+                                            }
                                         }
                                     }
 
@@ -518,9 +560,16 @@ Kirigami.ApplicationWindow {
                                 property var items: []
                                 model: items
                                 function refresh() {
+                                    const selectedId = extDetail.ext ? extDetail.ext.id : ""
                                     items = root.backend.extensions()
-                                    if (currentIndex >= 0 && currentIndex < items.length)
-                                        extDetail.load(items[currentIndex])
+                                    currentIndex = -1
+                                    for (let i = 0; i < items.length; i++) {
+                                        if (items[i].id === selectedId) {
+                                            currentIndex = i
+                                            break
+                                        }
+                                    }
+                                    extDetail.load(currentIndex >= 0 ? items[currentIndex] : null)
                                 }
                                 Component.onCompleted: refresh()
                                 delegate: QQC2.ItemDelegate {
@@ -596,6 +645,7 @@ Kirigami.ApplicationWindow {
 
                         ColumnLayout {
                             id: extDetail
+                            objectName: "extensionDetail"
                             width: scrollArea8.availableWidth
 
                             property var ext: null
@@ -686,7 +736,7 @@ Kirigami.ApplicationWindow {
                                             required property var modelData
                                             Kirigami.FormData.label: modelData.name + " keyword:"
                                             text: modelData.keyword
-                                            onEditingFinished: {
+                                            onTextChanged: {
                                                 let pending = extDetail.pendingTriggers
                                                 pending[modelData.id] = { keyword: text }
                                                 extDetail.pendingTriggers = pending
@@ -764,7 +814,7 @@ Kirigami.ApplicationWindow {
                                             Layout.minimumHeight: 80
                                             text: modelData.type === "text" ? String(modelData.value || "") : ""
                                             wrapMode: TextEdit.WordWrap
-                                            onEditingFinished: {
+                                            onTextChanged: {
                                                 let pending = extDetail.pendingPrefs
                                                 pending[modelData.id] = text
                                                 extDetail.pendingPrefs = pending
@@ -776,7 +826,8 @@ Kirigami.ApplicationWindow {
                                                      && modelData.type !== "select" && modelData.type !== "text"
                                             Layout.fillWidth: true
                                             text: String(modelData.value || "")
-                                            onEditingFinished: {
+                                            echoMode: modelData.type === "password" ? TextInput.Password : TextInput.Normal
+                                            onTextEdited: {
                                                 let pending = extDetail.pendingPrefs
                                                 pending[modelData.id] = text
                                                 extDetail.pendingPrefs = pending
@@ -802,7 +853,7 @@ Kirigami.ApplicationWindow {
 
                                     QQC2.Button {
                                         visible: extDetail.ext && extDetail.ext.manageable && extDetail.ext.has_update_url
-                                        text: "Check updates"
+                                        text: "Update"
                                         icon.name: "view-refresh"
                                         onClicked: root.backend.updateExtension(extDetail.ext.id)
                                     }
@@ -863,6 +914,7 @@ Kirigami.ApplicationWindow {
                         }
 
                         SettingCombo {
+                            visible: root.backend && root.backend.isX11
                             Kirigami.FormData.label: "Screen to show on:"
                             settingKey: "render_on_screen"
                             entries: [
@@ -926,14 +978,14 @@ Kirigami.ApplicationWindow {
                         QQC2.Label {
                             Layout.alignment: Qt.AlignHCenter
                             text: "Made by Gosh"
-                            accessibleName: "Maker: Gosh"
+                            Accessible.name: "Maker: Gosh"
                             opacity: 0.7
                         }
 
                         QQC2.Label {
                             Layout.alignment: Qt.AlignHCenter
                             text: "Qt 6 + Kirigami launcher · GNU GPL v3.0"
-                            accessibleName: "Qt 6 and Kirigami launcher, licensed under GNU GPL version 3"
+                            Accessible.name: "Qt 6 and Kirigami launcher, licensed under GNU GPL version 3"
                             opacity: 0.7
                             font.pointSize: 9
                         }

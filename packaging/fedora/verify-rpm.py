@@ -38,7 +38,7 @@ EXPECTED_REQUIRES = {
 }
 ALLOWED_TREES = (
     re.compile(r"/usr/lib/python3\.\d+/site-packages/ulauncher(?:/.*)?"),
-    re.compile(r"/usr/lib/python3\.\d+/site-packages/ulauncher-6\.0\.1\.dist-info(?:/.*)?"),
+    re.compile(r"/usr/lib/python3\.\d+/site-packages/ulauncher-6\.0\.2\.dist-info(?:/.*)?"),
     re.compile(r"/usr/share/ulauncher(?:/.*)?"),
 )
 FORBIDDEN = (
@@ -122,7 +122,7 @@ def main() -> None:  # noqa: PLR0915
         "%{NAME}\n%{VERSION}\n%{RELEASE}\n%{ARCH}\n%{VENDOR}\n%{LICENSE}\n",
         rpm_path,
     ).splitlines()
-    expected_metadata = ("goshlauncher", "6.0.1", "1.fc44", "noarch", "Gosh")
+    expected_metadata = ("goshlauncher", "6.0.2", "1.fc44", "noarch", "Gosh")
     if tuple(metadata[:5]) != expected_metadata or metadata[5] != "GPL-3.0-or-later AND LGPL-3.0-only":
         fail(f"Unexpected metadata: {metadata!r}")
 

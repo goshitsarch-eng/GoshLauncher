@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+from ulauncher.utils.host import host_argv, is_flatpak
 from ulauncher.utils.systemd_controller import SystemdController
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ def launch_detached(
     working_dir: str | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> None:
-    use_systemd_run = SystemdController("ulauncher").status().is_active
+    use_systemd_run = not is_flatpak() and SystemdController("ulauncher").status().is_active
     if use_systemd_run:
         cmd = ["systemd-run", "--user", "--scope", *cmd]
 
@@ -35,7 +36,7 @@ def launch_detached(
     stdio = subprocess.DEVNULL if sys.stdout.isatty() else None
     try:
         subprocess.Popen(
-            cmd,
+            host_argv(cmd, working_dir),
             cwd=working_dir or None,
             env=env,
             start_new_session=not use_systemd_run,

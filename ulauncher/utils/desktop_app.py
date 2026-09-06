@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 import re
 import shlex
-import shutil
 from typing import Any
 
 from ulauncher.utils.desktop_entry import DesktopEntry, find_desktop_entry, get_all_desktop_entries
+from ulauncher.utils.host import find_program
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ _KNOWN_TERMINALS = [
 
 def find_terminal() -> tuple[str, str] | None:
     for terminal, exec_arg in _KNOWN_TERMINALS:
-        if shutil.which(terminal):
+        if find_program(terminal):
             return terminal, exec_arg
     return None
 

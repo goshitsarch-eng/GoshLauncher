@@ -1,43 +1,160 @@
-name: Draft release
+name: Release
 
 on:
   push:
-    tags:
-      - "*"
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/flatpak/**"
+      - ".github/workflows/draft-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  draft_release:
-    runs-on: ubuntu-22.04
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.release.outputs.build }}
     steps:
       - uses: actions/checkout@v5
+      - id: version
+        name: Validate version
+        shell: bash
+        run: |
+          VERSION=$(python3 -c 'exec(open("ulauncher/_version.py").read()); print(version)')
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            test "$GITHUB_REF_NAME" = "v$VERSION"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - id: release
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         with:
-          fetch-depth: 0
+          script: |
+            if (context.eventName === 'pull_request') {
+              core.setOutput('build', 'true');
+              return;
+            }
+            try {
+              const {data} = await github.rest.repos.getReleaseByTag({...context.repo, tag: `v${process.env.VERSION}`});
+              core.setOutput('build', data.draft ? 'true' : 'false');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('build', 'true');
+            }
+
+  source:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
       - name: Install Qt 6 runtime and deb build tools
         run: |
           sudo bash scripts/ci-install-qt6.sh
-          sudo apt-get install -y --no-install-recommends debhelper dh-python python3-all help2man
-      - name: Set up virtual environment
-        run: make venv
-      - name: Check
-        run: make check
-      - name: Generate release notes
+          sudo apt-get install -y --no-install-recommends debhelper dh-python python3-all help2man devscripts
+      - name: Check and build source archive
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          .venv/bin/git-cliff --current > RELEASE_NOTES.md
-      - name: Build release
-        run: |
-          VERSION=$(make version)
-          echo "Building GoshLauncher version: $VERSION"
-          make deb DEB_DISTRO=jammy
-          # make sure to run make sdist after make deb because make deb overwrites the tarball
+          make venv QUIET=1
+          make check
+          make deb DEB_DISTRO=noble
           make sdist
-
-      - name: Make draft GitHub release
-        uses: softprops/action-gh-release@v1
+      - uses: actions/upload-artifact@v4
         with:
-          draft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          body_path: RELEASE_NOTES.md
-          files: |
+          name: source
+          path: |
             dist/*.tar.gz
             dist/*.deb
+          if-no-files-found: error
+
+  flatpak:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Flatpak build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+      - name: Build with matching Qt, PySide6 and Kirigami
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          flatpak-builder --user --arch="$ARCH" --install-deps-from=flathub --force-clean \
+            --repo=repo --default-branch=stable .flatpak-build packaging/flatpak/com.goshapps.GoshLauncher.json
+      - name: Verify the packaged Qt UI
+        run: |
+          flatpak-builder --run .flatpak-build packaging/flatpak/com.goshapps.GoshLauncher.json \
+            env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software python3 /app/share/ulauncher/check-qml.py
+      - name: Build installable bundle
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p dist
+          flatpak build-bundle --arch="$ARCH" --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+            repo "dist/GoshLauncher-$VERSION-$ARCH.flatpak" com.goshapps.GoshLauncher stable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-${{ matrix.arch }}
+          path: dist/*.flatpak
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, source, flatpak]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Verify release assets and generate checksums
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          test -s "dist/ulauncher-$VERSION.tar.gz"
+          test -s "dist/GoshLauncher-$VERSION-x86_64.flatpak"
+          test -s "dist/GoshLauncher-$VERSION-aarch64.flatpak"
+          cd dist
+          sha256sum *.tar.gz *.deb *.flatpak > SHA256SUMS
+      - name: Publish complete release and version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --draft=false
+          else
+            FLAGS=()
+            if [[ "$VERSION" == *-* ]]; then FLAGS+=(--prerelease); fi
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "GoshLauncher $VERSION" \
+              --generate-notes "${FLAGS[@]}" dist/*
+          fi

@@ -269,6 +269,8 @@ def terminal_spec(find_in_path: Any | None = None) -> dict | None:
         find_in_path = find_in_user_path
     if find_in_path("xdg-terminal-exec"):
         return {"argv": ["xdg-terminal-exec"], "use_directory_cwd": True}
+    if find_in_path("konsole"):
+        return {"argv": ["konsole"], "working_directory_flag": "--workdir"}
     if find_in_path("ptyxis"):
         return {"argv": ["ptyxis", "--new-window"], "working_directory_flag": "--working-directory"}
     if find_in_path("kgx"):

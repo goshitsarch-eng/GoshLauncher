@@ -21,12 +21,14 @@ from ulauncher.modes.launcher.shortcut import (
     shortcut_retry_list,
 )
 from ulauncher.utils.environment import DESKTOP_ID, DESKTOP_NAME
+from ulauncher.utils.host import is_flatpak
 from ulauncher.utils.launch_detached import launch_detached
 
 logger = logging.getLogger(__name__)
 launch_command = "ulauncher toggle"
 
-IS_SUPPORTED = DESKTOP_ID in ("GNOME", "XFCE", "PLASMA")
+
+IS_SUPPORTED = not is_flatpak() and DESKTOP_ID in ("GNOME", "XFCE", "PLASMA")
 
 _GNOME_BASE_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys"
 _GNOME_SPEC_SCHEMA = f"{_GNOME_BASE_SCHEMA}.custom-keybinding"
@@ -108,6 +110,8 @@ class HotkeyController:
 
     @staticmethod
     def setup_default(default_hotkey: str) -> bool:
+        if is_flatpak():
+            return False
         if DESKTOP_ID == "PLASMA":
             hotkey = "Ctrl+Space"
             config_path = ["--file", "kglobalshortcutsrc", "--group", f"{app_id}.desktop", "--key"]
@@ -192,7 +196,7 @@ class HotkeyController:
         """
         from ulauncher.modes.launcher.global_shortcuts import GlobalShortcutsPortal, should_bind_portal
 
-        if not should_bind_portal(DESKTOP_ID):
+        if not is_flatpak() and not should_bind_portal(DESKTOP_ID):
             return None
         portal = GlobalShortcutsPortal(on_toggle)
         if not portal.start(hotkey, app_id):

@@ -112,8 +112,9 @@ class PrefsBackend(QObject):
     def hotkeyUsesPortal(self) -> bool:
         from ulauncher.modes.launcher.global_shortcuts import should_bind_portal
         from ulauncher.utils.environment import DESKTOP_ID
+        from ulauncher.utils.host import is_flatpak
 
-        return should_bind_portal(DESKTOP_ID)
+        return is_flatpak() or should_bind_portal(DESKTOP_ID)
 
     @Property(bool, constant=True)
     def isPlasma(self) -> bool:
@@ -139,21 +140,30 @@ class PrefsBackend(QObject):
         # pyrefly: ignore [missing-attribute]
         if key in (Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta, Qt.Key_Super_L, Qt.Key_Super_R):
             return ""
-        key_name = QKeySequence(key).toString().lower()
+        key_name = QKeySequence(key).toString()
+        # Qt's display names differ from the accelerator key names used by the
+        # desktop stores; retain function-key casing for bare F1..F35 captures.
+        key_name = {
+            " ": "space",
+            "Space": "space",
+            "Esc": "Escape",
+            "Del": "Delete",
+            "Ins": "Insert",
+            "PgUp": "Page_Up",
+            "PgDown": "Page_Down",
+        }.get(key_name, key_name)
+        if len(key_name) == 1:
+            key_name = key_name.lower()
         if not key_name:
             return ""
         mods = ""
-        # pyrefly: ignore [unsupported-operation]
-        if modifiers & Qt.KeyboardModifier.MetaModifier:
+        if modifiers & Qt.KeyboardModifier.MetaModifier.value:
             mods += "<Super>"
-        # pyrefly: ignore [unsupported-operation]
-        if modifiers & Qt.KeyboardModifier.ControlModifier:
+        if modifiers & Qt.KeyboardModifier.ControlModifier.value:
             mods += "<Control>"
-        # pyrefly: ignore [unsupported-operation]
-        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+        if modifiers & Qt.KeyboardModifier.ShiftModifier.value:
             mods += "<Shift>"
-        # pyrefly: ignore [unsupported-operation]
-        if modifiers & Qt.KeyboardModifier.AltModifier:
+        if modifiers & Qt.KeyboardModifier.AltModifier.value:
             mods += "<Alt>"
         if not mods and accelerator_needs_modifier(key_name):
             return ""
@@ -163,6 +173,9 @@ class PrefsBackend(QObject):
     def applyAccelerator(self, accel: str) -> bool:
         from ulauncher.ui.hotkey_controller import HotkeyController
 
+        if HotkeyController.is_plasma():
+            HotkeyController.show_dialog()
+            return False
         applied = HotkeyController.apply_accelerator(accel)
         self.hotkeyChanged.emit()
         return applied
@@ -235,29 +248,36 @@ class PrefsBackend(QObject):
         items.sort(key=lambda item: str(item["name"]).lower())
         return items
 
-    @Slot("QVariant", result=bool)
-    def saveShortcut(self, data: Any) -> bool:
+    @Slot("QVariant", result=str)
+    def saveShortcut(self, data: Any) -> str:
         from ulauncher.modes.shortcuts.shortcuts import Shortcut, Shortcuts
 
         fields = dict(data.toVariant()) if hasattr(data, "toVariant") else dict(data)
-        if not (fields.get("name") and fields.get("keyword") and fields.get("cmd")):
-            return False
+        name = str(fields.get("name") or "").strip()
+        keyword = str(fields.get("keyword") or "").strip()
+        if (
+            not name
+            or not keyword
+            or any(char.isspace() for char in keyword)
+            or not str(fields.get("cmd") or "").strip()
+        ):
+            return ""
         shortcuts = Shortcuts.load()
         shortcut_id = fields.get("id") or str(uuid4())
         existing = shortcuts.get(shortcut_id)
         shortcut = Shortcut(
             id=shortcut_id,
-            name=str(fields["name"]),
-            keyword=str(fields["keyword"]),
+            name=name,
+            keyword=keyword,
             cmd=str(fields["cmd"]),
-            icon=str(fields.get("icon") or ""),
+            icon=str(fields["icon"]) if "icon" in fields else (existing.icon if existing else ""),
             run_without_argument=bool(fields.get("run_without_argument")),
             is_default_search=bool(fields.get("is_default_search")),
             added=existing.added if existing else int(time.time()),
         )
         shortcuts.save({shortcut_id: shortcut})
         self.shortcutsChanged.emit()
-        return True
+        return shortcut_id
 
     @Slot(str)
     def removeShortcut(self, shortcut_id: str) -> None:
@@ -426,7 +446,7 @@ class PreferencesWindow:
         self.backend = PrefsBackend(app)
         engine = app.qml_engine
         qml_path = os.path.normpath(os.path.join(QML_DIR, "PreferencesWindow.qml"))
-        component = QQmlComponent(engine, QUrl.fromLocalFile(qml_path))
+        self._component = component = QQmlComponent(engine, QUrl.fromLocalFile(qml_path))
         if component.isError():
             for error in component.errors():
                 logger.error("QML error: %s", error.toString())

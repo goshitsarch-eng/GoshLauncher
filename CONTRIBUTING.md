@@ -96,6 +96,32 @@ PySide6 ships type stubs, so IDE completion works out of the box.
 1. Run `make run` to start the app. If GoshLauncher is already running, this command stops that instance first because only one launcher instance can own the D-Bus name.
 1. When you are done testing or want to restart, press Ctrl+C. You can then start it normally again (`systemctl --user start ulauncher` if using systemd).
 
+### GUI verification
+
+Run `make check` for lint, types, and unit tests. Also run `python3 scripts/check-qml.py` using
+an interpreter with matching PySide6, Qt, and Kirigami packages. It instantiates both windows and
+the extension preference controls. CI runs this against Fedora's native runtime and inside each
+release Flatpak. Python tests alone cannot detect invalid QML properties or handlers.
+
+### Releases
+
+Update `ulauncher/_version.py`, the README release notes, AppStream metadata, man page, and Fedora
+packaging/version checks together, then push to `main`. The **Release** workflow detects an
+unpublished version, checks the code, builds the source archive and Debian package, and builds
+Flatpaks on native x86_64 and ARM64 runners. Only after every build and QML check passes does it
+create the `vX.Y.Z` tag and publish all assets with checksums. An existing published version is
+skipped, so ordinary pushes do not invent new version numbers.
+
+Explicit `v*` tag pushes and manual workflow runs are also supported. A tag must match the
+version file. Retry a failed workflow from Actions after fixing its cause; no partial public
+release is created. Pull requests changing Flatpak packaging or the release workflow build
+artifacts without publishing. GitHub's built-in token needs `contents: write` only in the final
+publish job; no personal token or Flathub credentials are required.
+
+The release created by `GITHUB_TOKEN` does not trigger another release-event workflow. Optional
+Launchpad/AUR publication remains a separate maintainer workflow; source and Flatpak publication
+is fully contained in **Release**.
+
 ### How to contribute
 
 Use the GoshLauncher main branch, and verify that the issue or feature has not already been fixed there.

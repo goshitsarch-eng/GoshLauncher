@@ -12,7 +12,7 @@ def test_fedora_spec_has_native_identity_and_exact_dependencies() -> None:
     spec = SPEC.read_text()
 
     assert "Name:           goshlauncher" in spec
-    assert "Version:        6.0.1" in spec
+    assert "Version:        6.0.2" in spec
     assert "BuildArch:      noarch" in spec
     assert "License:        GPL-3.0-or-later AND LGPL-3.0-only" in spec
     assert "Vendor:         Gosh" in spec
@@ -106,7 +106,7 @@ def test_rpm_verifier_rejects_sibling_paths_and_scans_payload_bytes(tmp_path: Pa
 
     assert verifier.path_is_allowed("/usr/bin/ulauncher")
     assert verifier.path_is_allowed("/usr/lib/python3.14/site-packages/ulauncher/core.py")
-    assert verifier.path_is_allowed("/usr/lib/python3.14/site-packages/ulauncher-6.0.1.dist-info/METADATA")
+    assert verifier.path_is_allowed("/usr/lib/python3.14/site-packages/ulauncher-6.0.2.dist-info/METADATA")
     assert verifier.path_is_allowed("/usr/share/ulauncher/icons/gear.svg")
     assert not verifier.path_is_allowed("/usr/bin/ulauncher-rogue")
     assert not verifier.path_is_allowed("/usr/lib/python3.evil/arbitrary")

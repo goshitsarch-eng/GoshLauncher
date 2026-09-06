@@ -17,7 +17,7 @@ def test_find_in_user_path_caches_hits_and_misses(tmp_path: Path, monkeypatch: p
         "ulauncher.modes.launcher.gio_launch.extra_path_dirs",
         lambda _home=None: [str(tmp_path)],
     )
-    monkeypatch.setattr("ulauncher.modes.launcher.gio_launch.which", lambda _name: None)
+    monkeypatch.setattr("ulauncher.modes.launcher.gio_launch.find_program", lambda _name: None)
     assert find_in_user_path("tool") == str(tool)
     tool.unlink()
     assert find_in_user_path("tool") == str(tool)
