@@ -38,3 +38,14 @@ def test_autostart_reports_failed_write(mocker: MockerFixture) -> None:
     mocker.patch("ulauncher.utils.systemd_controller.systemctl_run", return_value="")
     with pytest.raises(OSError, match="Could not change autostart state"):
         SystemdController("ulauncher").toggle(True)
+
+
+def test_flatpak_command_resolves_host_executable(mocker: MockerFixture) -> None:
+    from ulauncher.modes.launcher.commands import resolve_command_row
+
+    mocker.patch.dict("os.environ", {"FLATPAK_ID": "com.goshapps.GoshLauncher"})
+    mocker.patch("ulauncher.utils.host.find_program", return_value="/usr/bin/konsole")
+    row = resolve_command_row("konsole --new-tab")
+    assert row is not None
+    assert row["ready"]
+    assert row["argv"] == ["/usr/bin/konsole", "--new-tab"]

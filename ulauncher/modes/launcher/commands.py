@@ -150,7 +150,9 @@ def resolve_command_row(query: str) -> dict | None:
     path_env = extra_path()
 
     def find_in_path(name: str) -> str | None:
-        return which(name, path=path_env)
+        from ulauncher.utils.host import find_program, is_flatpak
+
+        return find_program(name) if is_flatpak() else which(name, path=path_env)
 
     ready = command_is_ready(exe, find_in_path, os.path.exists)
     if command_uses_path_lookup(exe):

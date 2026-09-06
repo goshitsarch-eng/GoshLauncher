@@ -21,6 +21,7 @@ settings persistence, desktop integration, and packaging.
 | Preferences could not open without a persistent daemon or popup | Allow a standalone preferences window |
 | Systemd failures could appear to save successfully | Check the resulting enabled state |
 | Wayland socket creation errors escaped the unavailable-provider fallback | Treat creation failures like connection failures |
+| Open in Terminal omitted KDE Konsole | Recognize Konsole and pass the requested working directory |
 | No Flatpak manifest or ARM64 release build existed | Add native dual-architecture builds, host launch integration, QML checks and publication gates |
 
 ## Verification
